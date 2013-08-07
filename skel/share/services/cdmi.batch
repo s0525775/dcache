@@ -1,0 +1,18 @@
+check -strong cdmi.cell.name
+check -strong cdmi.formal
+check -strong cdmi.service.poolmanager
+check -strong cdmi.service.poolmanager.timeout
+check -strong cdmi.service.poolmanager.timeout.unit
+
+create org.dcache.cells.UniversalSpringCell "${cdmi.cell.name}" \
+    "classpath:org/dcache/cdmi/cdmi.xml   \
+      -isDefaultFormal=\"${cdmi.formal}\" \
+    "
+
+# Line poolmanager removed since it isn't used in webdav.properties, too. It should work without that then, too.
+# It throws the same error message with or without that line, so it doesn't really matter.
+# create org.dcache.cells.UniversalSpringCell "${cdmi.cell.name}" \
+#     "classpath:org/dcache/cdmi/cdmi.xml   \
+#       -isDefaultFormal=\"${cdmi.formal}\" \
+#       -poolmanager=\"${poolmanager}\"     \
+#     "
