@@ -25,6 +25,8 @@ import org.dcache.util.list.ListDirectoryHandler;			//added
 import org.dcache.vehicles.PnfsListDirectoryMessage;
 import org.springframework.beans.factory.annotation.Required;
 
+import java.util.Collections;
+
 public class CDMI
     implements CellCommandListener
 {
@@ -77,18 +79,19 @@ public class CDMI
         }
     }
 
-   // PoolManager Start, property should be poolManager. Has a problem. 
+   // PoolManager Start, property should be poolManager. Has a problem.
    @Command(name = "pools", hint = "show pools in pool group",
             usage = "Shows the names of the pools in POOLGROUP.")
     class PoolsCommands implements Callable<ArrayList<String>>
     {
         @Argument(help = "A pool group")
-        Iterable<String> poolGroup;				//changed
+        String poolgroup;
 
         @Override
         public ArrayList<String> call() throws CacheException, InterruptedException
         {
-            PoolManagerGetPoolsByPoolGroupMessage request = new PoolManagerGetPoolsByPoolGroupMessage(poolGroup);
+            Iterable<String> poolgroups = Collections.singleton(poolgroup);
+            PoolManagerGetPoolsByPoolGroupMessage request = new PoolManagerGetPoolsByPoolGroupMessage(poolgroups);
             PoolManagerGetPoolsByPoolGroupMessage reply = poolManager.sendAndWait(request);
             ArrayList<String> names = new ArrayList<>();
             for (PoolManagerPoolInformation pool : reply.getPools()) {
@@ -131,7 +134,7 @@ public class CDMI
         }
     }
 
-    
+
     @Command(name = "rm", hint = "delete directory (Test!)",
             usage = "Delete a directory")
     class RmCommand implements Callable<String>
@@ -184,7 +187,7 @@ public class CDMI
         public ArrayList<String> call() throws CacheException, InterruptedException {
        	     FsPath fspath = new FsPath();
              fspath.add(name);
-             Glob glob = new Glob("*"); 
+             Glob glob = new Glob("*");
              ListDirectoryHandler handler = new ListDirectoryHandler(pnfs);
              DirectoryStream dStream = handler.list(null, fspath, glob, Range.<Integer>all());
              ArrayList<String> names = new ArrayList<>();
