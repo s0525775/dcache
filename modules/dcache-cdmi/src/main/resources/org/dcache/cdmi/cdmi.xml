@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:annotation-config/>
+
+    <bean id="properties" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+                <description>Imported configuration data</description>
+                <property name="location" value="arguments:"/>
+    </bean>
+
+    <!-- Old convention, but works -->
+    <bean id="pnfs-handler" class="diskCacheV111.util.PnfsHandler">
+                <constructor-arg>
+                <bean class="org.dcache.cells.CellStub">
+                	<property name="destination" value="PnfsManager"/>
+                	<property name="timeout" value="30000"/>
+                </bean>
+    		</constructor-arg>
+    </bean>
+
+    <bean id="hello-stub" class="org.dcache.cells.CellStub">
+                <property name="timeout" value="30000"/>
+    </bean>
+
+    <bean id="list-handler" class="org.dcache.util.list.ListDirectoryHandler">
+        <constructor-arg ref="pnfs-handler"/>
+    </bean>
+
+    <!-- New convention -->
+    <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
+                <description>PoolManager communication stub</description>
+                <property name="destination" value="${cdmi.service.poolmanager}"/>
+                <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
+                <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
+    </bean>
+
+    <!-- poolManager refers to pool-manager-stub bean -->
+    <bean id="cdmi" class="org.dcache.cdmi.CDMI">
+                <description>CDMI Test</description>
+                <property name="defaultFormal" value="${isDefaultFormal}"/>
+                <property name="poolManager" ref="pool-manager-stub"/>
+		<property name="pnfsHandler" ref="pnfs-handler"/>
+		<property name="helloStub" ref="hello-stub"/> <!-- added -->
+		<property name="listDirectoryHandler" ref="list-handler"/> <!-- added -->
+    </bean>
+</beans>

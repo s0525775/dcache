@@ -1135,6 +1135,7 @@
         <module>modules/acl</module>
         <module>modules/chimera</module>
         <module>modules/missingfiles-semsg</module>
+        <module>modules/dcache-cdmi</module>
         <module>plugins</module>
         <module>packages</module>
     </modules>
