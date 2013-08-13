@@ -19,7 +19,9 @@ import dmg.util.command.Argument;
 import dmg.util.command.Command;
 import dmg.util.command.DelayedCommand;                                 //added
 import dmg.util.command.Option;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
@@ -45,20 +47,25 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.dcache.auth.Subjects;
+import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
+import org.dcache.cells.CellMessageReceiver;
+import org.dcache.util.Transfer;
+import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
 //import org.dcache.vehicles.FileAttributes;
 
-public class CDMI
-    implements CellCommandListener, Runnable
+public class CDMI extends AbstractCellComponent
+    implements CellCommandListener, Runnable, CellMessageReceiver
 {
     private boolean isDefaultFormal;
-
-    private CellStub poolManager;				//added
-    private CellStub helloStub;                                 //added
+    private CellStub poolManager;
+    private CellStub helloStub;
     private PnfsHandler pnfs;
-    ListDirectoryHandler lister;                                //added
-    ServerSocketChannel channel;                                //added
+    private ListDirectoryHandler lister;
+    private ServerSocketChannel channel;
+    private CellStub billing;
+    private CellStub pool;
 
     public boolean isDefaultFormal()
     {
@@ -82,6 +89,49 @@ public class CDMI
         } else {
             return "Hi there, " + name;
         }
+    }
+
+    @Required
+    public void setPoolManager(CellStub poolManager)
+    {
+        this.poolManager = poolManager;
+    }
+
+    @Required
+    public void setPnfsHandler(PnfsHandler pnfs)
+    {
+        this.pnfs = pnfs;
+    }
+
+    @Required
+    public void setHelloStub(CellStub helloStub)
+    {
+        this.helloStub = helloStub;
+    }
+
+    @Required
+    public void setBilling(CellStub billing)
+    {
+        this.billing = billing;
+    }
+
+    @Required
+    public void setPool(CellStub pool)
+    {
+        this.pool = pool;
+    }
+
+    @Required
+    public void setListDirectoryHandler(ListDirectoryHandler lister)
+    {
+        this.lister = lister;
+    }
+
+    public CDMIMessage messageArrived(CDMIMessage message)
+    {
+        String name = message.getName();
+        message.setGreeting(isDefaultFormal ? "Hello, " + name : "Hi there, " + name);
+        return message;
     }
 
     /*
@@ -123,19 +173,6 @@ public class CDMI
             return helloStub.sendAndWait(new CellPath(cell), new CDMIMessage(name)).getGreeting();
         }
     } */
-
-    @Required //Required annotation
-    public void setHelloStub(CellStub helloStub)
-    {
-        this.helloStub = helloStub;
-    }
-
-    public CDMIMessage messageArrived(CDMIMessage message)
-    {
-        String name = message.getName();
-        message.setGreeting(isDefaultFormal ? "Hello, " + name : "Hi there, " + name);
-        return message;
-    }
 
     /* 8
     @Command(name = "hi", hint = "prints greeting", usage = "Prints a greeting for NAME.")
@@ -216,7 +253,8 @@ public class CDMI
         }
     } */
 
-    @Command(name = "hi", hint = "prints greeting", usage = "Prints a greeting for NAME.")
+    @Command(name = "hi", hint = "prints greeting",
+             usage = "Prints a greeting for NAME.")
     class HelloCommand extends DelayedReply implements Callable<Reply>
     {
         @Argument(index = 0, help = "Your name")
@@ -247,12 +285,6 @@ public class CDMI
         }
     }
 
-    @Required
-    public void setListDirectoryHandler(ListDirectoryHandler lister)
-    {
-        this.lister = lister;
-    }
-
     public void start() throws IOException
     {
         channel = ServerSocketChannel.open();
@@ -272,17 +304,35 @@ public class CDMI
     {
         while (true) {
             try {
+                PrintWriter out;
                 try (SocketChannel connection = channel.accept()) {
-                    PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket()
-                            .getOutputStream()));
+                    out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
                     try {
-                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
-                                null, Range.<Integer>all());
-                    } catch (CacheException e) {
+                        //old
+                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
+
+                        //new
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.socket().getInputStream()));
+                        int port = Integer.parseInt(reader.readLine());
+
+                        Transfer transfer = new Transfer(pnfs, Subjects.ROOT, new FsPath("/disk/" + System.currentTimeMillis()));
+                        transfer.setClientAddress((InetSocketAddress) connection.getRemoteAddress());
+                        transfer.setBillingStub(billing);
+                        transfer.setPoolManagerStub(poolManager);
+                        transfer.setPoolStub(pool);
+                        transfer.setCellName(getCellName());
+                        transfer.setDomainName(getCellDomainName());
+                        InetSocketAddress address = new InetSocketAddress(((InetSocketAddress) connection
+                                .getRemoteAddress()).getAddress(), port);
+                        transfer.setProtocolInfo(new CDMIProtocolInfo(address));
+                        transfer.createNameSpaceEntry();
+                        transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
+                    } catch (IOException | CacheException e) {
                         out.println(e.toString());
                     }
                     out.flush();
                 }
+                out.close();
             } catch (NotYetBoundException e) {
                 // log error
                 break;
@@ -294,7 +344,7 @@ public class CDMI
         }
     }
 
-    private class ListPrinter implements DirectoryListPrinter  //cannot be abstract
+    private static class ListPrinter implements DirectoryListPrinter
     {
         private final PrintWriter writer;
 
@@ -304,7 +354,7 @@ public class CDMI
         }
 
         @Override
-        public Set<org.dcache.namespace.FileAttribute> getRequiredAttributes()  //in conflict with java.nio.file.attribute.FileAttribute
+        public Set<FileAttribute> getRequiredAttributes()  //in conflict with java.nio.file.attribute.FileAttribute
         {
             return EnumSet.noneOf(FileAttribute.class);
         }
@@ -318,7 +368,7 @@ public class CDMI
     }
 
     @Command(name = "pools", hint = "show pools in pool group",
-            usage = "Shows the names of the pools in POOLGROUP.")
+             usage = "Shows the names of the pools in POOLGROUP.")
     class PoolsCommands implements Callable<ArrayList<String>>
     {
         @Argument(help = "A pool group")
@@ -343,20 +393,8 @@ public class CDMI
         return poolManager;
     }
 
-    @Required
-    public void setPoolManager(CellStub poolManager)
-    {
-        this.poolManager = poolManager;
-    }
-
-    @Required
-    public void setPnfsHandler(PnfsHandler pnfs)
-    {
-        this.pnfs = pnfs;
-    }
-
     @Command(name = "mkdir", hint = "create directory",
-            usage = "Create a new directory")
+             usage = "Create a new directory")
     class MkdirCommand implements Callable<String>
     {
         @Argument(help = "Directory name")
@@ -370,9 +408,8 @@ public class CDMI
         }
     }
 
-
     @Command(name = "rm", hint = "delete directory (Test!)",
-            usage = "Delete a directory")
+             usage = "Delete a directory")
     class RmCommand implements Callable<String>
     {
         @Argument(help = "Directory name")
@@ -408,7 +445,6 @@ public class CDMI
              return names;
         }
     }
-    */
     // new code
     @Command(name = "dir", hint = "list directories (Test!)",
              usage = "List directories")
@@ -432,5 +468,5 @@ public class CDMI
              }
              return names;
         }
-    }
+    } */
 }
