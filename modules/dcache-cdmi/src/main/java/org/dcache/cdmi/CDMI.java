@@ -32,7 +32,6 @@ import java.nio.channels.SocketChannel;
 
 import org.dcache.cells.CellCommandListener;
 import org.dcache.cells.CellStub;
-import org.dcache.util.Glob;						//added
 import org.dcache.util.list.DirectoryEntry;				//added
 import org.dcache.util.list.DirectoryStream;				//added
 import org.dcache.util.list.ListDirectoryHandler;			//added
@@ -45,7 +44,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.dcache.auth.Subjects;
 import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
@@ -53,10 +51,12 @@ import org.dcache.cells.CellMessageReceiver;
 import org.dcache.util.Transfer;
 import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 //import org.dcache.vehicles.FileAttributes;
 
 public class CDMI extends AbstractCellComponent
-    implements CellCommandListener, Runnable, CellMessageReceiver
+    implements Runnable, CellCommandListener, CellMessageReceiver
 {
     private boolean isDefaultFormal;
     private CellStub poolManager;
@@ -66,6 +66,9 @@ public class CDMI extends AbstractCellComponent
     private ServerSocketChannel channel;
     private CellStub billing;
     private CellStub pool;
+
+    private final static Logger _log =
+        LoggerFactory.getLogger(CDMI.class);
 
     public boolean isDefaultFormal()
     {
@@ -287,13 +290,17 @@ public class CDMI extends AbstractCellComponent
 
     public void start() throws IOException
     {
+        //passed, works
         channel = ServerSocketChannel.open();
         channel.bind(new InetSocketAddress(2000));
+        //next line is added from me, NEW, switches to non-blocking mode
+        channel.configureBlocking(false);
         new Thread(this).start();
     }
 
     public void stop() throws IOException
     {
+        //passed, works
         if (channel != null) {
             channel.close();
         }
@@ -303,10 +310,13 @@ public class CDMI extends AbstractCellComponent
     public void run()
     {
         while (true) {
+            //passed, works
             try {
-                PrintWriter out;
-                try (SocketChannel connection = channel.accept()) {
-                    out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
+                //it will work till this comment line
+                //the next line doesn't throw an exception or a response in blocking mode! it will wait till there is a connection to accept. but there doesn't seem to be a connection to accept
+                SocketChannel connection = channel.accept();
+                if (connection != null) { //connection is null, this line of code is rewritten for non-blocking mode, NEW
+                    PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
                     try {
                         //old
                         lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
@@ -332,11 +342,15 @@ public class CDMI extends AbstractCellComponent
                     }
                     out.flush();
                 }
-                out.close();
+                //added, NEW
+                if (connection != null && connection.isConnected()) {
+                    connection.close();
+                }
             } catch (NotYetBoundException e) {
                 // log error
                 break;
             } catch (InterruptedException | ClosedChannelException e) {
+                // log error
                 break;
             } catch (IOException e) {
                 // log error
@@ -354,7 +368,7 @@ public class CDMI extends AbstractCellComponent
         }
 
         @Override
-        public Set<FileAttribute> getRequiredAttributes()  //in conflict with java.nio.file.attribute.FileAttribute
+        public Set<FileAttribute> getRequiredAttributes()
         {
             return EnumSet.noneOf(FileAttribute.class);
         }
@@ -423,50 +437,19 @@ public class CDMI extends AbstractCellComponent
         }
     }
 
-    // DCache sends a message and CDMI doesn't answer it, still testing
-    /*
-    // old code
-    @Command(name = "dir", hint = "list directories (Test!)",
-            usage = "List directories")
-    class DirCommand implements Callable<ArrayList<String>>
+    //without function
+    @Command(name = "ls", hint = "list directory (Test!)",
+             usage = "List directories")
+    class LsCommand implements Callable<String>
     {
         @Argument(help = "Directory name")
         String name;
 
         @Override
-        public ArrayList<String> call() throws CacheException {
-             //the other three parameters seem to be filters for search like pattern, range and attributes - necessary for test?
-             PnfsListDirectoryMessage request = new PnfsListDirectoryMessage(name, null, null, null);
-             Collection<DirectoryEntry> entries = request.getEntries();
-             ArrayList<String> names = new ArrayList<>();
-             for (DirectoryEntry entry : entries) {
-                  names.add(entry.getName());
-             }
-             return names;
+        public String call() throws CacheException
+        {
+            //pnfs.deletePnfsEntry(name);
+            return "";
         }
     }
-    // new code
-    @Command(name = "dir", hint = "list directories (Test!)",
-             usage = "List directories")
-    class DirCommand implements Callable<ArrayList<String>>
-    {
-	// Argument necessary? --> Look out for example 13 of Gerd's tutorial, maybe this solves the message problem since he implements InetSockets.
-	// ListDirectoryHandler and PnfsListDirectoryMessage need to work together somehow.
-        @Argument(help = "Directory name")
-        String name;
-
-        @Override
-        public ArrayList<String> call() throws CacheException, InterruptedException {
-       	     FsPath fspath = new FsPath();
-             fspath.add(name);
-             Glob glob = new Glob("*");
-             ListDirectoryHandler handler = new ListDirectoryHandler(pnfs);
-             DirectoryStream dStream = handler.list(null, fspath, glob, Range.<Integer>all());
-             ArrayList<String> names = new ArrayList<>();
-             for (DirectoryEntry entry : dStream) {
-                  names.add(entry.getName());
-             }
-             return names;
-        }
-    } */
 }

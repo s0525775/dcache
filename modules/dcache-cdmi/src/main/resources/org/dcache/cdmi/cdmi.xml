@@ -29,12 +29,12 @@
     </bean>
 
     <bean id="billing-stub" class="org.dcache.cells.CellStub">
-        <property name="destination" value="billing"/>
-        <property name="timeout" value="30000"/>
+                <property name="destination" value="billing"/>
+                <property name="timeout" value="30000"/>
     </bean>
 
     <bean id="pool-stub" class="org.dcache.cells.CellStub">
-        <property name="timeout" value="10000"/>
+                <property name="timeout" value="10000"/>
     </bean>
 
     <bean id="list-handler" class="org.dcache.util.list.ListDirectoryHandler">
