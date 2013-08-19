@@ -13,7 +13,81 @@
 
   <name>dCache CDMI</name>
 
+  <!--
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <jarName>${project.artifactId}-${project.version}</jarName>
+        </configuration>
+        <executions>
+          <execution>
+            <id>make-a-jar</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+  -->
+
+  <!-- <repositories>
+    <repository>
+       <id>org.dcache.cdmi</id>
+       <name>CDMI repository</name>
+       <url>file://${project.basedir}/libs</url>
+    </repository>
+  </repositories> -->
+
   <dependencies>
+    <dependency>
+      <groupId>org.snia</groupId>
+      <artifactId>cdmi-server</artifactId>
+      <version>0.1-SNAPSHOT</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/libs/org/snia/cdmi-server/0.1-SNAPSHOT/cdmi-server-0.1-SNAPSHOT.jar</systemPath>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.7</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-frontend-jaxrs</artifactId>
+      <version>2.2.5</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-test</artifactId>
+      <version>2.5.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.jackson</groupId>
+      <artifactId>jackson-core-asl</artifactId>
+      <version>1.5.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+      <version>4.0.1</version>
+      <scope>compile</scope>
+   </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.0.1</version>
+      <scope>compile</scope>
+   </dependency>
+
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
@@ -73,13 +147,6 @@
     <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-expression</artifactId>
-    </dependency>
-    
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>3.8.1</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>
