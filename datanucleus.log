@@ -4512,3 +4512,77 @@
 18:53:58,590 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/GroupList.class" with enhanced definition
 18:53:58,600 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/Group.class" with enhanced definition
 18:53:58,601 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer completed with success for 3 classes.
+14:52:12,791 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer (version 3.2.6) for API "JDO" using JRE "1.7"
+14:52:13,183 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsBaseInfo.class" with enhanced definition
+14:52:13,187 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsConnectInfo.class" with enhanced definition
+14:52:13,193 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsStorageInfo.class" with enhanced definition
+14:52:13,202 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/BaseEntry.class" with enhanced definition
+14:52:13,207 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/SizeEntry.class" with enhanced definition
+14:52:13,210 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/TransferredEntry.class" with enhanced definition
+14:52:13,216 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/StorageData.class" with enhanced definition
+14:52:13,223 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/MoverData.class" with enhanced definition
+14:52:13,227 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolHitData.class" with enhanced definition
+14:52:13,234 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DoorRequestData.class" with enhanced definition
+14:52:13,236 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HitsHourly.class" with enhanced definition
+14:52:13,239 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/MissesHourly.class" with enhanced definition
+14:52:13,241 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheReadsHourly.class" with enhanced definition
+14:52:13,244 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheWritesHourly.class" with enhanced definition
+14:52:13,258 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheTimeHourly.class" with enhanced definition
+14:52:13,260 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolToPoolTransfersHourly.class" with enhanced definition
+14:52:13,263 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMReadsHourly.class" with enhanced definition
+14:52:13,266 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMWritesHourly.class" with enhanced definition
+14:52:13,270 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HitsDaily.class" with enhanced definition
+14:52:13,272 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheReadsDaily.class" with enhanced definition
+14:52:13,274 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheWritesDaily.class" with enhanced definition
+14:52:13,279 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheTimeDaily.class" with enhanced definition
+14:52:13,282 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolToPoolTransfersDaily.class" with enhanced definition
+14:52:13,285 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMReadsDaily.class" with enhanced definition
+14:52:13,288 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMWritesDaily.class" with enhanced definition
+14:52:13,304 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/pinmanager/model/Pin.class" with enhanced definition
+14:52:13,328 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/alarms/dao/LogEntry.class" with enhanced definition
+14:52:13,366 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandler.class" with enhanced definition
+14:52:13,376 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandlerBackup.class" with enhanced definition
+14:52:13,383 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandlerState.class" with enhanced definition
+14:52:13,384 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer completed with success for 30 classes.
+14:52:14,163 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer (version 3.2.6) for API "JPA" using JRE "1.7"
+14:52:14,429 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/AuthorizationRecord.class" with enhanced definition
+14:52:14,440 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/GroupList.class" with enhanced definition
+14:52:14,448 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/Group.class" with enhanced definition
+14:52:14,448 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer completed with success for 3 classes.
+14:56:48,896 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer (version 3.2.6) for API "JDO" using JRE "1.7"
+14:56:49,173 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsBaseInfo.class" with enhanced definition
+14:56:49,177 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsConnectInfo.class" with enhanced definition
+14:56:49,181 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PnfsStorageInfo.class" with enhanced definition
+14:56:49,188 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/BaseEntry.class" with enhanced definition
+14:56:49,191 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/SizeEntry.class" with enhanced definition
+14:56:49,194 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/TransferredEntry.class" with enhanced definition
+14:56:49,198 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/StorageData.class" with enhanced definition
+14:56:49,205 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/MoverData.class" with enhanced definition
+14:56:49,208 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolHitData.class" with enhanced definition
+14:56:49,214 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DoorRequestData.class" with enhanced definition
+14:56:49,216 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HitsHourly.class" with enhanced definition
+14:56:49,218 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/MissesHourly.class" with enhanced definition
+14:56:49,221 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheReadsHourly.class" with enhanced definition
+14:56:49,223 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheWritesHourly.class" with enhanced definition
+14:56:49,235 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheTimeHourly.class" with enhanced definition
+14:56:49,237 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolToPoolTransfersHourly.class" with enhanced definition
+14:56:49,239 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMReadsHourly.class" with enhanced definition
+14:56:49,241 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMWritesHourly.class" with enhanced definition
+14:56:49,245 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HitsDaily.class" with enhanced definition
+14:56:49,247 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheReadsDaily.class" with enhanced definition
+14:56:49,249 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheWritesDaily.class" with enhanced definition
+14:56:49,253 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/DcacheTimeDaily.class" with enhanced definition
+14:56:49,255 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/PoolToPoolTransfersDaily.class" with enhanced definition
+14:56:49,257 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMReadsDaily.class" with enhanced definition
+14:56:49,259 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/services/billing/db/data/HSMWritesDaily.class" with enhanced definition
+14:56:49,271 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/pinmanager/model/Pin.class" with enhanced definition
+14:56:49,289 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/alarms/dao/LogEntry.class" with enhanced definition
+14:56:49,321 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandler.class" with enhanced definition
+14:56:49,328 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandlerBackup.class" with enhanced definition
+14:56:49,333 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/diskCacheV111/services/TransferManagerHandlerState.class" with enhanced definition
+14:56:49,333 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer completed with success for 30 classes.
+14:56:50,092 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer (version 3.2.6) for API "JPA" using JRE "1.7"
+14:56:50,400 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/AuthorizationRecord.class" with enhanced definition
+14:56:50,768 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/GroupList.class" with enhanced definition
+14:56:50,778 (main) INFO  [DataNucleus.Enhancer] - Writing class file "/ProjektDCACHE/dcache/modules/dcache/target/classes/org/dcache/auth/Group.class" with enhanced definition
+14:56:50,778 (main) INFO  [DataNucleus.Enhancer] - DataNucleus Enhancer completed with success for 3 classes.

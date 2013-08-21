@@ -30,6 +30,7 @@
  */
 package org.dcache.cdmi;
 
+import java.net.HttpURLConnection;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -48,6 +49,9 @@ import org.junit.Test;
  * @author Mark A. Carlson
  */
 public class CDMItest {
+
+    //necessary?
+    HttpURLConnection connection = null;
 
     @Test
     public void testCapabilities() throws Exception {

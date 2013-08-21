@@ -13,45 +13,7 @@
 
   <name>dCache CDMI</name>
 
-  <!--
-  <build>
-    <plugins>
-      <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <configuration>
-          <jarName>${project.artifactId}-${project.version}</jarName>
-        </configuration>
-        <executions>
-          <execution>
-            <id>make-a-jar</id>
-            <phase>compile</phase>
-            <goals>
-              <goal>jar</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
-  -->
-
-  <!-- <repositories>
-    <repository>
-       <id>org.dcache.cdmi</id>
-       <name>CDMI repository</name>
-       <url>file://${project.basedir}/libs</url>
-    </repository>
-  </repositories> -->
-
   <dependencies>
-    <dependency>
-      <groupId>org.snia</groupId>
-      <artifactId>cdmi-server</artifactId>
-      <version>0.1-SNAPSHOT</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/libs/org/snia/cdmi-server/0.1-SNAPSHOT/cdmi-server-0.1-SNAPSHOT.jar</systemPath>
-    </dependency>
-
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -60,11 +22,16 @@
     </dependency>
 
     <dependency>
+      <groupId>org.snia</groupId>
+      <artifactId>cdmi-server-core</artifactId>
+      <version>1.0e-dCache-1</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-frontend-jaxrs</artifactId>
       <version>2.2.5</version>
     </dependency>
-
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-test</artifactId>
