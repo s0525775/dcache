@@ -11,7 +11,8 @@ cdmi.service.poolmanager.timeout=${cdmiPoolManagerTimeout}
 (immutable)cdmi.service.poolmanager-space-true=${dcache.service.spacemanager}
 (one-of?true|false|${dcache.enable.spacemanager})cdmi.enable.spacemanager=${dcache.enable.spacemanager}
 
-#  The port cdmi will listen on for GSI-based communication.
+
+#  ---- TCP Port
 #
 # (deprecated)srmPort=8443
 (deprecated)cdmiPort=8543

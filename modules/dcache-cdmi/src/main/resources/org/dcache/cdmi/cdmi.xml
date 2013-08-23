@@ -10,55 +10,128 @@
     <context:annotation-config/>
 
     <bean id="properties" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
-                <description>Imported configuration data</description>
-                <property name="location" value="arguments:"/>
+        <description>Imported configuration data</description>
+        <property name="location" value="arguments:"/>
     </bean>
 
     <!-- Old convention, but works -->
     <bean id="pnfs-handler" class="diskCacheV111.util.PnfsHandler">
-                <constructor-arg>
-                <bean class="org.dcache.cells.CellStub">
-                	<property name="destination" value="PnfsManager"/>
-                	<property name="timeout" value="30000"/>
-                </bean>
-    		</constructor-arg>
+        <constructor-arg>
+            <bean class="org.dcache.cells.CellStub">
+                <property name="destination" value="PnfsManager"/>
+                <property name="timeout" value="30000"/>
+            </bean>
+        </constructor-arg>
     </bean>
 
     <bean id="hello-stub" class="org.dcache.cells.CellStub">
-                <property name="timeout" value="30000"/>
+        <property name="timeout" value="30000"/>
     </bean>
 
     <bean id="billing-stub" class="org.dcache.cells.CellStub">
-                <property name="destination" value="billing"/>
-                <property name="timeout" value="30000"/>
+        <property name="destination" value="billing"/>
+        <property name="timeout" value="30000"/>
     </bean>
 
     <bean id="pool-stub" class="org.dcache.cells.CellStub">
-                <property name="timeout" value="10000"/>
+        <property name="timeout" value="10000"/>
     </bean>
 
     <bean id="list-handler" class="org.dcache.util.list.ListDirectoryHandler">
-                <constructor-arg ref="pnfs-handler"/>
+        <constructor-arg ref="pnfs-handler"/>
     </bean>
 
     <!-- New convention -->
     <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
-                <description>PoolManager communication stub</description>
-                <property name="destination" value="${cdmi.service.poolmanager}"/>
-                <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
-                <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
+        <description>PoolManager communication stub</description>
+        <property name="destination" value="${cdmi.service.poolmanager}"/>
+        <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
+        <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
     </bean>
 
     <!-- poolManager refers to pool-manager-stub bean -->
     <bean id="cdmi" class="org.dcache.cdmi.CDMI"
           init-method="start" destroy-method="stop"> <!-- added -->
-                <description>CDMI Test</description>
-                <property name="defaultFormal" value="${isDefaultFormal}"/>
-                <property name="poolManager" ref="pool-manager-stub"/>
-		<property name="pnfsHandler" ref="pnfs-handler"/>
-		<property name="helloStub" ref="hello-stub"/> <!-- added -->
-		<property name="listDirectoryHandler" ref="list-handler"/> <!-- added -->
-                <property name="pool" ref="pool-stub"/> <!-- added -->
-                <property name="billing" ref="billing-stub"/> <!-- added -->
+        <description>CDMI Test</description>
+        <property name="defaultFormal" value="${isDefaultFormal}"/>
+        <property name="poolManager" ref="pool-manager-stub"/>
+        <property name="pnfsHandler" ref="pnfs-handler"/>
+        <property name="helloStub" ref="hello-stub"/> <!-- added -->
+        <property name="listDirectoryHandler" ref="list-handler"/> <!-- added -->
+        <property name="pool" ref="pool-stub"/> <!-- added -->
+        <property name="billing" ref="billing-stub"/> <!-- added -->
     </bean>
+
+    <!-- JETTY CONFIG -->
+    <bean id="thread-pool" class="org.eclipse.jetty.util.thread.QueuedThreadPool"
+        init-method="start" destroy-method="stop">
+        <description>Thread pool used by Jetty for request processing</description>
+        <property name="maxIdleTimeMs"
+              value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
+		     ${cdmi.limits.jetty.threads.idle-time.max},
+		     '${cdmi.limits.jetty.threads.idle-time.max.unit}')}" />
+        <property name="maxThreads" value="${cdmi.limits.jetty.threads.max}"/>
+        <property name="minThreads" value="${cdmi.limits.jetty.threads.min}"/>
+        <property name="name" value="jetty-cdmi"/>
+        <property name="maxQueued" value="${cdmi.limits.jetty.threads.queued.max}"/>
+    </bean>
+
+    <bean id="server" class="org.eclipse.jetty.server.Server"
+        init-method="start" destroy-method="stop">
+        <description>Jetty server hosting the CDMI web application</description>
+        <property name="gracefulShutdown" value="${cdmi.limits.jetty.graceful-shutdown}"/>
+        <property name="threadPool" ref="thread-pool"/>
+        <property name="connectors">
+            <list>
+                <bean id="Connector" class="org.eclipse.jetty.server.nio.SelectChannelConnector">
+                    <property name="port" value="8542" />
+                    <property name="host" value="#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }"/>
+                </bean>
+            </list>
+        </property>
+        <property name="handler">
+            <bean class="org.eclipse.jetty.server.handler.HandlerList">
+                <property name="handlers">
+                    <list>
+                        <bean id="contexts" class="org.eclipse.jetty.server.handler.ContextHandlerCollection"/>
+                        <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
+                           <property name="contextPath" value="/" />
+                           <property name="servletHandler">
+                               <bean class="org.eclipse.jetty.servlet.ServletHandler">
+                                   <property name="servlets">
+                                       <list>
+                                           <bean class="org.eclipse.jetty.servlet.ServletHolder">
+                                               <property name="name" value="cdmi-server" />
+                                               <property name="servlet">
+                                                   <bean class="org.apache.cxf.transport.servlet.CXFServlet" />
+                                               </property>
+                                               <property name="initParameters">
+                                                   <map>
+                                                       <entry key="contextConfigLocation" value="classpath:applicationContext.xml" />
+                                                   </map>
+                                               </property>
+                                           </bean>
+                                       </list>
+                                   </property>
+                                   <property name="servletMappings">
+                                       <list>
+                                           <bean class="org.eclipse.jetty.servlet.ServletMapping">
+                                               <property name="servletName" value="cdmi-server" />
+                                               <property name="pathSpec" value="/*" />
+                                           </bean>
+                                       </list>
+                                   </property>
+                               </bean>
+                           </property>
+                        </bean>
+                        <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <!-- CDMI SERVICE -->
+    <import resource="cxf-jsr-config.xml"/>
+
 </beans>

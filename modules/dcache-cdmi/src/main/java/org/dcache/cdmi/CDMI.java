@@ -24,11 +24,15 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetBoundException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+
+import com.sun.net.httpserver.HttpServer;
 
 import org.dcache.cells.CellCommandListener;
 import org.dcache.cells.CellStub;
@@ -43,7 +47,6 @@ import org.dcache.vehicles.FileAttributes;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
-import java.util.logging.Level;
 import org.dcache.auth.Subjects;
 import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
@@ -58,6 +61,7 @@ import org.slf4j.LoggerFactory;
 public class CDMI extends AbstractCellComponent
     implements Runnable, CellCommandListener, CellMessageReceiver
 {
+
     private boolean isDefaultFormal;
     private CellStub poolManager;
     private CellStub helloStub;
@@ -69,6 +73,9 @@ public class CDMI extends AbstractCellComponent
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
+
+    public CDMI() {
+    }
 
     public boolean isDefaultFormal()
     {
@@ -287,10 +294,10 @@ public class CDMI extends AbstractCellComponent
             return this;
         }
     }
-
+    
     public void start() throws IOException
     {
-        //passed, works
+        //passed
         channel = ServerSocketChannel.open();
         channel.bind(new InetSocketAddress(2000));
         //next line is added from me, NEW, switches to non-blocking mode
