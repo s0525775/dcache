@@ -95,7 +95,7 @@
                     <list>
                         <bean id="contexts" class="org.eclipse.jetty.server.handler.ContextHandlerCollection"/>
                         <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
-                           <property name="contextPath" value="/" />
+                           <property name="contextPath" value="/cdmi-server" />  <!-- here -->
                            <property name="servletHandler">
                                <bean class="org.eclipse.jetty.servlet.ServletHandler">
                                    <property name="servlets">
