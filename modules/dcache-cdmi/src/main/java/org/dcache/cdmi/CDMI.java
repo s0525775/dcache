@@ -74,9 +74,6 @@ public class CDMI extends AbstractCellComponent
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
 
-    public CDMI() {
-    }
-
     public boolean isDefaultFormal()
     {
         return isDefaultFormal;
@@ -294,7 +291,7 @@ public class CDMI extends AbstractCellComponent
             return this;
         }
     }
-    
+
     public void start() throws IOException
     {
         //passed
