@@ -1,5 +1,6 @@
 package org.dcache.cdmi;
 
+import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Collection;						//added
 import java.util.concurrent.Callable;
@@ -8,8 +9,11 @@ import com.google.common.collect.Range;					//added
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;					//added
 import diskCacheV111.util.PnfsHandler;
+import diskCacheV111.vehicles.DoorTransferFinishedMessage;
+import diskCacheV111.vehicles.HttpDoorUrlInfoMessage;
 import diskCacheV111.vehicles.PoolManagerGetPoolsByPoolGroupMessage;    //added
 import diskCacheV111.vehicles.PoolManagerPoolInformation;               //added
+import dmg.cells.nucleus.CellMessage;
 import dmg.cells.nucleus.CellPath;                                      //added
 import dmg.cells.nucleus.DelayedReply;                                  //added
 import dmg.cells.nucleus.Reply;                                         //added
@@ -20,19 +24,21 @@ import dmg.util.command.Command;
 import dmg.util.command.DelayedCommand;                                 //added
 import dmg.util.command.Option;
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.net.InetAddress;
+import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetBoundException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import com.sun.net.httpserver.HttpServer;
+import java.io.Writer;
+import java.net.URISyntaxException;
 
 import org.dcache.cells.CellCommandListener;
 import org.dcache.cells.CellStub;
@@ -46,6 +52,7 @@ import org.dcache.vehicles.FileAttributes;
 
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.dcache.auth.Subjects;
 import org.dcache.cells.AbstractCellComponent;
@@ -65,6 +72,7 @@ public class CDMI extends AbstractCellComponent
     private boolean isDefaultFormal;
     private CellStub poolManager;
     private CellStub helloStub;
+    private CellStub pnfsStub;
     private PnfsHandler pnfs;
     private ListDirectoryHandler lister;
     private ServerSocketChannel channel;
@@ -105,9 +113,15 @@ public class CDMI extends AbstractCellComponent
     }
 
     @Required
-    public void setPnfsHandler(PnfsHandler pnfs)
+    public void setPnfsHandler(PnfsHandler handler)
     {
-        this.pnfs = pnfs;
+        this.pnfs = handler;
+    }
+
+    @Required
+    public void setPnfsStub(CellStub pnfsStub)
+    {
+        this.pnfsStub = pnfsStub;
     }
 
     @Required
@@ -345,6 +359,7 @@ public class CDMI extends AbstractCellComponent
                         out.println(e.toString());
                     }
                     out.flush();
+                    out.close();
                 }
                 //added, NEW
                 if (connection != null && connection.isConnected()) {
@@ -450,10 +465,16 @@ public class CDMI extends AbstractCellComponent
         String name;
 
         @Override
-        public String call() throws CacheException
+        public String call() throws CacheException, InterruptedException, FileNotFoundException, UnsupportedEncodingException
         {
-            //pnfs.deletePnfsEntry(name);
-            return "";
+            FsPath path = new FsPath();
+            path.add(name);
+            ArrayList<String> names = new ArrayList<>();
+            PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest.log"), "UTF-8"));
+            out.close();
+            int test = lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
+            return String.valueOf(test);
         }
     }
+
 }
