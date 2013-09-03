@@ -30,7 +30,6 @@
  */
 package org.dcache.cdmi.dao;
 
-import diskCacheV111.util.PnfsHandler;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
@@ -45,27 +44,21 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import org.dcache.cdmi.Test;
 
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
 import org.dcache.cells.CellStub;
-import org.dcache.util.list.ListDirectoryHandler;
 
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.NotFoundException;
 import org.snia.cdmiserver.model.Container;
 import org.snia.cdmiserver.util.ObjectID;
-import org.springframework.beans.factory.annotation.Required;
-import org.springframework.web.context.ServletContextAware;
 
 /**
  * <p>
  * Concrete implementation of {@link ContainerDao} using the local filesystem as the backing store.
  * </p>
  */
-public class ContainerDaoImpl extends AbstractCellComponent
-    implements ContainerDao, ServletContextAware, Runnable, CellCommandListener, CellMessageReceiver {
+public class ContainerDaoImpl
+    implements ContainerDao, ServletContextListener {
 
     //
     // Properties and Dependency Injection Methods
@@ -74,27 +67,21 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private ServletContext servletContext = null;
 
     private CellStub pnfsStub;
-    private PnfsHandler pnfsHandler;
-    private ListDirectoryHandler lister;
 
-    public static final String ATTRIBUTE_NAME_CONTAINER = "org.dcache.cdmi.container";
+    public static final String ATTRIBUTE_NAME_CONTAINER = "org.dcache.cdmi.pnfsstub";
 
-    @Required
-    public void setPnfsHandler(PnfsHandler handler)
-    {
-        this.pnfsHandler = handler;
+    @Override
+    public void contextInitialized(ServletContextEvent servletContextEvent) {
+        //throw new UnsupportedOperationException("Not supported yet.");
+        Test.write("/tmp/test003.log", "Context11");
+        this.servletContext = servletContextEvent.getServletContext();
+        Test.write("/tmp/test003.log", "Context22");
+        this.pnfsStub = getAttribute();
     }
 
-    @Required
-    public void setPnfsStub(CellStub pnfsStub)
-    {
-        this.pnfsStub = pnfsStub;
-    }
-
-    @Required
-    public void setListDirectoryHandler(ListDirectoryHandler lister)
-    {
-        this.lister = lister;
+    @Override
+    public void contextDestroyed(ServletContextEvent sce) {
+        //throw new UnsupportedOperationException("Not supported yet.");
     }
 
     /**
@@ -671,51 +658,23 @@ public class ContainerDaoImpl extends AbstractCellComponent
         }
     }
 
-    @Override
-    public void setServletContext(ServletContext servletContext) {
-        Test.write("/tmp/test003.log", "Context1");
-        this.servletContext = servletContext;
-        Test.write("/tmp/test003.log", "Context2");
-        this.pnfsHandler = getAttribute();
-    }
-
-    public PnfsHandler getAttribute()
+    public CellStub getAttribute()
     {
         if (servletContext == null) {
-            Test.write("/tmp/test003.log", "ServletContext is not set");
             throw new RuntimeException("ServletContext is not set");
         }
 
         Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_CONTAINER);
 
         if (attribute == null) {
-            Test.write("/tmp/test003.log", "Attribute " + ATTRIBUTE_NAME_CONTAINER + " not found");
             throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not found");
         }
 
-        if (!PnfsHandler.class.isInstance(attribute)) {
-            Test.write("/tmp/test003.log", "Attribute " + ATTRIBUTE_NAME_CONTAINER + " not of type " + PnfsHandler.class);
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not of type " + PnfsHandler.class);
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not of type " + CellStub.class);
         }
 
         Test.write("/tmp/test003.log", "Attribute " + ATTRIBUTE_NAME_CONTAINER + " (" + attribute.toString() + ") exists");
-        return (PnfsHandler) attribute;
+        return (CellStub) attribute;
     }
-
-    public void start() throws IOException
-    {
-        Test.write("/tmp/test003.log", "Start");
-    }
-
-    public void stop() throws IOException
-    {
-        Test.write("/tmp/test003.log", "Stop");
-    }
-
-    @Override
-    public void run() {
-        Test.write("/tmp/test003.log", "Run");
-        //throw new UnsupportedOperationException("Not supported yet.");
-    }
-
 }

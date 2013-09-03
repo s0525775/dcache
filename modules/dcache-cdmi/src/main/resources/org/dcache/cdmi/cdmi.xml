@@ -83,8 +83,6 @@
         <property name="maxQueued" value="${cdmi.limits.jetty.threads.queued.max}"/>
     </bean>
 
-    <!-- <bean id="server" class="org.dcache.cdmi.ServerConfigurer" --> <!-- throws NullPointerException -->
-    <!-- <bean name="server" class="org.dcache.cdmi.ServerConfigurer" --> <!-- throws NullPointerException -->
     <bean id="server" class="org.eclipse.jetty.server.Server"
           init-method="start" destroy-method="stop">
         <description>Jetty server hosting the CDMI web application</description>
@@ -104,20 +102,18 @@
                     <list>
                         <bean id="contexts" class="org.eclipse.jetty.server.handler.ContextHandlerCollection"/>
                         <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
-                            <property name="contextPath" value="/cdmi-server" />  <!-- here -->
-                            <!--
                             <property name="eventListeners">
                                 <list>
-                                    <bean class="org.springframework.web.context.ContextLoaderListener"/>
+                                    <bean class="org.dcache.cdmi.dao.ContainerDaoImpl"/>
                                 </list>
                             </property>
-                            -->
+                            <property name="contextPath" value="/cdmi-server"/>  <!-- here -->
                             <property name="servletHandler">
                                 <bean class="org.eclipse.jetty.servlet.ServletHandler">
                                     <property name="servlets">
                                         <list>
                                             <bean class="org.eclipse.jetty.servlet.ServletHolder">
-                                                <property name="name" value="cdmi-server" />
+                                                <property name="name" value="cdmi-server"/>
                                                 <property name="servlet">
                                                     <bean class="org.apache.cxf.transport.servlet.CXFServlet" />
                                                 </property>
@@ -126,17 +122,6 @@
                                                         <entry key="contextConfigLocation" value="classpath:cxf-jsr-config.xml" />
                                                     </map>
                                                 </property>
-                                                <!--
-                                                <property name="attributes">
-                                                    <bean class="org.eclipse.jetty.util.AttributesMap">
-                                                        <constructor-arg>
-                                                            <map>
-                                                                <entry key="org.dcache.cdmi.container" value-ref="container"/>
-                                                            </map>
-                                                        </constructor-arg>
-                                                    </bean>
-                                                </property>
-                                                -->
                                             </bean>
                                         </list>
                                     </property>
@@ -150,33 +135,24 @@
                                     </property>
                                 </bean>
                             </property>
+                            <property name="attributes">
+                                <bean class="org.eclipse.jetty.util.AttributesMap">
+                                    <constructor-arg>
+                                        <map>
+                                            <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub"/>
+                                        </map>
+                                    </constructor-arg>
+                                </bean>
+                            </property>
                         </bean>
                         <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
                     </list>
                 </property>
-            </bean>
+           </bean>
         </property>
     </bean>
 
     <!-- CDMI SERVICE -->
     <import resource="cxf-jsr-config.xml"/>
-
-    <bean id="container" class="org.dcache.cdmi.dao.ContainerDaoImpl"
-        init-method="start" destroy-method="stop">
-        <description>dCache plugin for CDMI Container Dao</description>
-        <property name="pnfsStub" ref="pnfs-stub"/>
-        <property name="pnfsHandler" ref="pnfs-handler"/>
-        <property name="listDirectoryHandler" ref="list-handler"/>
-    </bean>
-
-    <bean class="org.springframework.web.context.support.ServletContextAttributeExporter">
-        <property name="attributes">
-            <map>
-                <entry key="org.dcache.cdmi.container">
-                    <ref bean="container" />
-                </entry>
-            </map>
-        </property>
-    </bean>
 
 </beans>

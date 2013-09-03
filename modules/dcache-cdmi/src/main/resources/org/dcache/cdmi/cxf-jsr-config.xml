@@ -48,6 +48,7 @@
     <!-- Register autowired components -->
 
     <context:component-scan base-package="org.snia.cdmiserver"/>
+    <context:component-scan base-package="org.dcache.cdmi.dao"/>
 
     <!-- Apache CXF Core Configuration -->
 
@@ -107,7 +108,14 @@
 
     <!-- Application Objects -->
 
+    <!--
     <bean id="containerDao" class="org.snia.cdmiserver.dao.filesystem.ContainerDaoImpl">
+        <property name="baseDirectoryName" value="/data"/>
+        <property name="recreate" value="false"/>
+    </bean>
+    -->
+
+    <bean id="containerDao" class="org.dcache.cdmi.dao.ContainerDaoImpl">
         <property name="baseDirectoryName" value="/data"/>
         <property name="recreate" value="false"/>
     </bean>
@@ -117,8 +125,6 @@
         <property name="containerDao" ref="containerDao"/>
     </bean>
 
-    <bean id="capabilityDao" class="org.snia.cdmiserver.dao.filesystem.CapabilityDaoImpl">
-
-    </bean>
+    <bean id="capabilityDao" class="org.snia.cdmiserver.dao.filesystem.CapabilityDaoImpl"/>
 
 </beans>
