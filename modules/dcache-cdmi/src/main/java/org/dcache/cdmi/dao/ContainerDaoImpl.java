@@ -30,30 +30,20 @@
  */
 package org.dcache.cdmi.dao;
 
-import com.google.common.collect.Range;
 import diskCacheV111.util.CacheException;
-import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
-import org.dcache.auth.Subjects;
-import org.dcache.cdmi.CDMI;
 import org.dcache.cdmi.Test;
 
 import org.dcache.cells.CellStub;
