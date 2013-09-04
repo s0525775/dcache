@@ -108,7 +108,7 @@
 
     <!-- Application Objects -->
 
-    <!--
+    <!-- OLD:
     <bean id="containerDao" class="org.snia.cdmiserver.dao.filesystem.ContainerDaoImpl">
         <property name="baseDirectoryName" value="/data"/>
         <property name="recreate" value="false"/>

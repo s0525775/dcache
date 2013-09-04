@@ -335,6 +335,7 @@ public class CDMI extends AbstractCellComponent
                 SocketChannel connection = channel.accept();
                 if (connection != null) { //connection is null, this line of code is rewritten for non-blocking mode, NEW
                     PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
+                    out.flush();
                     try {
                         //old
                         lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
@@ -397,6 +398,7 @@ public class CDMI extends AbstractCellComponent
                 throws InterruptedException
         {
             writer.println(entry.getName());
+            Test.write("/tmp/test006.log", "Writer:" + entry.getName());
         }
     }
 
@@ -471,8 +473,9 @@ public class CDMI extends AbstractCellComponent
             path.add(name);
             ArrayList<String> names = new ArrayList<>();
             PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest.log"), "UTF-8"));
-            out.close();
+            out.flush();
             int test = lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
+            out.close();
             return String.valueOf(test);
         }
     }

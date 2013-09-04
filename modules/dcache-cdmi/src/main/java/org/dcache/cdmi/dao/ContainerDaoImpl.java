@@ -30,18 +30,30 @@
  */
 package org.dcache.cdmi.dao;
 
+import com.google.common.collect.Range;
+import diskCacheV111.util.CacheException;
+import diskCacheV111.util.FsPath;
+import diskCacheV111.util.PnfsHandler;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
+import org.dcache.auth.Subjects;
+import org.dcache.cdmi.CDMI;
 import org.dcache.cdmi.Test;
 
 import org.dcache.cells.CellStub;
@@ -67,16 +79,30 @@ public class ContainerDaoImpl
     private ServletContext servletContext = null;
 
     private CellStub pnfsStub;
+    private PnfsHandler pnfsHandler;
 
     public static final String ATTRIBUTE_NAME_CONTAINER = "org.dcache.cdmi.pnfsstub";
 
     @Override
     public void contextInitialized(ServletContextEvent servletContextEvent) {
         //throw new UnsupportedOperationException("Not supported yet.");
-        Test.write("/tmp/test003.log", "Context11");
         this.servletContext = servletContextEvent.getServletContext();
-        Test.write("/tmp/test003.log", "Context22");
         this.pnfsStub = getAttribute();
+        this.pnfsHandler = new PnfsHandler(pnfsStub);
+        //Create = OK
+        try {
+            pnfsHandler.createPnfsDirectory("/test123");
+        } catch (CacheException ex) {
+            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
+            //Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        //Delete = OK
+        try {
+            pnfsHandler.deletePnfsEntry("/test123");
+        } catch (CacheException ex) {
+            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
+            //Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     @Override
