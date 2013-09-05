@@ -30,23 +30,39 @@
  */
 package org.dcache.cdmi.dao;
 
+import com.google.common.collect.Range;
 import diskCacheV111.util.CacheException;
+import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
+import org.dcache.auth.Subjects;
 import org.dcache.cdmi.Test;
+import org.dcache.cells.CellMessageReceiver;
 
 import org.dcache.cells.CellStub;
+import org.dcache.namespace.FileAttribute;
+import org.dcache.util.list.DirectoryEntry;
+import org.dcache.util.list.DirectoryListPrinter;
+import org.dcache.util.list.ListDirectoryHandler;
+import org.dcache.vehicles.FileAttributes;
 
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.exception.BadRequestException;
@@ -60,7 +76,7 @@ import org.snia.cdmiserver.util.ObjectID;
  * </p>
  */
 public class ContainerDaoImpl
-    implements ContainerDao, ServletContextListener {
+    implements ContainerDao, ServletContextListener, CellMessageReceiver {
 
     //
     // Properties and Dependency Injection Methods
@@ -70,35 +86,10 @@ public class ContainerDaoImpl
 
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
+    private ListDirectoryHandler listDirectoryHandler;
+    private String result = "";
 
     public static final String ATTRIBUTE_NAME_CONTAINER = "org.dcache.cdmi.pnfsstub";
-
-    @Override
-    public void contextInitialized(ServletContextEvent servletContextEvent) {
-        //throw new UnsupportedOperationException("Not supported yet.");
-        this.servletContext = servletContextEvent.getServletContext();
-        this.pnfsStub = getAttribute();
-        this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //Create = OK
-        try {
-            pnfsHandler.createPnfsDirectory("/test123");
-        } catch (CacheException ex) {
-            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
-            //Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        //Delete = OK
-        try {
-            pnfsHandler.deletePnfsEntry("/test123");
-        } catch (CacheException ex) {
-            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
-            //Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-
-    @Override
-    public void contextDestroyed(ServletContextEvent sce) {
-        //throw new UnsupportedOperationException("Not supported yet.");
-    }
 
     /**
      * <p>
@@ -674,23 +665,135 @@ public class ContainerDaoImpl
         }
     }
 
-    public CellStub getAttribute()
+    /**
+     * <p>
+     * DCache related stuff.
+     * </p>
+     *
+     */
+
+    @Override
+    public void contextInitialized(ServletContextEvent servletContextEvent) {
+        //throw new UnsupportedOperationException("Not supported yet.");
+        this.servletContext = servletContextEvent.getServletContext();
+        this.pnfsStub = getAttribute();
+        this.pnfsHandler = new PnfsHandler(pnfsStub);
+        this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler);
+        //Create = OK
+        try {
+            pnfsHandler.createPnfsDirectory("/test123");
+            pnfsHandler.createPnfsDirectory("/test234");
+            pnfsHandler.createPnfsDirectory("/test345");
+        } catch (CacheException ex) {
+            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
+        }
+        //Delete = OK
+        try {
+            pnfsHandler.deletePnfsEntry("/test123");
+        } catch (CacheException ex) {
+            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
+        }
+        //List = ???
+        Test.write("/tmp/testa001.log", "001");
+        FsPath path = new FsPath("/");
+        Test.write("/tmp/testa001.log", "002");
+        new ListThread(path).start();
+        Test.write("/tmp/testa001.log", "003");
+    }
+
+    @Override
+    public void contextDestroyed(ServletContextEvent sce) {
+    }
+
+    public CellStub getAttribute()  //tested, ok
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
         }
-
         Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_CONTAINER);
-
         if (attribute == null) {
             throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not found");
         }
-
         if (!CellStub.class.isInstance(attribute)) {
             throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not of type " + CellStub.class);
         }
-
-        Test.write("/tmp/test003.log", "Attribute " + ATTRIBUTE_NAME_CONTAINER + " (" + attribute.toString() + ") exists");
         return (CellStub) attribute;
     }
+
+    class ListThread implements Runnable
+    {
+        private final FsPath path;
+
+        public ListThread(FsPath path)
+        {
+            Test.write("/tmp/testa001.log", "004");
+            this.path = path;
+            Test.write("/tmp/testa001.log", "005");
+        }
+
+        public void start()
+        {
+            Test.write("/tmp/testa001.log", "T01");
+            new Thread(this).start();
+            Test.write("/tmp/testa001.log", "T02");
+        }
+
+        public void stop()
+        {
+            Test.write("/tmp/testa001.log", "T03");
+        }
+
+        @Override
+        public void run()
+        {
+            Test.write("/tmp/testa001.log", "006");
+            PrintWriter out = null;
+            Test.write("/tmp/testa001.log", "007");
+            try {
+                Test.write("/tmp/testa001.log", "008");
+                out = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest2.log"), "UTF-8"));
+                Test.write("/tmp/testa001.log", "009");
+                out.flush();
+                Test.write("/tmp/testa001.log", "010");
+                int count = listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
+                Test.write("/tmp/testa001.log", "011:" + String.valueOf(count) + " counted");
+            } catch (InterruptedException | CacheException | FileNotFoundException | UnsupportedEncodingException ex) {
+                Test.write("/tmp/testa001.log", "012:" + ex.getMessage());
+            } finally {
+                Test.write("/tmp/testa001.log", "013");
+                out.close();
+                Test.write("/tmp/testa001.log", "014");
+            }
+        }
+    }
+
+    private static class ListPrinter implements DirectoryListPrinter
+    {
+        private final PrintWriter writer;
+
+        private ListPrinter(PrintWriter writer)
+        {
+            Test.write("/tmp/testa001.log", "015");
+            this.writer = writer;
+            Test.write("/tmp/testa001.log", "016");
+        }
+
+        @Override
+        public Set<FileAttribute> getRequiredAttributes()
+        {
+            Test.write("/tmp/testa001.log", "017");
+            return EnumSet.noneOf(FileAttribute.class);
+        }
+
+        @Override
+        public void print(FsPath dir, FileAttributes dirAttr, DirectoryEntry entry)
+                throws InterruptedException
+        {
+            Test.write("/tmp/testa001.log", "018");
+            writer.println(entry.getName());
+            Test.write("/tmp/testa001.log", "019");
+            Test.write("/tmp/testa002.log", "Writer:" + entry.getName());
+        }
+    }
+
 }

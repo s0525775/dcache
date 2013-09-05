@@ -27,4 +27,3 @@ public class CDMIMessage extends Message
         this.greeting = greeting;
     }
 }
-
