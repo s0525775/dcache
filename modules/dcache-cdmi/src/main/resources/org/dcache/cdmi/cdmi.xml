@@ -21,6 +21,13 @@
         <property name="timeoutUnit" value="MILLISECONDS"/>
     </bean>
 
+    <bean id="pnfs-stub-2" class="org.dcache.cells.CellStub">
+        <description>PnfsManager communication stub</description>
+        <property name="destination" value="${dcache.service.pnfsmanager}"/>
+        <property name="timeout" value="30000"/>
+        <property name="timeoutUnit" value="MILLISECONDS"/>
+    </bean>
+
     <bean id="pnfs-handler" class="diskCacheV111.util.PnfsHandler">
         <description>PNFS manager client module</description>
         <constructor-arg ref="pnfs-stub"/>
@@ -43,6 +50,14 @@
       <constructor-arg>
 	  <bean class="diskCacheV111.util.PnfsHandler">
 	      <constructor-arg ref="pnfs-stub"/>
+	  </bean>
+      </constructor-arg>
+    </bean>
+
+    <bean id="list-handler-2" class="org.dcache.util.list.ListDirectoryHandler">
+      <constructor-arg>
+	  <bean class="diskCacheV111.util.PnfsHandler">
+	      <constructor-arg ref="pnfs-stub-2"/>
 	  </bean>
       </constructor-arg>
     </bean>
@@ -139,7 +154,8 @@
                                 <bean class="org.eclipse.jetty.util.AttributesMap">
                                     <constructor-arg>
                                         <map>
-                                            <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub"/>
+                                            <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub-2"/>
+                                            <entry key="org.dcache.cdmi.lister" value-ref="list-handler-2"/>
                                         </map>
                                     </constructor-arg>
                                 </bean>

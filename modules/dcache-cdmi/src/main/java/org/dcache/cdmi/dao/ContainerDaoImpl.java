@@ -89,7 +89,8 @@ public class ContainerDaoImpl
     private ListDirectoryHandler listDirectoryHandler;
     private String result = "";
 
-    public static final String ATTRIBUTE_NAME_CONTAINER = "org.dcache.cdmi.pnfsstub";
+    public static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
+    public static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
 
     /**
      * <p>
@@ -676,9 +677,11 @@ public class ContainerDaoImpl
     public void contextInitialized(ServletContextEvent servletContextEvent) {
         //throw new UnsupportedOperationException("Not supported yet.");
         this.servletContext = servletContextEvent.getServletContext();
-        this.pnfsStub = getAttribute();
+        this.pnfsStub = getCellStubAttribute();
         this.pnfsHandler = new PnfsHandler(pnfsStub);
-        this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler);
+        //this.listDirectoryHandler = new ListDirectoryHandler(new PnfsHandler(pnfsManager));
+        //diskCacheV111.pools.DirectoryLookUpPool.java (dcache-dcap)
+        this.listDirectoryHandler = getListDirAttribute(); //temp
         //Create = OK
         try {
             pnfsHandler.createPnfsDirectory("/test123");
@@ -693,11 +696,11 @@ public class ContainerDaoImpl
         } catch (CacheException ex) {
             Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
         }
-        //List = ???
+        //List = OK (tested with more than one thread)
         Test.write("/tmp/testa001.log", "001");
         FsPath path = new FsPath("/");
         Test.write("/tmp/testa001.log", "002");
-        new ListThread(path).start();
+        (new Thread(new ListThread(path))).start();
         Test.write("/tmp/testa001.log", "003");
     }
 
@@ -705,19 +708,34 @@ public class ContainerDaoImpl
     public void contextDestroyed(ServletContextEvent sce) {
     }
 
-    public CellStub getAttribute()  //tested, ok
+    public CellStub getCellStubAttribute()  //tested, ok
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
         }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_CONTAINER);
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_PNFSSTUB);
         if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not found");
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not found");
         }
         if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_CONTAINER + " not of type " + CellStub.class);
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not of type " + CellStub.class);
         }
         return (CellStub) attribute;
+    }
+
+    public ListDirectoryHandler getListDirAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_LISTER);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not found");
+        }
+        if (!ListDirectoryHandler.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not of type " + ListDirectoryHandler.class);
+        }
+        return (ListDirectoryHandler) attribute;
     }
 
     class ListThread implements Runnable
@@ -734,7 +752,7 @@ public class ContainerDaoImpl
         public void start()
         {
             Test.write("/tmp/testa001.log", "T01");
-            new Thread(this).start();
+            (new ListThread(path)).start();
             Test.write("/tmp/testa001.log", "T02");
         }
 
