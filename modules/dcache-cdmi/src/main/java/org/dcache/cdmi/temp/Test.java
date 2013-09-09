@@ -1,4 +1,4 @@
-package org.dcache.cdmi;
+package org.dcache.cdmi.temp;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;

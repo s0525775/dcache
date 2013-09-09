@@ -45,16 +45,19 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import org.dcache.auth.Subjects;
-import org.dcache.cdmi.Test;
+import org.dcache.cdmi.temp.Test;
 import org.dcache.cells.CellMessageReceiver;
 
 import org.dcache.cells.CellStub;
@@ -82,8 +85,9 @@ public class ContainerDaoImpl
     // Properties and Dependency Injection Methods
     //
     private String baseDirectoryName = null;
-    private ServletContext servletContext = null;
 
+    private ServletContext servletContext = null;
+    private boolean threadHasFinished = false;
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
     private ListDirectoryHandler listDirectoryHandler;
@@ -667,9 +671,7 @@ public class ContainerDaoImpl
     }
 
     /**
-     * <p>
      * DCache related stuff.
-     * </p>
      *
      */
 
@@ -700,6 +702,7 @@ public class ContainerDaoImpl
         Test.write("/tmp/testa001.log", "001");
         FsPath path = new FsPath("/");
         Test.write("/tmp/testa001.log", "002");
+        //it only works if it is called in this way in a thread:
         (new Thread(new ListThread(path))).start();
         Test.write("/tmp/testa001.log", "003");
     }
@@ -744,6 +747,7 @@ public class ContainerDaoImpl
 
         public ListThread(FsPath path)
         {
+            threadHasFinished = false;
             Test.write("/tmp/testa001.log", "004");
             this.path = path;
             Test.write("/tmp/testa001.log", "005");
@@ -751,48 +755,44 @@ public class ContainerDaoImpl
 
         public void start()
         {
+            threadHasFinished = false;
             Test.write("/tmp/testa001.log", "T01");
-            (new ListThread(path)).start();
-            Test.write("/tmp/testa001.log", "T02");
         }
 
         public void stop()
         {
+            threadHasFinished = true;
             Test.write("/tmp/testa001.log", "T03");
         }
 
         @Override
         public void run()
         {
+            threadHasFinished = false;
             Test.write("/tmp/testa001.log", "006");
-            PrintWriter out = null;
+            List<String> out = new ArrayList<>();
             Test.write("/tmp/testa001.log", "007");
             try {
                 Test.write("/tmp/testa001.log", "008");
-                out = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest2.log"), "UTF-8"));
-                Test.write("/tmp/testa001.log", "009");
-                out.flush();
-                Test.write("/tmp/testa001.log", "010");
                 int count = listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
                 Test.write("/tmp/testa001.log", "011:" + String.valueOf(count) + " counted");
-            } catch (InterruptedException | CacheException | FileNotFoundException | UnsupportedEncodingException ex) {
+            } catch (InterruptedException | CacheException ex) {
                 Test.write("/tmp/testa001.log", "012:" + ex.getMessage());
             } finally {
                 Test.write("/tmp/testa001.log", "013");
-                out.close();
-                Test.write("/tmp/testa001.log", "014");
             }
+            threadHasFinished = true;
         }
     }
 
     private static class ListPrinter implements DirectoryListPrinter
     {
-        private final PrintWriter writer;
+        private final List<String> list;
 
-        private ListPrinter(PrintWriter writer)
+        private ListPrinter(List<String> list)
         {
             Test.write("/tmp/testa001.log", "015");
-            this.writer = writer;
+            this.list = list;
             Test.write("/tmp/testa001.log", "016");
         }
 
@@ -808,7 +808,7 @@ public class ContainerDaoImpl
                 throws InterruptedException
         {
             Test.write("/tmp/testa001.log", "018");
-            writer.println(entry.getName());
+            list.add(entry.getName());
             Test.write("/tmp/testa001.log", "019");
             Test.write("/tmp/testa002.log", "Writer:" + entry.getName());
         }

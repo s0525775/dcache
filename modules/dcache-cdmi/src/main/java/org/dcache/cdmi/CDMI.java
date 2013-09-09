@@ -1,5 +1,6 @@
 package org.dcache.cdmi;
 
+import org.dcache.cdmi.temp.Test;
 import java.util.ArrayList;
 import java.util.Collection;						//added
 import java.util.concurrent.Callable;
