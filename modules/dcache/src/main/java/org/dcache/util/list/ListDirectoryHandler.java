@@ -186,6 +186,7 @@ public class ListDirectoryHandler
                 } else {
                     _log.warn("Received list result for an unknown request. Directory listing was possibly incomplete.");
                 }
+
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -238,6 +239,7 @@ public class ListDirectoryHandler
 
             PnfsListDirectoryMessage msg =
                 _queue.poll(_pnfs.getPnfsTimeout(), TimeUnit.MILLISECONDS);
+
             if (msg == null) {
                 throw new CacheException(CacheException.TIMEOUT,
                                          "Timeout during directory list");

@@ -26,6 +26,7 @@
         <property name="destination" value="${dcache.service.pnfsmanager}"/>
         <property name="timeout" value="30000"/>
         <property name="timeoutUnit" value="MILLISECONDS"/>
+        <property name="retryOnNoRouteToCell" value="true"/>
     </bean>
 
     <bean id="pnfs-handler" class="diskCacheV111.util.PnfsHandler">
@@ -42,7 +43,16 @@
         <property name="timeout" value="30000"/>
     </bean>
 
+    <bean id="billing-stub-2" class="org.dcache.cells.CellStub">
+        <property name="destination" value="billing"/>
+        <property name="timeout" value="30000"/>
+    </bean>
+
     <bean id="pool-stub" class="org.dcache.cells.CellStub">
+        <property name="timeout" value="10000"/>
+    </bean>
+
+    <bean id="pool-stub-2" class="org.dcache.cells.CellStub">
         <property name="timeout" value="10000"/>
     </bean>
 
@@ -68,6 +78,19 @@
         <property name="destination" value="${cdmi.service.poolmanager}"/>
         <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
         <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
+    </bean>
+
+    <bean id="pool-manager-stub-2" class="org.dcache.cells.CellStub">
+        <description>PoolManager communication stub</description>
+        <property name="destination" value="${dcache.service.poolmanager}"/>
+        <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
+        <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
+    </bean>
+
+    <bean id="pool-manager-stub-3" class="org.dcache.cells.CellStub">
+        <description>Communication stub for pool manager</description>
+        <property name="destination" value="${poolmanager}"/>
+        <property name="timeout" value="30000"/>
     </bean>
 
     <!-- poolManager refers to pool-manager-stub bean -->
@@ -122,7 +145,7 @@
                                     <bean class="org.dcache.cdmi.dao.ContainerDaoImpl"/>
                                 </list>
                             </property>
-                            <property name="contextPath" value="/cdmi-server"/>  <!-- here -->
+                            <property name="contextPath" value="/"/>  <!-- here -->
                             <property name="servletHandler">
                                 <bean class="org.eclipse.jetty.servlet.ServletHandler">
                                     <property name="servlets">
@@ -156,6 +179,9 @@
                                         <map>
                                             <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub-2"/>
                                             <entry key="org.dcache.cdmi.lister" value-ref="list-handler-2"/>
+                                            <entry key="org.dcache.cdmi.poolmgrstub" value-ref="pool-manager-stub-3"/>
+                                            <entry key="org.dcache.cdmi.poolstub" value-ref="pool-stub-2"/> <!-- added -->
+                                            <entry key="org.dcache.cdmi.billingstub" value-ref="billing-stub-2"/> <!-- added -->
                                         </map>
                                     </constructor-arg>
                                 </bean>

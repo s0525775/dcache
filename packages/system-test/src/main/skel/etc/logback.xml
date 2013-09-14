@@ -190,7 +190,7 @@
     <threshold>
       <appender>events</appender>
       <logger>events</logger>
-      <level>debug</level>
+      <level>all</level>
     </threshold>
 
     <threshold>

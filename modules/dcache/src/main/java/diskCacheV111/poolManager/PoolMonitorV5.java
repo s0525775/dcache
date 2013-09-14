@@ -177,9 +177,13 @@ public class PoolMonitorV5
         public PoolInfo selectWritePool(long preallocated)
             throws CacheException
         {
+            _log.warn("PM001");
             PoolPreferenceLevel[] levels = match(DirectionType.WRITE);
+            _log.warn("PM002");
 
+            _log.warn("PM003");
             if (levels.length == 0) {
+                _log.warn("PM004");
                 throw new CacheException(19,
                                          "No write pools configured for <" +
                                          _fileAttributes.getStorageInfo() +
@@ -187,15 +191,22 @@ public class PoolMonitorV5
                                          (_linkGroup == null ? "[none]" : _linkGroup));
             }
 
+            _log.warn("PM005");
             for (PoolPreferenceLevel level: levels) {
+                _log.warn("PM006:" + level.toString());
                 List<PoolInfo> pools =
                     _costModule.getPoolInfo(level.getPoolList());
+                _log.warn("PM007:" + level.getPoolList().size());
+                _log.warn("PM007:" + pools.size());
                 if (!pools.isEmpty()) {
+                    _log.warn("PM008");
                     Partition partition =
                         _partitionManager.getPartition(level.getTag());
+                    _log.warn("PM009");
                     return partition.selectWritePool(_costModule, pools, _fileAttributes, preallocated);
                 }
             }
+            _log.warn("PM010");
 
             throw new CacheException(20,
                                      "No write pool available for <" +  _fileAttributes.getStorageInfo() +

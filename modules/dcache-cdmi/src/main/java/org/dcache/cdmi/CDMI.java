@@ -20,9 +20,11 @@ import dmg.cells.nucleus.Reply;                                         //added
 import dmg.util.Args;
 import dmg.util.command.Argument;
 import dmg.util.command.Command;
+import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
@@ -48,11 +50,15 @@ import org.dcache.auth.Subjects;
 import org.dcache.cells.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
 import org.dcache.cells.CellMessageReceiver;
+import org.dcache.util.Transfer;
+import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
 import org.dcache.util.list.DirectoryListSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-//import org.dcache.vehicles.FileAttributes;
+import static org.dcache.namespace.FileAttribute.*;
+import static org.dcache.namespace.FileType.*;
+
 
 public class CDMI extends AbstractCellComponent
     implements Runnable, CellCommandListener, CellMessageReceiver
@@ -297,31 +303,6 @@ public class CDMI extends AbstractCellComponent
         }
     }
 
-    // works! - Start
-    public void start()
-    {
-        new Thread(this).start();
-    }
-
-    public void stop()
-    {
-    }
-
-    @Override
-    public void run()
-    {
-        try {
-            Test.write("/tmp/outputtest.log", "New:");
-            PrintWriter out2 = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest.log"), "UTF-8"));
-            out2.flush();
-            lister.printDirectory(Subjects.ROOT, new ListPrinter(out2), new FsPath("/"), null, Range.<Integer>all());
-            out2.close();
-        } catch (FileNotFoundException | InterruptedException | CacheException | UnsupportedEncodingException ex) {
-            Test.write("/tmp/outputtest.log", ex.getMessage());
-        }
-    }
-    // works! - End
-
     private static class ListPrinter implements DirectoryListPrinter
     {
         private final PrintWriter writer;
@@ -336,7 +317,7 @@ public class CDMI extends AbstractCellComponent
         public Set<FileAttribute> getRequiredAttributes()
         {
             Test.write("/tmp/test005.log", "T009");
-            return EnumSet.noneOf(FileAttribute.class);
+            return EnumSet.of(TYPE, SIZE);
         }
 
         @Override
@@ -345,25 +326,30 @@ public class CDMI extends AbstractCellComponent
         {
             Test.write("/tmp/test005.log", "T010");
             writer.println(entry.getName());
+            FileAttributes attr = entry.getFileAttributes();
+            if (attr.getFileType() == DIR) {
+                writer.println(entry.getName() + "::d::" + attr.getSize() + "\n");
+                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::d::" + attr.getSize() + "\n");
+            } if (attr.getFileType() == REGULAR) {
+                writer.println(entry.getName() + "::f::" + attr.getSize() + "\n");
+                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::f::" + attr.getSize() + "\n");
+            } else {
+                writer.println(entry.getName() + "::s::" + attr.getSize() + "\n");
+                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::s::" + attr.getSize() + "\n");
+            }
             Test.write("/tmp/test005.log", "T011");
-            Test.write("/tmp/test006.log", "Writer:" + entry.getName());
         }
     }
 
-    /*
     public void start() throws IOException
     {
-        //passed
         channel = ServerSocketChannel.open();
         channel.bind(new InetSocketAddress(2000));
-        //next line is added from me, NEW, switches to non-blocking mode
-        channel.configureBlocking(false);
         new Thread(this).start();
     }
 
     public void stop() throws IOException
     {
-        //passed, works
         if (channel != null) {
             channel.close();
         }
@@ -372,32 +358,14 @@ public class CDMI extends AbstractCellComponent
     @Override
     public void run()
     {
-        //Test
-        try {
-            Test.write("/tmp/outputtest.log", "New:");
-            PrintWriter out2 = new PrintWriter(new OutputStreamWriter(new FileOutputStream("/tmp/outputtest.log"), "UTF-8"));
-            out2.flush();
-            lister.printDirectory(Subjects.ROOT, new ListPrinter(out2), new FsPath("/"), null, Range.<Integer>all());
-            out2.close();
-        } catch (FileNotFoundException | InterruptedException | CacheException | UnsupportedEncodingException ex) {
-            Test.write("/tmp/outputtest.log", ex.getMessage());
-        }
-        //Test
         while (true) {
-            //passed, works
             try {
-                //it will work till this comment line
-                //the next line doesn't throw an exception or a response in blocking mode! it will wait till there is a connection to accept. but there doesn't seem to be a connection to accept
-                SocketChannel connection = channel.accept();
-                if (connection != null) { //connection is null, this line of code is rewritten for non-blocking mode, NEW
+                try (SocketChannel connection = channel.accept()) {
                     PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
-                    out.flush();
                     try {
-                        //old
-                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
+                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
+                                              null, Range.<Integer>all());
 
-                        //new
-                        /*
                         BufferedReader reader = new BufferedReader(new InputStreamReader(connection.socket().getInputStream()));
                         int port = Integer.parseInt(reader.readLine());
 
@@ -413,30 +381,24 @@ public class CDMI extends AbstractCellComponent
                         transfer.setProtocolInfo(new CDMIProtocolInfo(address));
                         transfer.createNameSpaceEntry();
                         transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
+
+                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
+                                              null, Range.<Integer>all());
                     } catch (IOException | CacheException e) {
-                        */ /*
-                    } catch (CacheException e) {
                         out.println(e.toString());
                     }
                     out.flush();
-                    out.close();
-                }
-                //added, NEW
-                if (connection != null && connection.isConnected()) {
-                    connection.close();
                 }
             } catch (NotYetBoundException e) {
                 // log error
                 break;
             } catch (InterruptedException | ClosedChannelException e) {
-                // log error
                 break;
             } catch (IOException e) {
                 // log error
             }
         }
     }
-    */
 
     @Command(name = "pools", hint = "show pools in pool group",
              usage = "Shows the names of the pools in POOLGROUP.")
@@ -494,36 +456,8 @@ public class CDMI extends AbstractCellComponent
         }
     }
 
-    /*
-    @Command(name = "ls", hint = "list directory (Test!)",
-             usage = "List directories")
-    class LsCommand extends DelayedReply implements Callable<Reply>, Runnable
-    {
-        @Argument(help = "Directory name")
-        String name;
-
-        @Override
-        public Reply call()
-        {
-            new Thread(this).start();
-            return this;
-        }
-
-        @Override
-        public void run()
-        {
-             try {
-                 String cell = "cdmi";
-                 reply(helloStub.sendAndWait(new CellPath(cell), new CDMIMessage(name)).getGreeting());
-             } catch (CacheException e) {
-                 reply(e);
-             } catch (InterruptedException ex) {
-             }
-        }
-    } */
-
     // runs too fast - getRequiredAttributes() - interrupts
-    @Command(name = "ls2", hint = "list directory (Test!)",
+    @Command(name = "ls", hint = "list directory (Test!)",
              usage = "List directories")
     class LsCommand extends DelayedReply implements Callable<String>
     {
@@ -536,20 +470,8 @@ public class CDMI extends AbstractCellComponent
             Test.write("/tmp/test007.log", "T001");
             FsPath path = new FsPath(name);
             Test.write("/tmp/test007.log", "T002");
-            ListThread thread = new ListThread(path);
+            new Thread(new ListThread(path)).start();
             Test.write("/tmp/test007.log", "T003");
-            Thread newThread = new Thread(thread);
-            Test.write("/tmp/test007.log", "T004");
-            newThread.start();
-            Test.write("/tmp/test007.log", "T004_1");
-            try {
-                Test.write("/tmp/test007.log", "T004_2");
-                newThread.join();
-                Test.write("/tmp/test007.log", "T004_3");
-            } catch (InterruptedException ex) {
-                Test.write("/tmp/test007.log", "T004_4" + ex.getMessage());
-            }
-            Test.write("/tmp/test007.log", "T005");
             return result;
         }
     }
@@ -557,7 +479,7 @@ public class CDMI extends AbstractCellComponent
     /**
      * List task that can serve as a DelayedReply.
      */
-    class ListThread extends DelayedReply implements Runnable
+    class ListThread implements Runnable
     {
         private final FsPath path;
 
@@ -619,7 +541,7 @@ public class CDMI extends AbstractCellComponent
         public Set<FileAttribute> getRequiredAttributes()
         {
             Test.write("/tmp/test007.log", "T015");
-            return EnumSet.noneOf(FileAttribute.class);
+            return EnumSet.of(TYPE, SIZE);
         }
 
         @Override
@@ -628,50 +550,16 @@ public class CDMI extends AbstractCellComponent
             Test.write("/tmp/test007.log", "T016");
             FileAttributes attr = entry.getFileAttributes();
             Test.write("/tmp/test007.log", "T017");
-            out.append(entry.getName()).append("\n");
+            if (attr.getFileType() == DIR) {
+                out.append(entry.getName()).append("::d::").append(attr.getSize()).append("\n");
+            } else if (attr.getFileType() == REGULAR) {
+                out.append(entry.getName()).append("::f::").append(attr.getSize()).append("\n");
+            } else {
+                out.append(entry.getName()).append("::s::").append(attr.getSize()).append("\n");
+            }
+            Test.write("/tmp/test007.log", "T017_2");
             Test.write("/tmp/test008.log", "Writer:" + entry.getName());
         }
-    }
-
-    /**
-     * List task that can serve as a DelayedReply.
-     */
-    class ListThread2 extends DelayedReply implements Runnable
-    {
-        private final FsPath path;
-
-        public ListThread2(FsPath path)
-        {
-            Test.write("/tmp/test007.log", "T105");
-            this.path = path;
-        }
-
-        @Override
-        public void run()
-        {
-            try {
-                Test.write("/tmp/test007.log", "T106");
-                reply(list(path));
-            } catch (CacheException ex) {
-                Test.write("/tmp/test007.log", "T107");
-                reply(ex);
-            }
-        }
-    }
-
-    // commands
-    // diskCacheV111.admin.UserAdminShell - dmg.util.RequestTimeOutException
-    public final static String hh_ls_$_1 = "ls <path>";
-    public DelayedReply ac_ls_$_1(Args args)
-    {
-        Test.write("/tmp/test007.log", "T101");
-        FsPath path = new FsPath(args.argv(0));
-        Test.write("/tmp/test007.log", "T102");
-        ListThread2 thread = new ListThread2(path);
-        Test.write("/tmp/test007.log", "T103");
-        new Thread(thread).start();
-        Test.write("/tmp/test007.log", "T104");
-        return thread;
     }
 
 }

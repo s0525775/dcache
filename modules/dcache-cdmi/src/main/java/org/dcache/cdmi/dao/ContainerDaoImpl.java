@@ -30,42 +30,74 @@
  */
 package org.dcache.cdmi.dao;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
+import com.google.common.io.ByteStreams;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
+import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsHandler;
+import diskCacheV111.util.PnfsId;
+import diskCacheV111.util.TimeoutCacheException;
+import diskCacheV111.vehicles.HttpProtocolInfo;
+import diskCacheV111.vehicles.ProtocolInfo;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.security.auth.Subject;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.temp.Test;
-import org.dcache.cells.CellMessageReceiver;
+import org.dcache.cells.CellLifeCycleAware;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import org.dcache.cdmi.CDMIProtocolInfo;
+import org.dcache.cells.AbstractCellComponent;
+import static org.dcache.namespace.FileAttribute.*;
+import static org.dcache.namespace.FileType.*;
 
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
+import org.dcache.namespace.FileType;
+import org.dcache.util.RedirectedTransfer;
+import org.dcache.util.Transfer;
+import org.dcache.util.TransferRetryPolicies;
+import org.dcache.util.TransferRetryPolicy;
 import org.dcache.util.list.DirectoryEntry;
 import org.dcache.util.list.DirectoryListPrinter;
 import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
+import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import org.slf4j.LoggerFactory;
 
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.exception.BadRequestException;
@@ -78,23 +110,39 @@ import org.snia.cdmiserver.util.ObjectID;
  * Concrete implementation of {@link ContainerDao} using the local filesystem as the backing store.
  * </p>
  */
-public class ContainerDaoImpl
-    implements ContainerDao, ServletContextListener, CellMessageReceiver {
+public class ContainerDaoImpl extends AbstractCellComponent
+    implements ContainerDao, ServletContextListener, CellLifeCycleAware  {
 
     //
-    // Properties and Dependency Injection Methods
+    // Something important
+    //
+    private final static org.slf4j.Logger _log =
+        LoggerFactory.getLogger(ContainerDaoImpl.class);
+
+    //
+    // Properties and Dependency Injection Methods by CDMI
     //
     private String baseDirectoryName = null;
 
+    //
+    // Properties and Dependency Injection Methods by dCache
+    //
     private ServletContext servletContext = null;
-    private boolean threadHasFinished = false;
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
     private ListDirectoryHandler listDirectoryHandler;
-    private String result = "";
-
+    private CellStub poolStub;
+    private CellStub poolMgrStub;
+    private CellStub billingStub;
     public static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
     public static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
+    public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
+    public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
+    public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
+
+    /**
+     * CDMI related stuff.
+     */
 
     /**
      * <p>
@@ -135,9 +183,9 @@ public class ContainerDaoImpl
         // passed Container in PathResource.putContainer()
         //
 
-        File directory = absoluteFile(path);
+        String directory = absolutePath(path);
 
-        File containerFieldsFile = getContainerFieldsFile(path);
+        String containerFieldsFile = getContainerFieldsFile(path);
 
         if (containerRequest.getMove() == null) { // This is a normal Create or Update
 
@@ -152,13 +200,13 @@ public class ContainerDaoImpl
             // Update.
             //
 
-            if (!directory.exists()) { // Creating Container
+            if (!checkIfDirectoryExists(directory)) { // Creating Container
 
-                if (!directory.mkdir()) {
+                if (!createDirectory(directory)) {
                     throw new IllegalArgumentException("Cannot create container '" + path + "'");
                 }
 
-                String objectID = ObjectID.getObjectID(9);// System.nanoTime()+"";
+                String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
                 containerRequest.setObjectID(objectID);
 
                 //
@@ -194,6 +242,7 @@ public class ContainerDaoImpl
                 //
                 // Read the persistent metatdata from the "." file
                 //
+                //TODO:
                 Container currentContainer = getPersistedContainerFields(containerFieldsFile);
 
                 containerRequest.setObjectID(currentContainer.getObjectID());
@@ -230,7 +279,7 @@ public class ContainerDaoImpl
             //
 
             try {
-                FileWriter fstream = new FileWriter(containerFieldsFile.getAbsolutePath());
+                FileWriter fstream = new FileWriter(absolutePath(containerFieldsFile));
                 BufferedWriter out = new BufferedWriter(fstream);
                 out.write(containerRequest.toJson(true)); // Save it
                 out.close();
@@ -256,7 +305,7 @@ public class ContainerDaoImpl
 
         } else { // Moving a Container
 
-            if (directory.exists()) {
+            if (checkIfDirectoryExists(directory)) {
                 throw new IllegalArgumentException("Cannot move container '"
                                                    + containerRequest.getMove()
                                                    + "' to '"
@@ -264,16 +313,16 @@ public class ContainerDaoImpl
                                                    + "'; Destination already exists");
             }
 
-            File sourceContainerFile = absoluteFile(containerRequest.getMove());
+            String sourceContainerFile = absolutePath(containerRequest.getMove());
 
-            if (!sourceContainerFile.exists()) {
+            if (!checkIfFileExists(sourceContainerFile)) {
                 throw new NotFoundException("Path '"
-                                            + directory.getAbsolutePath()
+                                            + absolutePath(directory)
                                             + "' does not identify an existing container");
             }
-            if (!sourceContainerFile.isDirectory()) {
+            if (!isDirectory(sourceContainerFile)) {
                 throw new IllegalArgumentException("Path '"
-                                                   + directory.getAbsolutePath()
+                                                   + absolutePath(directory)
                                                    + "' does not identify a container");
             }
 
@@ -281,15 +330,14 @@ public class ContainerDaoImpl
             // Move Container directory
             //
 
-            sourceContainerFile.renameTo(directory);
+            renameDirectory(sourceContainerFile, directory);
 
             //
             // Move Container's Metadata .file
             //
+            String sourceContainerFieldsFile = getContainerFieldsFile(containerRequest.getMove());
 
-            File sourceContainerFieldsFile = getContainerFieldsFile(containerRequest.getMove());
-
-            sourceContainerFieldsFile.renameTo(containerFieldsFile);
+            renameFile(sourceContainerFieldsFile, containerFieldsFile);
 
             //
             // Get the containers field's to return in response
@@ -322,7 +370,7 @@ public class ContainerDaoImpl
                 //
 
                 try {
-                    FileWriter fstream = new FileWriter(containerFieldsFile.getAbsolutePath());
+                    FileWriter fstream = new FileWriter(absolutePath(containerFieldsFile));
                     BufferedWriter out = new BufferedWriter(fstream);
                     out.write(containerRequest.toJson(true)); // Save it
                     out.close();
@@ -360,21 +408,21 @@ public class ContainerDaoImpl
     //
     @Override
     public void deleteByPath(String path) {
-        File directoryOrFile = absoluteFile(path);
+        String directoryOrFile = absolutePath(path);
 
         //
 
-        if (directoryOrFile.isDirectory()) {
-            recursivelyDelete(directoryOrFile);
+        if (isDirectory(directoryOrFile)) {
+            deleteRecursively(directoryOrFile);
         } else {
-            directoryOrFile.delete();
+            deleteFile(directoryOrFile);
         }
 
         //
         // remove the "." file that contains the Container or Object's JSON-encoded
         // metadata
         //
-        getContainerFieldsFile(path).delete();
+        deleteFile(getContainerFieldsFile(path));
     }
 
     //
@@ -393,16 +441,16 @@ public class ContainerDaoImpl
 
         System.out.println("In ContainerDAO.findByPath : " + path);
 
-        File directory = absoluteFile(path);
+        String directory = absolutePath(path);
 
-        if (!directory.exists()) {
+        if (checkIfDirectoryExists(directory)) {
             throw new NotFoundException("Path '"
-                                        + directory.getAbsolutePath()
+                                        + absolutePath(directory)
                                         + "' does not identify an existing container");
         }
-        if (!directory.isDirectory()) {
+        if (!isDirectory(directory)) {
             throw new IllegalArgumentException("Path '"
-                                               + directory.getAbsolutePath()
+                                               + absolutePath(directory)
                                                + "' does not identify a container");
         }
 
@@ -440,7 +488,7 @@ public class ContainerDaoImpl
      * @param path
      *            Path of the requested container.
      */
-    private File getContainerFieldsFile(String path) {
+    private String getContainerFieldsFile(String path) {
         // path should be /<parent container name>/<container name>
         String[] tokens = path.split("[/]+");
         if (tokens.length < 1) {
@@ -461,20 +509,20 @@ public class ContainerDaoImpl
                            + containerName);
 
 
-        File baseDirectory1, parentContainerDirectory, containerFieldsFile;
+        String baseDirectory1, parentContainerDirectory, containerFieldsFile;
         try {
             System.out.println("baseDirectory = " + baseDirectoryName);
-            baseDirectory1 = new File(baseDirectoryName + "/");
+            baseDirectory1 = baseDirectoryName + "/";
             System.out
-                    .println("Base Directory Absolute Path = " + baseDirectory1.getAbsolutePath());
-            parentContainerDirectory = new File(baseDirectory1, parentContainerName);
+                    .println("Base Directory Absolute Path = " + absolutePath(baseDirectory1));
+            parentContainerDirectory = baseDirectory1 + "/" + parentContainerName;
             //
             System.out.println("Parent Container Absolute Path = "
-                               + parentContainerDirectory.getAbsolutePath());
+                               + absolutePath(parentContainerDirectory));
             //
-            containerFieldsFile = new File(parentContainerDirectory, containerFieldsFileName);
+            containerFieldsFile = parentContainerDirectory + "/" + containerFieldsFileName;
             System.out.println("Container Metadata File Path = "
-                               + containerFieldsFile.getAbsolutePath());
+                               + absolutePath(containerFieldsFile));
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception while building File objects: " + ex);
@@ -491,10 +539,10 @@ public class ContainerDaoImpl
      * @param containerFieldsFile
      *            File object for the container fields file.
      */
-    private Container getPersistedContainerFields(File containerFieldsFile) {
+    private Container getPersistedContainerFields(String containerFieldsFile) {
         Container containerFields = new Container();
         try {
-            FileInputStream in = new FileInputStream(containerFieldsFile.getAbsolutePath());
+            FileInputStream in = new FileInputStream(absolutePath(containerFieldsFile));
             int inpSize = in.available();
             System.out.println("Container fields file size:" + inpSize);
 
@@ -524,15 +572,14 @@ public class ContainerDaoImpl
      * @param path
      *            Path of the requested file or directory.
      */
-    public File absoluteFile(String path) {
+    public String absolutePath(String path) {
         if (path == null) {
             return baseDirectory();
         } else {
-            return new File(baseDirectory(), path);
+            String tmpPath = addPrefixSlashToPath(path);
+            return baseDirectory() + tmpPath;
         }
     }
-
-    private File baseDirectory = null;
 
     /**
      * <p>
@@ -543,16 +590,14 @@ public class ContainerDaoImpl
      * @exception IllegalArgumentException
      *                if we cannot create the base directory
      */
-    private File baseDirectory() {
-        if (baseDirectory == null) {
-            baseDirectory = new File(baseDirectoryName);
-            if (recreate) {
-                recursivelyDelete(baseDirectory);
-                if (!baseDirectory.mkdirs()) {
-                    throw new IllegalArgumentException("Cannot create base directory '"
-                                                       + baseDirectoryName
-                                                       + "'");
-                }
+    private String baseDirectory() {
+        String baseDirectory = addPrefixSlashToPath(baseDirectoryName);
+        if (recreate) {
+            deleteRecursively(baseDirectory);
+            if (!createDirectory(baseDirectory)) {
+                throw new IllegalArgumentException("Cannot create base directory '"
+                        + baseDirectoryName
+                        + "'");
             }
         }
         return baseDirectory;
@@ -575,11 +620,11 @@ public class ContainerDaoImpl
      * @exception IllegalArgumentException
      *                if the specified path identifies a data object instead of a container
      */
-    private Container completeContainer(Container container, File directory, String path) {
+    private Container completeContainer(Container container, String directory, String path) {
         System.out.println("In ContainerDaoImpl.Container, path is: " + path);
 
         System.out.println("In ContainerDaoImpl.Container, absolute path is: "
-                           + directory.getAbsolutePath());
+                           + absolutePath(directory));
 
 
         container.setObjectType("application/cdmi-container");
@@ -618,13 +663,12 @@ public class ContainerDaoImpl
 
         List<String> children = container.getChildren();
 
-        for (File file : directory.listFiles()) {
-            String name = file.getName();
-            if (file.isDirectory()) {
-                children.add(name + "/");
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath(directory).entrySet()) {
+            if (entry.getValue() == DIR) {
+                children.add(entry.getKey() + "/");
             } else {
-                if (!file.getName().startsWith(".")) {
-                    children.add(name);
+                if (!entry.getKey().startsWith(".")) {
+                    children.add(entry.getKey());
                 }
             }
         }
@@ -641,6 +685,7 @@ public class ContainerDaoImpl
 
     /**
      * <p>
+     * (Deprecated)
      * Delete the specified directory, after first recursively deleting any contents within it.
      * </p>
      *
@@ -662,8 +707,8 @@ public class ContainerDaoImpl
 
     @Override
     public boolean isContainer(String path) {
-        File directoryOrFile = absoluteFile(path);
-        if (directoryOrFile.isDirectory()) {
+        String directoryOrFile = absolutePath(path);
+        if (isDirectory(directoryOrFile)) {
             return true;
         } else {
             return false;
@@ -672,46 +717,65 @@ public class ContainerDaoImpl
 
     /**
      * DCache related stuff.
-     *
      */
 
+    //This function is necessary, otherwise the attributes and servletContext are not set.
+    //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
+    //In other words: contextInitialized() must be called before afterStart().
     @Override
     public void contextInitialized(ServletContextEvent servletContextEvent) {
-        //throw new UnsupportedOperationException("Not supported yet.");
         this.servletContext = servletContextEvent.getServletContext();
         this.pnfsStub = getCellStubAttribute();
         this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //this.listDirectoryHandler = new ListDirectoryHandler(new PnfsHandler(pnfsManager));
-        //diskCacheV111.pools.DirectoryLookUpPool.java (dcache-dcap)
-        this.listDirectoryHandler = getListDirAttribute(); //temp
-        //Create = OK
-        try {
-            pnfsHandler.createPnfsDirectory("/test123");
-            pnfsHandler.createPnfsDirectory("/test234");
-            pnfsHandler.createPnfsDirectory("/test345");
-        } catch (CacheException ex) {
-            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
-        }
-        //Delete = OK
-        try {
-            pnfsHandler.deletePnfsEntry("/test123");
-        } catch (CacheException ex) {
-            Test.write("/tmp/test005.log", "Error:" + ex.getMessage());
-        }
-        //List = OK (tested with more than one thread)
-        Test.write("/tmp/testa001.log", "001");
-        FsPath path = new FsPath("/");
-        Test.write("/tmp/testa001.log", "002");
-        //it only works if it is called in this way in a thread:
-        (new Thread(new ListThread(path))).start();
-        Test.write("/tmp/testa001.log", "003");
+        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
+        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
+        this.poolStub = getPoolAttribute();
+        this.poolMgrStub = getPoolMgrAttribute();
+        this.billingStub = getBillingAttribute();
     }
 
     @Override
-    public void contextDestroyed(ServletContextEvent sce) {
+    public void contextDestroyed(ServletContextEvent sce)
+    {
     }
 
-    public CellStub getCellStubAttribute()  //tested, ok
+    @Override
+    public void afterStart()
+    {
+        //Temporary... Start...
+        /*
+        boolean test01 = createDirectory("test123");
+        boolean test02 = createDirectory("test345");
+        boolean test1 = createDirectory("test234");
+        Test.write("/tmp/testb001.log", "001:" + String.valueOf(test1));
+        boolean test2 = checkIfDirectoryExists("test234");
+        Test.write("/tmp/testb001.log", "002:" + String.valueOf(test2));
+        boolean test3 = deleteDirectory("test234");
+        Test.write("/tmp/testb001.log", "003:" + String.valueOf(test3));
+        boolean test4 = checkIfDirectoryExists("test234");
+        Test.write("/tmp/testb001.log", "004:" + String.valueOf(test4));
+        */
+        //Temporary... End...
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/").entrySet()) {
+            Test.write("/tmp/testb001.log", "005:" + entry.getKey() + "|" + entry.getValue());
+        }
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
+            Test.write("/tmp/testb001.log", "006:" + entry.getKey() + "|" + entry.getValue());
+        }
+        Test.write("/tmp/testb001.log", "007");
+        doSomething();
+        Test.write("/tmp/testb001.log", "008");
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
+            Test.write("/tmp/testb001.log", "009:" + entry.getKey() + "|" + entry.getValue());
+        }
+    }
+
+    @Override
+    public void beforeStop()
+    {
+    }
+
+    private CellStub getCellStubAttribute()  //tested, ok
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -726,7 +790,7 @@ public class ContainerDaoImpl
         return (CellStub) attribute;
     }
 
-    public ListDirectoryHandler getListDirAttribute()  //tested, ok
+    private ListDirectoryHandler getListDirAttribute()  //tested, ok
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -741,76 +805,306 @@ public class ContainerDaoImpl
         return (ListDirectoryHandler) attribute;
     }
 
-    class ListThread implements Runnable
+    private CellStub getPoolAttribute()  //tested, ok
     {
-        private final FsPath path;
-
-        public ListThread(FsPath path)
-        {
-            threadHasFinished = false;
-            Test.write("/tmp/testa001.log", "004");
-            this.path = path;
-            Test.write("/tmp/testa001.log", "005");
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
         }
-
-        public void start()
-        {
-            threadHasFinished = false;
-            Test.write("/tmp/testa001.log", "T01");
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not found");
         }
-
-        public void stop()
-        {
-            threadHasFinished = true;
-            Test.write("/tmp/testa001.log", "T03");
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not of type " + CellStub.class);
         }
+        return (CellStub) attribute;
+    }
 
-        @Override
-        public void run()
-        {
-            threadHasFinished = false;
-            Test.write("/tmp/testa001.log", "006");
-            List<String> out = new ArrayList<>();
-            Test.write("/tmp/testa001.log", "007");
-            try {
-                Test.write("/tmp/testa001.log", "008");
-                int count = listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"), null, Range.<Integer>all());
-                Test.write("/tmp/testa001.log", "011:" + String.valueOf(count) + " counted");
-            } catch (InterruptedException | CacheException ex) {
-                Test.write("/tmp/testa001.log", "012:" + ex.getMessage());
-            } finally {
-                Test.write("/tmp/testa001.log", "013");
+    private CellStub getPoolMgrAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLMGRSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private CellStub getBillingAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_BILLINGSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private boolean isDirectory(String dirPath)
+    {
+        return checkIfDirectoryExists(dirPath);
+    }
+
+    private boolean checkIfDirectoryExists(String dirPath)
+    {
+        boolean result = false;
+        List<String> listing = listDirectoriesByPath(baseDirectory());
+        for (String dir : listing) {
+            if (dir.compareTo(dirPath) == 0) {
+                result = true;
             }
-            threadHasFinished = true;
         }
+        return result;
+    }
+
+    private boolean checkIfFileExists(String filePath)
+    {
+        boolean result = false;
+        List<String> listing = listFilesByPath(baseDirectory());
+        for (String file : listing) {
+            if (file.compareTo(filePath) == 0) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
+    private boolean checkIfDirectoryFileExists(String dirPath)
+    {
+        boolean result = false;
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(tmpDirPath);
+        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+            if (entry.getKey().compareTo(dirPath) == 0) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
+    private List<String> listDirectoriesByPath(String path)
+    {
+        List<String> result = new ArrayList<>();
+        String tmpPath = addPrefixSlashToPath(path);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(tmpPath);
+        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+            if (entry.getValue() == DIR) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
+    }
+
+    private List<String> listFilesByPath(String path)
+    {
+        List<String> result = new ArrayList<>();
+        String tmpPath = addPrefixSlashToPath(path);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(tmpPath);
+        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+            if (entry.getValue() == REGULAR) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
+    }
+
+    private Map<String, FileType> listDirectoriesFilesByPath(String path)
+    {
+        String tmpPath = addPrefixSlashToPath(path);
+        FsPath fsPath = new FsPath(tmpPath);
+        Map<String, FileType> result = new HashMap<>();
+        try {
+            listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
+        } catch (InterruptedException | CacheException ex) {
+            _log.warn("Directory and file listing for path '" + path + "' was not possible, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private boolean createDirectory(String dirPath)
+    {
+        boolean result = false;
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        try {
+            pnfsHandler.createPnfsDirectory(tmpDirPath);
+            result = true;
+        } catch (CacheException ex) {
+            _log.warn("Directory '" + dirPath + "' could not get created, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private boolean renameDirectory(String dirPath, String newName)
+    {
+        boolean result = false;
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        try {
+            pnfsHandler.renameEntry(tmpDirPath, newName, true);
+            result = true;
+        } catch (CacheException ex) {
+            _log.warn("Directory '" + dirPath + "' could not get renamed, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private boolean deleteDirectory(String dirPath)
+    {
+        boolean result = false;
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        try {
+            pnfsHandler.deletePnfsEntry(tmpDirPath);
+            result = true;
+        } catch (CacheException ex) {
+            _log.warn("Directory '" + dirPath + "' could not get deleted, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private boolean renameFile(String filePath, String newName)
+    {
+        boolean result = false;
+        String tmpFilePath = addPrefixSlashToPath(filePath);
+        try {
+            pnfsHandler.renameEntry(tmpFilePath, newName, true);
+            result = true;
+        } catch (CacheException ex) {
+            _log.warn("File '" + filePath + "' could not get renamed, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private boolean deleteFile(String filePath)
+    {
+        boolean result = false;
+        String tmpFilePath = addPrefixSlashToPath(filePath);
+        try {
+            pnfsHandler.deletePnfsEntry(tmpFilePath);
+            result = true;
+        } catch (CacheException ex) {
+            _log.warn("File '" + filePath + "' could not get deleted, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private void deleteRecursively(String path)
+    {
+        String tmpPath = addPrefixSlashToPath(path);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(tmpPath);
+        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+            if (entry.getValue() == REGULAR) {
+                deleteFile(entry.getKey());
+            } else {
+                deleteRecursively(entry.getKey());
+                //deleteDirectory(entry.getKey());
+            }
+        }
+        deleteDirectory(tmpPath);
+    }
+
+    private String addPrefixSlashToPath(String path)
+    {
+        String result = "";
+        if (!path.startsWith("/")) {
+            result = "/" + path;
+        } else {
+            result = path;
+        }
+        return result;
+    }
+
+    private String addSuffixSlashToPath(String path)
+    {
+        String result = "";
+        if (!path.endsWith("/")) {
+            result = path + "/";
+        } else {
+            result = path;
+        }
+        return result;
+    }
+
+    private String removeSlashesFromPath(String path)
+    {
+        String result = "";
+        if (path.startsWith("/")) {
+            result = path.substring(1, path.length() - 1);
+        } else {
+            result = path;
+        }
+        if (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 2);
+        } else {
+            result = path;
+        }
+        return result;
     }
 
     private static class ListPrinter implements DirectoryListPrinter
     {
-        private final List<String> list;
+        private final Map<String, FileType> list;
 
-        private ListPrinter(List<String> list)
+        private ListPrinter(Map<String, FileType> list)
         {
-            Test.write("/tmp/testa001.log", "015");
             this.list = list;
-            Test.write("/tmp/testa001.log", "016");
         }
 
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            Test.write("/tmp/testa001.log", "017");
-            return EnumSet.noneOf(FileAttribute.class);
+            return EnumSet.of(TYPE, SIZE);
         }
 
         @Override
         public void print(FsPath dir, FileAttributes dirAttr, DirectoryEntry entry)
                 throws InterruptedException
         {
-            Test.write("/tmp/testa001.log", "018");
-            list.add(entry.getName());
-            Test.write("/tmp/testa001.log", "019");
-            Test.write("/tmp/testa002.log", "Writer:" + entry.getName());
+            FileAttributes attr = entry.getFileAttributes();
+            list.put(entry.getName(), attr.getFileType());
+            Test.write("/tmp/listing.log", "Out:" + entry.getName() + "|" + String.valueOf(attr.getFileType()) + "|" + String.valueOf(attr.getSize())); //temporary
+        }
+    }
+
+    //Minimum to create a file
+    public void doSomething()
+    {
+        Test.write("/tmp/testb001.log", "t001");
+        try {
+            Test.write("/tmp/testb001.log", "t002");
+            Transfer transfer = new Transfer(pnfsHandler, Subjects.ROOT, new FsPath("/disk/" + "test.txt"));
+            Test.write("/tmp/testb001.log", "t003");
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Test.write("/tmp/testb001.log", "t004");
+            transfer.setBillingStub(billingStub);
+            Test.write("/tmp/testb001.log", "t005");
+            transfer.setPoolManagerStub(poolMgrStub);
+            Test.write("/tmp/testb001.log", "t006");
+            transfer.setPoolStub(poolStub);
+            Test.write("/tmp/testb001.log", "t007");
+            transfer.setCellName(getCellName());
+            Test.write("/tmp/testb001.log", "t008");
+            transfer.setDomainName(getCellDomainName());
+            Test.write("/tmp/testb001.log", "t009");
+            transfer.setProtocolInfo(new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0)));
+            Test.write("/tmp/testb001.log", "t010");
+            transfer.createNameSpaceEntry();
+            Test.write("/tmp/testb001.log", "t011");
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
+            Test.write("/tmp/testb001.log", "t012");
+            transfer.setOverwriteAllowed(true);
+            Test.write("/tmp/testb001.log", "t013");
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            Test.write("/tmp/testb001.log", "t014:" + ex.getMessage());
+            Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 

@@ -7,6 +7,7 @@ check -strong cdmi.service.poolmanager.timeout.unit
 create org.dcache.cells.UniversalSpringCell "${cdmi.cell.name}" \
     "classpath:org/dcache/cdmi/cdmi.xml   \
       -isDefaultFormal=\"${cdmi.formal}\" \
+      -poolmanager=\"${poolmanager}\"     \
     "
 
 # Line poolmanager removed since it isn't used in webdav.properties, too. It should work without that then, too.

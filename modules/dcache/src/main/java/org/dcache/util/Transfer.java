@@ -752,41 +752,62 @@ public class Transfer implements Comparable<Transfer>
                 request.setId(_sessionId);
                 request.setSubject(_subject);
                 request.setPnfsPath(_path.toString());
+                _log.warn("w115:" + _poolManager.toString());
+                _log.warn("w115:" + _poolManager.getDestinationPath());
 
                 PoolMgrSelectWritePoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
+                _log.warn("w116");
                 setPool(reply.getPoolName());
+                _log.warn("w117");
                 setPoolAddress(reply.getPoolAddress());
+                _log.warn("w118");
                 setStorageInfo(reply.getStorageInfo());
+                _log.warn("w119");
             } else if (!_fileAttributes.getStorageInfo().isCreatedOnly()) {
+                _log.warn("w120");
                 EnumSet<RequestContainerV5.RequestState> allowedStates =
                     _checkStagePermission.canPerformStaging(_subject, fileAttributes.getStorageInfo())
                     ? RequestContainerV5.allStates
                     : RequestContainerV5.allStatesExceptStage;
 
+                _log.warn("w121");
                 PoolMgrSelectReadPoolMsg request =
                     new PoolMgrSelectReadPoolMsg(fileAttributes,
                                                  protocolInfo,
                                                  getReadPoolSelectionContext(),
                                                  allowedStates);
+                _log.warn("w122");
                 request.setId(_sessionId);
+                _log.warn("w123");
                 request.setSubject(_subject);
+                _log.warn("w124");
                 request.setPnfsPath(_path.toString());
 
+                _log.warn("w125");
                 PoolMgrSelectReadPoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
+                _log.warn("w126");
                 setPool(reply.getPoolName());
+                _log.warn("w127");
                 setPoolAddress(reply.getPoolAddress());
+                _log.warn("w128");
                 setStorageInfo(reply.getStorageInfo());
+                _log.warn("w129");
                 setReadPoolSelectionContext(reply.getContext());
+                _log.warn("w130");
             } else {
+                _log.warn("w131");
                 throw new FileIsNewCacheException();
             }
         } catch (IOException e) {
+            _log.warn("w132");
             throw new CacheException(CacheException.UNEXPECTED_SYSTEM_EXCEPTION,
                                      e.getMessage());
         } finally {
+            _log.warn("w133");
             setStatus(null);
+            _log.warn("w134");
         }
     }
 
@@ -994,7 +1015,9 @@ public class Transfer implements Comparable<Transfer>
             long start = System.currentTimeMillis();
             CacheException lastFailure;
             try {
+                _log.warn("w009");
                 selectPool(subWithInfinity(deadLine, System.currentTimeMillis()));
+                _log.warn("w010");
                 gotPool = true;
                 startMover(queue,
                         Math.min(subWithInfinity(deadLine, System.currentTimeMillis()),

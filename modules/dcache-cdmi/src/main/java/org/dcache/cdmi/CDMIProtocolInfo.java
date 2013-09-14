@@ -3,6 +3,7 @@ package org.dcache.cdmi;
 import java.net.InetSocketAddress;
 
 import diskCacheV111.vehicles.IpProtocolInfo;
+import org.dcache.cdmi.temp.Test;
 
 public class CDMIProtocolInfo implements IpProtocolInfo
 {
@@ -10,13 +11,14 @@ public class CDMIProtocolInfo implements IpProtocolInfo
 
     public CDMIProtocolInfo(InetSocketAddress address)
     {
+        Test.write("/tmp/testb001.log", "010");
         this.address = address;
     }
 
     @Override
     public String getProtocol()
     {
-        return "cdmi";
+        return "CDMI";
     }
 
     @Override
@@ -34,7 +36,7 @@ public class CDMIProtocolInfo implements IpProtocolInfo
     @Override
     public String getVersionString()
     {
-        return "cdmi-1.0";
+        return "CDMI-1.0";
     }
 
     @Override
