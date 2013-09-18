@@ -145,6 +145,7 @@ public class PoolMonitorV5
             String protocol =
                 _protocolInfo.getProtocol() + "/" +
                 _protocolInfo.getMajorVersion() ;
+            _log.warn("T001:" + direction.name() + "|" + protocol + "|" + _fileAttributes.getStorageInfo().getStorageClass() + "|" +  _linkGroup);
             return _selectionUnit.match(direction,
                                         hostName,
                                         protocol,
@@ -196,6 +197,7 @@ public class PoolMonitorV5
                 _log.warn("PM006:" + level.toString());
                 List<PoolInfo> pools =
                     _costModule.getPoolInfo(level.getPoolList());
+                _log.warn("PM007:" + level.getTag());
                 _log.warn("PM007:" + level.getPoolList().size());
                 _log.warn("PM007:" + pools.size());
                 if (!pools.isEmpty()) {

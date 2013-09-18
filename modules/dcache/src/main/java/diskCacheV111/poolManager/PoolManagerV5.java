@@ -790,6 +790,7 @@ public class PoolManagerV5
            ProtocolInfo protocolInfo = _request.getProtocolInfo();
 
            _log.info("{} write handler started", _pnfsId);
+           _log.warn("PMA001: {} write handler started", _pnfsId);
            long started = System.currentTimeMillis();
 
            if( _quotasEnabled && quotasExceeded(fileAttributes) ){
@@ -803,13 +804,17 @@ public class PoolManagerV5
                    .getPoolSelector(fileAttributes, protocolInfo, _request.getLinkGroup())
                    .selectWritePool(_request.getPreallocated());
 
-              _log.info("{} write handler selected {} after {} ms", _pnfsId, pool.getName(),
+              _log.info("PMA002: {} write handler selected {} after {} ms", _pnfsId, pool.getName(),
+                      System.currentTimeMillis() - started);
+              _log.warn("PMA003: {} write handler selected {} after {} ms", _pnfsId, pool.getName(),
                       System.currentTimeMillis() - started);
               requestSucceeded(pool);
 
            }catch(CacheException ce ){
               requestFailed( ce.getRc() , ce.getMessage() ) ;
+              _log.warn("PMA004:" + ce.getMessage());
            }catch(Exception ee ){
+              _log.warn("PMA005:" + ee.getMessage());
               requestFailed( 17 , ee.getMessage() ) ;
            }
        }

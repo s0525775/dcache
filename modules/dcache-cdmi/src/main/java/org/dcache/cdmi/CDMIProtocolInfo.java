@@ -8,11 +8,33 @@ import org.dcache.cdmi.temp.Test;
 public class CDMIProtocolInfo implements IpProtocolInfo
 {
     private final InetSocketAddress address;
+    private final String cellDomainName;
+    private final String cellName;
 
     public CDMIProtocolInfo(InetSocketAddress address)
     {
         Test.write("/tmp/testb001.log", "010");
         this.address = address;
+        this.cellDomainName = "";
+        this.cellName = "";
+    }
+
+    public CDMIProtocolInfo(String cellDomainName, String domainName, InetSocketAddress address)
+    {
+        Test.write("/tmp/testb001.log", "010");
+        this.address = address;
+        this.cellDomainName = cellDomainName;
+        this.cellName = domainName;
+    }
+
+    public String getInitiatorCellDomain()
+    {
+        return cellDomainName;
+    }
+
+    public String getInitiatorCellName()
+    {
+        return cellName;
     }
 
     @Override

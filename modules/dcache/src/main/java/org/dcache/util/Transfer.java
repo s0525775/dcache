@@ -754,12 +754,33 @@ public class Transfer implements Comparable<Transfer>
                 request.setPnfsPath(_path.toString());
                 _log.warn("w115:" + _poolManager.toString());
                 _log.warn("w115:" + _poolManager.getDestinationPath());
+                _log.warn("w115:" + String.valueOf(request.getId()));
+                _log.warn("w115:" + request.getMessageName());
+                _log.warn("w115:" + String.valueOf(request.getPnfsId()));
+                _log.warn("w115:" + request.getPnfsPath());
+                _log.warn("w115:" + request.getProtocolInfo().getVersionString());
+                _log.warn("w115:" + request.getIoQueueName()); //null
+                _log.warn("w115:" + request.getLinkGroup()); //null
+                _log.warn("w115:" + request.getPoolName()); //null
+                _log.warn("w115:" + String.valueOf(request.isReply()));
+                _log.warn("w115:" + String.valueOf(request.getReturnCode())); //0
 
                 PoolMgrSelectWritePoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
-                _log.warn("w116");
-                setPool(reply.getPoolName());
-                _log.warn("w117");
+                _log.warn("w116:" + String.valueOf(reply.getId()));
+                _log.warn("w116:" + request.getMessageName());
+                _log.warn("w116:" + String.valueOf(reply.getPnfsId()));
+                _log.warn("w116:" + reply.getPnfsPath());
+                _log.warn("w116:" + reply.getProtocolInfo().getVersionString());
+                _log.warn("w116:" + reply.getPoolAddress().getCellName());
+                _log.warn("w116:" + reply.getIoQueueName());
+                _log.warn("w116:" + reply.getLinkGroup());
+                _log.warn("w116:" + reply.getDiagnosticContext());
+                _log.warn("w116:" + reply.getPoolName());
+                _log.warn("w116:" + String.valueOf(request.isReply()));
+                _log.warn("w116:" + String.valueOf(request.getReturnCode()));
+               setPool(reply.getPoolName());
+                _log.warn("w117:" + reply.getPoolName());
                 setPoolAddress(reply.getPoolAddress());
                 _log.warn("w118");
                 setStorageInfo(reply.getStorageInfo());
