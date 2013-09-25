@@ -33,16 +33,20 @@ package org.dcache.cdmi.dao;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.io.ByteStreams;
+import diskCacheV111.util.AccessLatency;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
+import diskCacheV111.util.RetentionPolicy;
 import diskCacheV111.util.TimeoutCacheException;
 import diskCacheV111.vehicles.HttpProtocolInfo;
 import diskCacheV111.vehicles.ProtocolInfo;
+import diskCacheV111.vehicles.StorageInfo;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -80,7 +84,8 @@ import org.dcache.cdmi.temp.Test;
 import org.dcache.cells.CellLifeCycleAware;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import org.dcache.cdmi.CDMIProtocolInfo;
+import org.dcache.cdmi.mover.CDMIProtocolInfo;
+import org.dcache.cdmi.util.DcacheResourceFactory;
 import org.dcache.cells.AbstractCellComponent;
 import static org.dcache.namespace.FileAttribute.*;
 import static org.dcache.namespace.FileType.*;
@@ -756,18 +761,60 @@ public class ContainerDaoImpl extends AbstractCellComponent
         Test.write("/tmp/testb001.log", "004:" + String.valueOf(test4));
         */
         //Temporary... End...
+        /*
         for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/").entrySet()) {
             Test.write("/tmp/testb001.log", "005:" + entry.getKey() + "|" + entry.getValue());
         }
         for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
             Test.write("/tmp/testb001.log", "006:" + entry.getKey() + "|" + entry.getValue());
         }
+        */
         Test.write("/tmp/testb001.log", "007");
-        doSomething();
-        Test.write("/tmp/testb001.log", "008");
-        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
-            Test.write("/tmp/testb001.log", "009:" + entry.getKey() + "|" + entry.getValue());
+        try {
+            doSomething();
+        } catch (UnknownHostException ex) {
+            Test.write("/tmp/testb001.log", "007_1:" + ex.getMessage());
+        } catch (CacheException | InterruptedException | URISyntaxException ex) {
+            Test.write("/tmp/testb001.log", "007_2:" + ex.getMessage());
+        } catch (IOException ex) {
+            Test.write("/tmp/testb001.log", "007_3:" + ex.getCause());
+            Test.write("/tmp/testb001.log", "007_4:" + ex.getMessage());
         }
+        Test.write("/tmp/testb001.log", "008");
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException ex) {
+        }
+        Test.write("/tmp/testb001.log", "008_2");
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/").entrySet()) {
+            Test.write("/tmp/testb001.log", "009_1:" + entry.getKey() + "|" + entry.getValue());
+        }
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
+            Test.write("/tmp/testb001.log", "009_2:" + entry.getKey() + "|" + entry.getValue());
+        }
+        try {
+            doSomething2();
+        } catch (UnknownHostException ex) {
+            Test.write("/tmp/testb001.log", "010_1:" + ex.getMessage());
+        } catch (CacheException | InterruptedException | URISyntaxException ex) {
+            Test.write("/tmp/testb001.log", "010_2:" + ex.getMessage());
+        } catch (IOException ex) {
+            Test.write("/tmp/testb001.log", "010_3:" + ex.getCause());
+            Test.write("/tmp/testb001.log", "010_4:" + ex.getMessage());
+        }
+        Test.write("/tmp/testb001.log", "011");
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException ex) {
+        }
+        Test.write("/tmp/testb001.log", "011_2");
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/").entrySet()) {
+            Test.write("/tmp/testb001.log", "012_1:" + entry.getKey() + "|" + entry.getValue());
+        }
+        for (Map.Entry<String, FileType> entry : listDirectoriesFilesByPath("/disk/").entrySet()) {
+            Test.write("/tmp/testb001.log", "012_2:" + entry.getKey() + "|" + entry.getValue());
+        }
+        Test.write("/tmp/testb001.log", "013");
     }
 
     @Override
@@ -1075,10 +1122,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
     }
 
     //Minimum to create a file
-    public void doSomething()
+    public void doSomething() throws UnknownHostException, CacheException, InterruptedException, IOException, URISyntaxException
     {
-        Test.write("/tmp/testb001.log", "t001");
         try {
+            //The order of transfer commands is important!
             Test.write("/tmp/testb001.log", "t002");
             Transfer transfer = new Transfer(pnfsHandler, Subjects.ROOT, new FsPath("/disk/" + "test.txt"));
             Test.write("/tmp/testb001.log", "t003");
@@ -1095,16 +1142,55 @@ public class ContainerDaoImpl extends AbstractCellComponent
             transfer.setDomainName(getCellDomainName());
             Test.write("/tmp/testb001.log", "t009");
             transfer.setProtocolInfo(new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0)));
-            Test.write("/tmp/testb001.log", "t010");
-            transfer.createNameSpaceEntry();
-            Test.write("/tmp/testb001.log", "t011");
-            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
-            Test.write("/tmp/testb001.log", "t012");
+            Test.write("/tmp/testb001.log", "t009_1:" + transfer.isWrite());
+            Test.write("/tmp/testb001.log", "t009_2:" + transfer.getProtocolInfo().getProtocol());
             transfer.setOverwriteAllowed(true);
-            Test.write("/tmp/testb001.log", "t013");
+            transfer.createNameSpaceEntry();
+            Test.write("/tmp/testb001.log", "t010:" + transfer.getPool());
+            Test.write("/tmp/testb001.log", "t010_1:" + transfer.getStatus());
+            //Test.write("/tmp/testb001.log", "t010_2:" + transfer.getStorageInfo());
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            Test.write("/tmp/testb001.log", "t011:" + transfer.getPool());
+            Test.write("/tmp/testb001.log", "t011_1:" + transfer.getProtocolInfo().getProtocol());
+            Test.write("/tmp/testb001.log", "t011_2:" + transfer.isWrite());
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
-            Test.write("/tmp/testb001.log", "t014:" + ex.getMessage());
-            Logger.getLogger(ContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+            Test.write("/tmp/testb001.log", "t013:" + ex.getMessage());
+        }
+    }
+
+    //Minimum to read a file
+    public void doSomething2() throws UnknownHostException, CacheException, InterruptedException, IOException, URISyntaxException
+    {
+        try {
+            //The order of transfer commands is important!
+            Test.write("/tmp/testb001.log", "r002");
+            Transfer transfer = new Transfer(pnfsHandler, Subjects.ROOT, new FsPath("/disk/" + "test.txt"));
+            Test.write("/tmp/testb001.log", "r003");
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Test.write("/tmp/testb001.log", "r004");
+            transfer.setBillingStub(billingStub);
+            Test.write("/tmp/testb001.log", "r005");
+            transfer.setPoolManagerStub(poolMgrStub);
+            Test.write("/tmp/testb001.log", "r006");
+            transfer.setPoolStub(poolStub);
+            Test.write("/tmp/testb001.log", "r007");
+            transfer.setCellName(getCellName());
+            Test.write("/tmp/testb001.log", "r008");
+            transfer.setDomainName(getCellDomainName());
+            Test.write("/tmp/testb001.log", "r009");
+            transfer.setProtocolInfo(new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0)));
+            Test.write("/tmp/testb001.log", "r009_1:" + transfer.isWrite());
+            Test.write("/tmp/testb001.log", "r009_2:" + transfer.getProtocolInfo().getProtocol());
+            transfer.readNameSpaceEntry();
+            Test.write("/tmp/testb001.log", "r010:" + transfer.getPool());
+            Test.write("/tmp/testb001.log", "r010_1:" + transfer.getStatus());
+            //Test.write("/tmp/testb001.log", "t010_2:" + transfer.getStorageInfo());
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            Test.write("/tmp/testb001.log", "r011:" + transfer.getPool());
+            Test.write("/tmp/testb001.log", "r011_1:" + transfer.getProtocolInfo().getProtocol());
+            Test.write("/tmp/testb001.log", "r011_2:" + transfer.isWrite());
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            Test.write("/tmp/testb001.log", "r013:" + ex.getMessage());
         }
     }
 

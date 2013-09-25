@@ -345,7 +345,7 @@ public class CDMI extends AbstractCellComponent
     {
         channel = ServerSocketChannel.open();
         channel.bind(new InetSocketAddress(2000));
-        new Thread(this).start();
+        //new Thread(this).start();
     }
 
     public void stop() throws IOException
@@ -358,13 +358,14 @@ public class CDMI extends AbstractCellComponent
     @Override
     public void run()
     {
+        /*
         while (true) {
             try {
                 try (SocketChannel connection = channel.accept()) {
-                    PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
+                    //PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
                     try {
-                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
-                                              null, Range.<Integer>all());
+                        //lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
+                        //                      null, Range.<Integer>all());
 
                         BufferedReader reader = new BufferedReader(new InputStreamReader(connection.socket().getInputStream()));
                         int port = Integer.parseInt(reader.readLine());
@@ -381,13 +382,10 @@ public class CDMI extends AbstractCellComponent
                         transfer.setProtocolInfo(new CDMIProtocolInfo(address));
                         transfer.createNameSpaceEntry();
                         transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
-
-                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
-                                              null, Range.<Integer>all());
                     } catch (IOException | CacheException e) {
-                        out.println(e.toString());
+                        //out.println(e.toString());
                     }
-                    out.flush();
+                    //out.flush();
                 }
             } catch (NotYetBoundException e) {
                 // log error
@@ -398,6 +396,7 @@ public class CDMI extends AbstractCellComponent
                 // log error
             }
         }
+        */
     }
 
     @Command(name = "pools", hint = "show pools in pool group",

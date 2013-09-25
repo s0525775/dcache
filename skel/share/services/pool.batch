@@ -91,7 +91,7 @@ define context PoolDefaults endDefine
    movermap define DCap-3  org.dcache.pool.movers.DCapProtocol_3_nio
    movermap define GFtp-1  org.dcache.pool.movers.GFtpProtocol_2_nio
    movermap define GFtp-2  org.dcache.pool.movers.GFtpProtocol_2_nio
-   movermap define CDMI-1  org.dcache.cdmi.CDMIMover
+   movermap define CDMI-1  org.dcache.cdmi.mover.CDMIMover
 endDefine
 
 create org.dcache.cells.UniversalSpringCell "${pool.cell.name}" \

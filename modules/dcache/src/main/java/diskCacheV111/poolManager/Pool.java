@@ -47,12 +47,10 @@ public class Pool extends PoolCore implements SelectionPool {
     @Override
     public void setActive(boolean active) {
         _active = active ? System.currentTimeMillis() : 0;
-        _log.warn("POOL001:" + _active + "|" + active + "|" + System.currentTimeMillis());
     }
 
     @Override
     public long getActive() {
-        _log.warn("POOL002:" + _ping + "|" + System.currentTimeMillis() + "|" + _active);
         return _ping ? (System.currentTimeMillis() - _active) : 0L;
     }
 
@@ -62,7 +60,6 @@ public class Pool extends PoolCore implements SelectionPool {
      */
     @Override
     public boolean isActive() {
-        _log.warn("POOL003:" + (getActive() < 5 * 60 * 1000));
         return getActive() < 5 * 60 * 1000;
     }
 
@@ -81,7 +78,6 @@ public class Pool extends PoolCore implements SelectionPool {
      */
     @Override
     public boolean canRead() {
-        _log.warn("POOL004:" + isEnabled() + "|" + (_mode.getMode() != PoolV2Mode.DISABLED) + "|" + (!_mode.isDisabled(PoolV2Mode.DISABLED_FETCH)) + "|" + (!_mode.isDisabled(PoolV2Mode.DISABLED_DEAD)));
         return isEnabled() && _mode.getMode() != PoolV2Mode.DISABLED && !_mode.isDisabled(PoolV2Mode.DISABLED_FETCH) && !_mode.isDisabled(PoolV2Mode.DISABLED_DEAD);
     }
 
@@ -93,7 +89,6 @@ public class Pool extends PoolCore implements SelectionPool {
      */
     @Override
     public boolean canWrite() {
-        _log.warn("POOL005:" + isEnabled() + "|" + !isReadOnly() + "|" + (_mode.getMode() != PoolV2Mode.DISABLED) + "|" + (!_mode.isDisabled(PoolV2Mode.DISABLED_STORE)) + "|" + (!_mode.isDisabled(PoolV2Mode.DISABLED_DEAD)) + "|" + (!_mode.isDisabled(PoolV2Mode.DISABLED_P2P_SERVER)));
         return isEnabled() && !isReadOnly() && _mode.getMode() != PoolV2Mode.DISABLED && !_mode.isDisabled(PoolV2Mode.DISABLED_STORE) && !_mode.isDisabled(PoolV2Mode.DISABLED_DEAD) && !_mode.isDisabled(PoolV2Mode.DISABLED_P2P_SERVER);
     }
 

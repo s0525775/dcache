@@ -54,6 +54,7 @@ import org.dcache.namespace.FileType;
 import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import org.dcache.auth.Subjects;
 import static org.dcache.namespace.FileAttribute.*;
 import static org.dcache.util.MathUtils.addWithInfinity;
 import static org.dcache.util.MathUtils.subWithInfinity;
@@ -229,7 +230,8 @@ public class Transfer implements Comparable<Transfer>
     public synchronized void setStatus(String status)
     {
         if (status != null) {
-            _log.debug("Status: {}", status);
+            _log.warn("Status: {}", status);
+            //_log.debug("Status: {}", status);
         }
         _status = status;
     }
@@ -751,84 +753,52 @@ public class Transfer implements Comparable<Transfer>
                                                   allocated);
                 request.setId(_sessionId);
                 request.setSubject(_subject);
+                request.setSubject(Subjects.ROOT); //added
                 request.setPnfsPath(_path.toString());
-                _log.warn("w115:" + _poolManager.toString());
-                _log.warn("w115:" + _poolManager.getDestinationPath());
-                _log.warn("w115:" + String.valueOf(request.getId()));
-                _log.warn("w115:" + request.getMessageName());
-                _log.warn("w115:" + String.valueOf(request.getPnfsId()));
-                _log.warn("w115:" + request.getPnfsPath());
-                _log.warn("w115:" + request.getProtocolInfo().getVersionString());
-                _log.warn("w115:" + request.getIoQueueName()); //null
-                _log.warn("w115:" + request.getLinkGroup()); //null
-                _log.warn("w115:" + request.getPoolName()); //null
-                _log.warn("w115:" + String.valueOf(request.isReply()));
-                _log.warn("w115:" + String.valueOf(request.getReturnCode())); //0
 
                 PoolMgrSelectWritePoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
-                _log.warn("w116:" + String.valueOf(reply.getId()));
-                _log.warn("w116:" + request.getMessageName());
-                _log.warn("w116:" + String.valueOf(reply.getPnfsId()));
-                _log.warn("w116:" + reply.getPnfsPath());
-                _log.warn("w116:" + reply.getProtocolInfo().getVersionString());
-                _log.warn("w116:" + reply.getPoolAddress().getCellName());
-                _log.warn("w116:" + reply.getIoQueueName());
-                _log.warn("w116:" + reply.getLinkGroup());
-                _log.warn("w116:" + reply.getDiagnosticContext());
-                _log.warn("w116:" + reply.getPoolName());
-                _log.warn("w116:" + String.valueOf(request.isReply()));
-                _log.warn("w116:" + String.valueOf(request.getReturnCode()));
-               setPool(reply.getPoolName());
-                _log.warn("w117:" + reply.getPoolName());
-                setPoolAddress(reply.getPoolAddress());
-                _log.warn("w118");
-                setStorageInfo(reply.getStorageInfo());
-                _log.warn("w119");
+
+                _log.error("TRANSFER1: " + reply.getReturnCode());
+
+                if (reply.getReturnCode() == 0) {
+                    _log.error("TRANSFER1_1: " + reply.getPoolName());
+                    _log.error("TRANSFER1_2: " + reply.getPoolAddress());
+                    _log.error("TRANSFER1_3: " + reply.getStorageInfo());
+                    _log.error("TRANSFER1_4: " + reply.getStorageInfo().isCreatedOnly());
+                    setPool(reply.getPoolName());
+                    setPoolAddress(reply.getPoolAddress());
+                    setStorageInfo(reply.getStorageInfo());
+                }
             } else if (!_fileAttributes.getStorageInfo().isCreatedOnly()) {
-                _log.warn("w120");
                 EnumSet<RequestContainerV5.RequestState> allowedStates =
                     _checkStagePermission.canPerformStaging(_subject, fileAttributes.getStorageInfo())
                     ? RequestContainerV5.allStates
                     : RequestContainerV5.allStatesExceptStage;
 
-                _log.warn("w121");
                 PoolMgrSelectReadPoolMsg request =
                     new PoolMgrSelectReadPoolMsg(fileAttributes,
                                                  protocolInfo,
                                                  getReadPoolSelectionContext(),
                                                  allowedStates);
-                _log.warn("w122");
                 request.setId(_sessionId);
-                _log.warn("w123");
                 request.setSubject(_subject);
-                _log.warn("w124");
                 request.setPnfsPath(_path.toString());
 
-                _log.warn("w125");
                 PoolMgrSelectReadPoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
-                _log.warn("w126");
                 setPool(reply.getPoolName());
-                _log.warn("w127");
                 setPoolAddress(reply.getPoolAddress());
-                _log.warn("w128");
                 setStorageInfo(reply.getStorageInfo());
-                _log.warn("w129");
                 setReadPoolSelectionContext(reply.getContext());
-                _log.warn("w130");
             } else {
-                _log.warn("w131");
                 throw new FileIsNewCacheException();
             }
         } catch (IOException e) {
-            _log.warn("w132");
             throw new CacheException(CacheException.UNEXPECTED_SYSTEM_EXCEPTION,
                                      e.getMessage());
         } finally {
-            _log.warn("w133");
             setStatus(null);
-            _log.warn("w134");
         }
     }
 
@@ -1036,16 +1006,13 @@ public class Transfer implements Comparable<Transfer>
             long start = System.currentTimeMillis();
             CacheException lastFailure;
             try {
-                _log.warn("w009");
                 selectPool(subWithInfinity(deadLine, System.currentTimeMillis()));
-                _log.warn("w010");
                 gotPool = true;
                 startMover(queue,
                         Math.min(subWithInfinity(deadLine, System.currentTimeMillis()),
                                 policy.getMoverStartTimeout()));
                 return;
             } catch (TimeoutCacheException e) {
-                _log.warn(e.getMessage());
                 if (gotPool && isWrite()) {
                     /* We cannot know whether the mover was actually
                      * started or not. Retrying is therefore not an

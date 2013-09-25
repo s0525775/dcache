@@ -1,4 +1,4 @@
-package org.dcache.cdmi;
+package org.dcache.cdmi.mover;
 
 import java.net.InetSocketAddress;
 

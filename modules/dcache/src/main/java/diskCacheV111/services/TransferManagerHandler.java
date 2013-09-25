@@ -387,6 +387,7 @@ public class TransferManagerHandler implements CellMessageAnswerable
 
         public void selectPool()
         {
+                log.warn("TranferManagerHandler: ME!");
 		protocol_info = manager.getProtocolInfo(transferRequest);
                 PoolMgrSelectPoolMsg request = store
                         ? new PoolMgrSelectWritePoolMsg(fileAttributes, protocol_info, (size == null) ? 0L: size)

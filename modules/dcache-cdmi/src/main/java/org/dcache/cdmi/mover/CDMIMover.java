@@ -1,4 +1,4 @@
-package org.dcache.cdmi;
+package org.dcache.cdmi.mover;
 
 import com.google.common.io.ByteStreams;
 import diskCacheV111.util.CacheException;
@@ -19,6 +19,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.logging.Level;
 import org.dcache.cdmi.temp.Test;
 
 import org.dcache.pool.movers.IoMode;
@@ -54,7 +55,7 @@ public class CDMIMover implements MoverProtocol
 
     @Override
     public void runIO(FileAttributes fileAttributes, RepositoryChannel diskFile,
-                      ProtocolInfo protocol, Allocator allocator, IoMode access) throws Exception
+                      ProtocolInfo protocol, Allocator allocator, IoMode access)
     {
 
         /*
@@ -77,16 +78,64 @@ public class CDMIMover implements MoverProtocol
         */
 
         //old:
+        PnfsId pnfsId = fileAttributes.getPnfsId();
+        StorageInfo storage = fileAttributes.getStorageInfo();
+        _log.error("runIO()\n\tprotocol="+
+            protocol+",\n\tStorageInfo="+storage+",\n\tPnfsId="+pnfsId+
+            ",\n\taccess ="+access);
         Test.write("/tmp/testb001.log", "c013");
         channel = new MoverChannel<>(access, fileAttributes, pi, diskFile, allocator);
-        try (SocketChannel connection = SocketChannel.open(pi.getSocketAddress())) {
+        Test.write("/tmp/testb001.log", "c013_2:" + channel.isOpen() + "|" + channel.getIoMode());
+        if (channel.isOpen() && channel.getIoMode() == IoMode.WRITE) {
             Test.write("/tmp/testb001.log", "c014");
+            try {
+                Test.write("/tmp/testb001.log", "c015");
+                channel.write(Test.stringToByteBuffer("Hello"));
+                Test.write("/tmp/testb001.log", "c016");
+            } catch (IOException ex) {
+                Test.write("/tmp/testb001.log", "c015_2:" + ex.getMessage());
+            }
+        } else if (channel.isOpen() && channel.getIoMode() == IoMode.READ) {
+            Test.write("/tmp/testb001.log", "c014");
+            try {
+                Test.write("/tmp/testb001.log", "c015");
+                ByteBuffer data = ByteBuffer.allocate(50);
+                Test.write("/tmp/testb001.log", "c016_1");
+                channel.position(0);
+                Test.write("/tmp/testb001.log", "c016_2");
+                channel.read(data);
+                Test.write("/tmp/testb001.log", "c017:|" + Test.byteBufferToString(data) + "|");
+            } catch (IOException ex) {
+                Test.write("/tmp/testb001.log", "c015_2:" + ex.getMessage());
+            }
+        }
+        Test.write("/tmp/testb001.log", "c018:" + String.valueOf(channel.getBytesTransferred()));
+        if (channel.isOpen()) {
+            try {
+                Test.write("/tmp/testb001.log", "c019");
+                channel.close();
+                Test.write("/tmp/testb001.log", "c020");
+            } catch (IOException ex) {
+                Test.write("/tmp/testb001.log", "c019_2:" + ex.getMessage());
+            }
+        }
+        Test.write("/tmp/testb001.log", "c021");
+
+        /*
+        try (SocketChannel connection = SocketChannel.open(pi.getSocketAddress())) {
+            Test.write("/tmp/testb001.log", "c014:" + channel.isOpen() + "|" + channel.getIoMode());
             ByteStreams.copy(connection, channel);
             Test.write("/tmp/testb001.log", "c015" + String.valueOf(channel.getBytesTransferred()));
         }
-
-        diskFile.write(Test.stringToByteBuffer("Hello"), 50);
-        Test.write("/tmp/testb001.log", "c015" + String.valueOf(channel.getBytesTransferred()));
+        catch (IOException ex) {
+            Test.write("/tmp/testb001.log", "c016:" + ex.getMessage());
+        }
+        try {
+            diskFile.write(Test.stringToByteBuffer("Hello"), 50);
+        } catch (IOException ex) {
+            java.util.logging.Logger.getLogger(CDMIMover.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        */
 
         /*
         ServerSocket serverSocket;
@@ -156,16 +205,5 @@ public class CDMIMover implements MoverProtocol
     public long getLastTransferred()
     {
         return channel.getLastTransferred();
-    }
-
-    private void cdmiWriteFile(Socket socket,
-                              RepositoryChannel diskFile,
-                              Allocator allocator) throws Exception
-    {
-        last_transfer_time    = System.currentTimeMillis();
-        DataInputStream in   = new DataInputStream(socket.getInputStream());
-        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-        //diskFile.write(null);
-        _log.warn("<Done>");
     }
 }

@@ -455,6 +455,8 @@ public class PoolSelectionUnitV2
         String storeUnitName = storageInfo.getStorageClass()+"@"+storageInfo.getHsm();
         String dCacheUnitName = storageInfo.getCacheClass();
 
+        _log.warn("running match: type={} store={} dCacheUnit={} net={} protocol={} SI={} linkGoup={}", type,
+                   storeUnitName, dCacheUnitName, netUnitName, protocolUnitName, storageInfo, linkGroupName);
         _log.debug("running match: type={} store={} dCacheUnit={} net={} protocol={} SI={} linkGoup={}", type,
                    storeUnitName, dCacheUnitName, netUnitName, protocolUnitName, storageInfo, linkGroupName);
 
@@ -727,6 +729,11 @@ public class PoolSelectionUnitV2
 
                 for (Link link : linkList) {
                     _log.warn("PS041:" + linkList.size());
+                    _log.warn("PS041_1:" + linkList.get(0).getTag());
+                    _log.warn("PS041_2:" + linkList.get(0).getName());
+                    _log.warn("PS041_3:" + linkList.get(0).getAttraction());
+                    _log.warn("PS041_4:" + linkList.get(0)._poolList.size());
+                    _log.warn("PS041_5:" + linkList.get(0)._poolList.values().size());
                     //
                     // get the link if available
                     //
@@ -750,7 +757,7 @@ public class PoolSelectionUnitV2
                                 _log.warn("PS045");
                                 resultList.add(pool.getName());
                             }
-                            _log.warn("PS044_2:" + pool.isActive()  + "|" + _allPoolsActive + "|" + type + "|" + pool.canRead() + "|" + pool.canWrite() + "|" + pool.canReadFromTape());
+                            _log.warn("PS044_2:" + pool.getName() + "|" + pool.isActive()  + "|" + _allPoolsActive + "|" + type + "|" + pool.canRead() + "|" + pool.canWrite() + "|" + pool.canReadFromTape());
                         } else {
                              _log.warn("PS046");
                             for (Pool pool : ((PGroup)poolCore)._poolList.values()) {
@@ -770,7 +777,6 @@ public class PoolSelectionUnitV2
                     }
                 }
                 result[i] = new PoolPreferenceLevel(resultList, tag);
-                _log.warn("PS049:" + resultList.size() + "|" + tag);
                 _log.warn("PS049:" + result[i].getTag() + "|" + result[i].getPoolList().size());
             }
 
@@ -779,7 +785,7 @@ public class PoolSelectionUnitV2
             _psuReadLock.unlock();
         }
 
-        if( true || _log.isDebugEnabled() ) {  //changed: added true
+        if(_log.isDebugEnabled() ) {  //changed: added true
 
             StringBuilder sb = new StringBuilder("match done: ");
 

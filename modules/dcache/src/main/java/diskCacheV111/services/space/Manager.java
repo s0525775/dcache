@@ -4829,6 +4829,7 @@ public final class Manager
                 PoolMgrSelectPoolMsg selectPool =
                         (PoolMgrSelectPoolMsg)cellMessage.getMessageObject();
                 logger.trace("selectPool({})", selectPool);
+                logger.warn("selectPool({})", selectPool);
                 String pnfsPath = selectPool.getPnfsPath();
                 PnfsId pnfsId   = selectPool.getPnfsId();
                 if( !(selectPool instanceof PoolMgrSelectWritePoolMsg) ||
