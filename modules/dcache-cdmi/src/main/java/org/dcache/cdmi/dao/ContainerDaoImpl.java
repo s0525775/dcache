@@ -85,7 +85,6 @@ import org.dcache.cells.CellLifeCycleAware;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
-import org.dcache.cdmi.util.DcacheResourceFactory;
 import org.dcache.cells.AbstractCellComponent;
 import static org.dcache.namespace.FileAttribute.*;
 import static org.dcache.namespace.FileType.*;
@@ -1158,7 +1157,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         }
     }
 
-    //Minimum to read a file
+    //Minimum to create a file
     public void doSomething2() throws UnknownHostException, CacheException, InterruptedException, IOException, URISyntaxException
     {
         try {
