@@ -3,38 +3,17 @@ package org.dcache.cdmi.mover;
 import java.net.InetSocketAddress;
 
 import diskCacheV111.vehicles.IpProtocolInfo;
-import org.dcache.cdmi.temp.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CDMIProtocolInfo implements IpProtocolInfo
 {
+    private static final Logger _log = LoggerFactory.getLogger(CDMIMover.class);
     private final InetSocketAddress address;
-    private final String cellDomainName;
-    private final String cellName;
 
     public CDMIProtocolInfo(InetSocketAddress address)
     {
-        Test.write("/tmp/testb001.log", "010");
         this.address = address;
-        this.cellDomainName = "";
-        this.cellName = "";
-    }
-
-    public CDMIProtocolInfo(String cellDomainName, String domainName, InetSocketAddress address)
-    {
-        Test.write("/tmp/testb001.log", "010");
-        this.address = address;
-        this.cellDomainName = cellDomainName;
-        this.cellName = domainName;
-    }
-
-    public String getInitiatorCellDomain()
-    {
-        return cellDomainName;
-    }
-
-    public String getInitiatorCellName()
-    {
-        return cellName;
     }
 
     @Override
@@ -66,4 +45,5 @@ public class CDMIProtocolInfo implements IpProtocolInfo
     {
         return address;
     }
+
 }

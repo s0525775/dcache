@@ -309,14 +309,12 @@ public class CDMI extends AbstractCellComponent
 
         private ListPrinter(PrintWriter writer)
         {
-            Test.write("/tmp/test005.log", "T008");
             this.writer = writer;
         }
 
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            Test.write("/tmp/test005.log", "T009");
             return EnumSet.of(TYPE, SIZE);
         }
 
@@ -324,7 +322,6 @@ public class CDMI extends AbstractCellComponent
         public void print(FsPath dir, FileAttributes dirAttr, DirectoryEntry entry)
                 throws InterruptedException
         {
-            Test.write("/tmp/test005.log", "T010");
             writer.println(entry.getName());
             FileAttributes attr = entry.getFileAttributes();
             if (attr.getFileType() == DIR) {
@@ -335,9 +332,7 @@ public class CDMI extends AbstractCellComponent
                 Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::f::" + attr.getSize() + "\n");
             } else {
                 writer.println(entry.getName() + "::s::" + attr.getSize() + "\n");
-                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::s::" + attr.getSize() + "\n");
             }
-            Test.write("/tmp/test005.log", "T011");
         }
     }
 
@@ -466,11 +461,8 @@ public class CDMI extends AbstractCellComponent
         @Override
         public String call()
         {
-            Test.write("/tmp/test007.log", "T001");
             FsPath path = new FsPath(name);
-            Test.write("/tmp/test007.log", "T002");
             new Thread(new ListThread(path)).start();
-            Test.write("/tmp/test007.log", "T003");
             return result;
         }
     }
@@ -484,22 +476,16 @@ public class CDMI extends AbstractCellComponent
 
         public ListThread(FsPath path)
         {
-            Test.write("/tmp/test007.log", "T006");
             this.path = path;
         }
 
         @Override
         public void run()
         {
-            Test.write("/tmp/test007.log", "T007");
             try {
-                Test.write("/tmp/test007.log", "T007_1");
                 result = list(path);
-                Test.write("/tmp/test007.log", "T007_2");
             } catch (CacheException ex) {
-                Test.write("/tmp/test007.log", "T007_3" + ex.getMessage());
             }
-            Test.write("/tmp/test007.log", "T008");
         }
     }
 
@@ -509,17 +495,10 @@ public class CDMI extends AbstractCellComponent
     private String list(FsPath path) throws CacheException
     {
         StringBuilder sb = new StringBuilder();
-        Test.write("/tmp/test007.log", "T009");
         try {
-            Test.write("/tmp/test007.log", "T010");  //here
             list.printDirectory(Subjects.ROOT, new DirectoryPrinter(sb), path, null, Range.<Integer>all());
-            Test.write("/tmp/test007.log", "T011");
-        } catch (InterruptedException ex) {
-            Test.write("/tmp/test007.log", "T012:" + ex.getMessage());
-        } catch (NotDirCacheException ex) {
-            Test.write("/tmp/test007.log", "T012_1:" + ex.getMessage());
+        } catch (InterruptedException | NotDirCacheException ex) {
         }
-        Test.write("/tmp/test007.log", "T013");
         return sb.toString();
     }
 
@@ -532,23 +511,19 @@ public class CDMI extends AbstractCellComponent
 
         public DirectoryPrinter(StringBuilder out)
         {
-            Test.write("/tmp/test007.log", "T014");
             this.out = out;
         }
 
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            Test.write("/tmp/test007.log", "T015");
             return EnumSet.of(TYPE, SIZE);
         }
 
         @Override
         public void print(FsPath dir, FileAttributes dirAttr, DirectoryEntry entry) throws InterruptedException
         {
-            Test.write("/tmp/test007.log", "T016");
             FileAttributes attr = entry.getFileAttributes();
-            Test.write("/tmp/test007.log", "T017");
             if (attr.getFileType() == DIR) {
                 out.append(entry.getName()).append("::d::").append(attr.getSize()).append("\n");
             } else if (attr.getFileType() == REGULAR) {
@@ -556,8 +531,7 @@ public class CDMI extends AbstractCellComponent
             } else {
                 out.append(entry.getName()).append("::s::").append(attr.getSize()).append("\n");
             }
-            Test.write("/tmp/test007.log", "T017_2");
-            Test.write("/tmp/test008.log", "Writer:" + entry.getName());
+            Test.write("/tmp/test006.log", "Writer2:" + entry.getName());
         }
     }
 

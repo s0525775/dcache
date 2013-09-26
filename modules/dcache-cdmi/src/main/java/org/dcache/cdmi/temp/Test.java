@@ -28,7 +28,7 @@ import java.util.logging.Logger;
  */
 public class Test {
 
-    static public void write(String file, String data) {
+    public synchronized static void write(String file, String data) {
         try {
             SimpleDateFormat formatter = new SimpleDateFormat ("dd.MM.yyyy HH:mm:ss");
             Date currentTime = new Date();
@@ -39,11 +39,11 @@ public class Test {
         } catch (IOException ex) { }
     }
 
-    public static ByteBuffer stringToByteBuffer(String data) {
+    public synchronized static ByteBuffer stringToByteBuffer(String data) {
 	return ByteBuffer.wrap(data.getBytes());
     }
 
-    public static String byteBufferToString(ByteBuffer data) {
+    public synchronized static String byteBufferToString(ByteBuffer data) {
         String result = "";
         try {
             result = new String(data.array(), "UTF-8");

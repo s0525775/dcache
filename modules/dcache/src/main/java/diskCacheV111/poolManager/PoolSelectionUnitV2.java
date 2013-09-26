@@ -455,18 +455,14 @@ public class PoolSelectionUnitV2
         String storeUnitName = storageInfo.getStorageClass()+"@"+storageInfo.getHsm();
         String dCacheUnitName = storageInfo.getCacheClass();
 
-        _log.warn("running match: type={} store={} dCacheUnit={} net={} protocol={} SI={} linkGoup={}", type,
-                   storeUnitName, dCacheUnitName, netUnitName, protocolUnitName, storageInfo, linkGroupName);
         _log.debug("running match: type={} store={} dCacheUnit={} net={} protocol={} SI={} linkGoup={}", type,
                    storeUnitName, dCacheUnitName, netUnitName, protocolUnitName, storageInfo, linkGroupName);
 
         Map<String, String> variableMap = storageInfo.getMap();
 
         PoolPreferenceLevel[] result = null;
-        _log.warn("PS001");
         _psuReadLock.lock();
         try {
-            _log.warn("PS002");
             //
             // resolve the unit from the unitname (or net unit mask)
             //
@@ -475,17 +471,14 @@ public class PoolSelectionUnitV2
             //
             List<Unit> list = new ArrayList<>();
             if (_useRegex) {
-                _log.warn("PS003");
                 Unit universalCoverage = null;
                 Unit classCoverage = null;
 
                 for (Unit unit : _units.values()) {
-                    _log.warn("PS004");
                     if (unit.getType() != STORE) {
                         continue;
                     }
 
-                    _log.warn("PS005");
                     if (unit.getName().equals("*@*")) {
                         universalCoverage = unit;
                     } else if (unit.getName().equals("*@" + storeUnitName)) {
@@ -501,9 +494,7 @@ public class PoolSelectionUnitV2
                 // If a pattern matches then use it, fail over to a class,
                 // then universal. If nothing, throw exception
                 //
-                _log.warn("PS006");
                 if (list.isEmpty()) {
-                    _log.warn("PS007");
                     if (classCoverage != null) {
                         list.add(classCoverage);
                     } else if (universalCoverage != null) {
@@ -515,13 +506,10 @@ public class PoolSelectionUnitV2
                 }
 
             } else {
-                _log.warn("PS008");
                 Unit unit = _units.get(storeUnitName);
                 if (unit == null) {
-                    _log.warn("PS009");
                     int ind = storeUnitName.lastIndexOf("@");
                     if ((ind > 0) && (ind < (storeUnitName.length() - 1))) {
-                        _log.warn("PS010");
                         String template = "*@"
                                 + storeUnitName.substring(ind + 1);
                         if ((unit = _units.get(template)) == null) {
@@ -533,7 +521,6 @@ public class PoolSelectionUnitV2
                             }
                         }
                     } else {
-                        _log.warn("PS011");
                         throw new IllegalArgumentException(
                                 "IllegalUnitFormat : " + storeUnitName);
                     }
@@ -541,14 +528,10 @@ public class PoolSelectionUnitV2
                 _log.debug("matching storage unit found for: {}", storeUnitName);
                 list.add(unit);
             }
-            _log.warn("PS012");
             if (protocolUnitName != null) {
-                _log.warn("PS013");
-
                 Unit unit = findProtocolUnit(protocolUnitName);
                 //
                 if (unit == null){
-                    _log.warn("PS014");
                     _log.debug("no matching protocol unit found for: {}", protocolUnitName);
                     throw new IllegalArgumentException("Unit not found : "
                             + protocolUnitName);
@@ -557,10 +540,8 @@ public class PoolSelectionUnitV2
                 list.add(unit);
             }
             if (dCacheUnitName != null) {
-                _log.warn("PS015");
                 Unit unit = _units.get(dCacheUnitName);
                 if (unit == null) {
-                    _log.warn("PS016");
                     _log.debug("no matching dCache unit found for: {}", dCacheUnitName);
                     throw new IllegalArgumentException("Unit not found : "
                             + dCacheUnitName);
@@ -568,13 +549,10 @@ public class PoolSelectionUnitV2
                 _log.debug("matching dCache unit found: {}", unit);
                 list.add(unit);
             }
-            _log.warn("PS017");
             if (netUnitName != null) {
                 try {
-                    _log.warn("PS018");
                     Unit unit = _netHandler.match(netUnitName);
                     if (unit == null) {
-                        _log.warn("PS019");
                         _log.debug("no matching net unit found for: {}", netUnitName);
                         throw new IllegalArgumentException(
                                 "Unit not matched : " + netUnitName);
@@ -582,7 +560,6 @@ public class PoolSelectionUnitV2
                     _log.debug("matching net unit found: {}" + unit);
                     list.add(unit);
                 } catch (UnknownHostException uhe) {
-                    _log.warn("PS020");
                     throw new IllegalArgumentException(
                             "NetUnit not resolved : " + netUnitName);
                 }
@@ -603,10 +580,8 @@ public class PoolSelectionUnitV2
             // number of uGroupList(s).
             // iii) check for the hashtable if required.
             //
-            _log.warn("PS021");
             int fitCount = list.size();
             Set<Link> sortedSet = new TreeSet<>(new LinkComparator(type));
-            _log.warn("PS022");
 
             //
             // use subset on links if it's defined
@@ -614,10 +589,8 @@ public class PoolSelectionUnitV2
 
             LinkGroup linkGroup = null;
             if (linkGroupName != null) {
-                _log.warn("PS023");
                 linkGroup = _linkGroups.get(linkGroupName);
                 if (linkGroup == null) {
-                    _log.warn("PS024");
                     _log.debug("LinkGroup not found : {}", linkGroupName );
                     throw new IllegalArgumentException("LinkGroup not found : "
                             + linkGroupName);
@@ -628,38 +601,29 @@ public class PoolSelectionUnitV2
             // find all links that matches the specified list of units
             //
 
-            _log.warn("PS025");
             LinkMap matchingLinks = new LinkMap();
             for (Unit unit : list) {
-                _log.warn("PS026");
                 matchingLinks = match(matchingLinks, unit, linkGroup, type);
             }
 
-            _log.warn("PS027");
             Iterator<Link> linkIterator = matchingLinks.iterator();
             while (linkIterator.hasNext()) {
-                _log.warn("PS028");
 
                 Link link = linkIterator.next();
                 if ((link._uGroupList.size() <= fitCount)
                         && ((variableMap == null) || link.exec(variableMap))) {
-                    _log.warn("PS029");
 
                     sortedSet.add(link);
                 }
             }
-            _log.warn("PS030");
             int pref = -1;
             List<List<Link>> listList = new ArrayList<>();
             List<Link> current = null;
 
-            _log.warn("PS031");
             switch (type) {
 
                 case READ:
-                    _log.warn("PS032");
                     for (Link link : sortedSet) {
-                        _log.warn("PS033");
                         if (link.getReadPref() < 1) {
                             continue;
                         }
@@ -697,15 +661,11 @@ public class PoolSelectionUnitV2
                     }
                     break;
                 case WRITE:
-                    _log.warn("PS034");
                     for (Link link : sortedSet) {
-                        _log.warn("PS035");
                         if (link.getWritePref() < 1) {
-                            _log.warn("PS036");
                             continue;
                         }
                         if (link.getWritePref() != pref) {
-                            _log.warn("PS037");
                             listList.add(current = new ArrayList<>());
                             pref = link.getWritePref();
                         }
@@ -714,39 +674,26 @@ public class PoolSelectionUnitV2
             }
             List<Link>[] x = listList.toArray(new List[listList.size()]);
             result = new PoolPreferenceLevel[x.length];
-            _log.warn("PS038:" + listList.size() + "|" + x.length);
-            _log.warn("PS038_2:" + listList.get(0));
             //
             // resolve the links to the pools
             //
-            _log.warn("PS039");
             for (int i = 0; i < x.length; i++) {
 
-                _log.warn("PS040:" + x[i]);
                 List<Link> linkList = x[i];
                 List<String> resultList = new ArrayList<>();
                 String tag = null;
 
                 for (Link link : linkList) {
-                    _log.warn("PS041:" + linkList.size());
-                    _log.warn("PS041_1:" + linkList.get(0).getTag());
-                    _log.warn("PS041_2:" + linkList.get(0).getName());
-                    _log.warn("PS041_3:" + linkList.get(0).getAttraction());
-                    _log.warn("PS041_4:" + linkList.get(0)._poolList.size());
-                    _log.warn("PS041_5:" + linkList.get(0)._poolList.values().size());
                     //
                     // get the link if available
                     //
                     if ((tag == null) && (link.getTag() != null)) {
                         tag = link.getTag();
                     }
-                    _log.warn("PS042:" + tag);
 
                     for (PoolCore poolCore : link._poolList.values()) {
-                        _log.warn("PS043");
                         if (poolCore instanceof Pool) {
                             Pool pool = (Pool) poolCore;
-                            _log.warn("PS044:" + pool.isEnabled() + "|" + pool.isPing());
                             _log.debug("Pool: {} can read from tape? : {}", pool, pool.canReadFromTape());
                             if (((type == DirectionType.READ && pool.canRead())
                                  || (type == DirectionType.CACHE && pool.canReadFromTape()
@@ -754,14 +701,10 @@ public class PoolSelectionUnitV2
                                  || (type == DirectionType.WRITE && pool.canWrite())
                                  || (type == DirectionType.P2P && pool.canWriteForP2P()))
                                 && (_allPoolsActive || pool.isActive())) {
-                                _log.warn("PS045");
                                 resultList.add(pool.getName());
                             }
-                            _log.warn("PS044_2:" + pool.getName() + "|" + pool.isActive()  + "|" + _allPoolsActive + "|" + type + "|" + pool.canRead() + "|" + pool.canWrite() + "|" + pool.canReadFromTape());
                         } else {
-                             _log.warn("PS046");
                             for (Pool pool : ((PGroup)poolCore)._poolList.values()) {
-                                _log.warn("PS047");
                                 _log.debug("Pool: {} can read from tape? : {}", pool, pool.canReadFromTape());
                                 if (((type == DirectionType.READ && pool.canRead())
                                      || (type == DirectionType.CACHE && pool.canReadFromTape()
@@ -769,7 +712,6 @@ public class PoolSelectionUnitV2
                                      || (type == DirectionType.WRITE && pool.canWrite())
                                      || (type == DirectionType.P2P && pool.canWriteForP2P()))
                                     && (_allPoolsActive || pool.isActive())) {
-                                    _log.warn("PS048");
                                     resultList.add(pool.getName());
                                 }
                             }
@@ -777,11 +719,9 @@ public class PoolSelectionUnitV2
                     }
                 }
                 result[i] = new PoolPreferenceLevel(resultList, tag);
-                _log.warn("PS049:" + result[i].getTag() + "|" + result[i].getPoolList().size());
             }
 
         } finally {
-            _log.warn("PS050");
             _psuReadLock.unlock();
         }
 

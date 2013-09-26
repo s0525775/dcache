@@ -759,13 +759,7 @@ public class Transfer implements Comparable<Transfer>
                 PoolMgrSelectWritePoolMsg reply =
                     _poolManager.sendAndWait(request, timeout);
 
-                _log.error("TRANSFER1: " + reply.getReturnCode());
-
                 if (reply.getReturnCode() == 0) {
-                    _log.error("TRANSFER1_1: " + reply.getPoolName());
-                    _log.error("TRANSFER1_2: " + reply.getPoolAddress());
-                    _log.error("TRANSFER1_3: " + reply.getStorageInfo());
-                    _log.error("TRANSFER1_4: " + reply.getStorageInfo().isCreatedOnly());
                     setPool(reply.getPoolName());
                     setPoolAddress(reply.getPoolAddress());
                     setStorageInfo(reply.getStorageInfo());
