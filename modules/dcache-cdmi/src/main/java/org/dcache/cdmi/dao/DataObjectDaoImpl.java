@@ -30,13 +30,41 @@
  */
 package org.dcache.cdmi.dao;
 
-import java.io.BufferedWriter;
+import static org.dcache.namespace.FileAttribute.*;
+import com.google.common.collect.Range;
+import diskCacheV111.util.CacheException;
+import diskCacheV111.util.FsPath;
+import diskCacheV111.util.PnfsHandler;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileWriter;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import javax.security.auth.Subject;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
+import org.dcache.auth.Subjects;
+import org.dcache.cdmi.mover.CDMIDataTransfer;
+import org.dcache.cdmi.mover.CDMIProtocolInfo;
+import org.dcache.cdmi.temp.Test;
+import org.dcache.cells.AbstractCellComponent;
+import org.dcache.cells.CellLifeCycleAware;
+import org.dcache.cells.CellStub;
+import org.dcache.namespace.FileAttribute;
+import org.dcache.namespace.FileType;
+import org.dcache.util.Transfer;
+import org.dcache.util.TransferRetryPolicies;
+import org.dcache.util.list.DirectoryEntry;
+import org.dcache.util.list.DirectoryListPrinter;
+import org.dcache.util.list.ListDirectoryHandler;
+import org.dcache.vehicles.FileAttributes;
+import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.dao.DataObjectDao;
 import org.snia.cdmiserver.exception.BadRequestException;
@@ -49,13 +77,34 @@ import org.snia.cdmiserver.util.ObjectID;
  * Concrete implementation of {@link DataObjectDao} using the local filesystem as the backing store.
  * </p>
  */
-public class DataObjectDaoImpl implements DataObjectDao {
+public class DataObjectDaoImpl extends AbstractCellComponent
+    implements DataObjectDao, ServletContextListener, CellLifeCycleAware {
+
+    //
+    // Something important
+    //
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DataObjectDaoImpl.class);
 
     // -------------------------------------------------------------- Properties
     private String baseDirectoryName = null;
 
     //
+    // Properties and Dependency Injection Methods by dCache
+    //
+    private ServletContext servletContext = null;
+    private CellStub pnfsStub;
+    private PnfsHandler pnfsHandler;
+    private ListDirectoryHandler listDirectoryHandler;
+    private CellStub poolStub;
+    private CellStub poolMgrStub;
+    private CellStub billingStub;
+    public static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
+    public static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
+    public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
+    public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
+    public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
 
+    //
     public void setBaseDirectoryName(String baseDirectoryName) {
         this.baseDirectoryName = baseDirectoryName;
         System.out.println("******* Base Directory = " + baseDirectoryName);
@@ -74,6 +123,13 @@ public class DataObjectDaoImpl implements DataObjectDao {
         this.containerDao = containerDao;
     }
 
+    public DataObjectDaoImpl() {
+        Test.write("/tmp/testb001.log", "Re-Init 2...");
+        if (listDirectoryHandler == null) {
+            init();
+        }
+    }
+
     // ---------------------------------------------------- ContainerDao Methods
     // utility function
     // given a path, find out metadata file name and container directory
@@ -86,7 +142,9 @@ public class DataObjectDaoImpl implements DataObjectDao {
         if (tokens.length < 1) {
             throw new BadRequestException("No object name in path <" + path + ">");
         }
+
         String fileName = tokens[tokens.length - 1];
+
         return "." + fileName;
     }
 
@@ -133,13 +191,14 @@ public class DataObjectDaoImpl implements DataObjectDao {
             System.out.println("Exception while writing: " + ex);
             throw new IllegalArgumentException("Cannot write Object @" + path + " error : " + ex);
         }
+
         // check for container
-        if (!containerDirectory.exists()) {
+        if (!checkIfDirectoryFileExists(containerDirectory.getAbsolutePath())) {
             throw new ConflictException("Container <"
                                         + containerDirectory.getAbsolutePath()
                                         + "> doesn't exist");
         }
-        if (objFile.exists()) {
+        if (checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
             throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
         }
         try {
@@ -172,18 +231,18 @@ public class DataObjectDaoImpl implements DataObjectDao {
             }
             dObj.setMetadata("mimetype", mimeType);
             //
-            FileWriter fstream = new FileWriter(objFile.getAbsolutePath());
-            BufferedWriter out = new BufferedWriter(fstream);
-            out.write(dObj.getValue()); // Save Only the value
-            // Close the output stream
-            out.close();
+            if (!writeFile(objFile.getAbsolutePath(), dObj.getValue())) {
+                System.out.println("Exception while writing.");
+                throw new IllegalArgumentException("Cannot write Object file @"
+                                                   + path);
+            }
             // write metadata file
             System.out.println("metadataFile : " + metadataFileName);
-            fstream = new FileWriter(metadataFile.getAbsolutePath());
-            out = new BufferedWriter(fstream);
-            out.write(dObj.metadataToJson()); // Save it
-            // Close the output stream
-            out.close();
+            if (!writeFile(metadataFile.getAbsolutePath(), dObj.metadataToJson())) {
+                System.out.println("Exception while writing.");
+                throw new IllegalArgumentException("Cannot write Object file @"
+                                                   + path);
+            }
             //
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -205,6 +264,7 @@ public class DataObjectDaoImpl implements DataObjectDao {
 
     @Override
     public DataObject findByPath(String path) {
+
         System.out.println("In findByPath : " + path);
         //
         String metadataFileName = getmetadataFileName(path);
@@ -222,7 +282,13 @@ public class DataObjectDaoImpl implements DataObjectDao {
             System.out.println("Exception in findByPath : " + ex);
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
-        if (!metadataFile.exists()) {
+
+        //temp
+        if (listDirectoryHandler == null) {
+            init();
+        }
+
+        if (!checkIfDirectoryFileExists(metadataFile.getAbsolutePath())) {
             return null;
         }
         // Check for object file
@@ -236,7 +302,7 @@ public class DataObjectDaoImpl implements DataObjectDao {
             System.out.println("Exception in findByPath : " + ex);
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
-        if (!objFile.exists()) {
+        if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
             throw new ConflictException("Object File <"
                                         + objFile.getAbsolutePath()
                                         + "> doesn't exist");
@@ -247,21 +313,11 @@ public class DataObjectDaoImpl implements DataObjectDao {
         DataObject dObj = new DataObject();
         try {
             // Read metadata
-            FileInputStream in = new FileInputStream(metadataFile.getAbsolutePath());
-            int inpSize = in.available();
-            byte[] inBytes = new byte[inpSize];
-            in.read(inBytes);
+            byte[] inBytes = readFile(metadataFile.getAbsolutePath());
             dObj.fromJson(inBytes, true);
-            // Close the output stream
-            in.close();
             // Read object from file
-            in = new FileInputStream(objFile.getAbsolutePath());
-            inpSize = in.available();
-            inBytes = new byte[inpSize];
-            in.read(inBytes);
+            inBytes = readFile(objFile.getAbsolutePath());
             dObj.setValue(new String(inBytes));
-            // Close the output stream
-            in.close();
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
@@ -284,4 +340,320 @@ public class DataObjectDaoImpl implements DataObjectDao {
         throw new UnsupportedOperationException("DataObjectDaoImpl.findByObjectId()");
     }
     // --------------------------------------------------------- Private Methods
+
+    /**
+     * DCache related stuff.
+     */
+
+    private void init() {
+        pnfsStub = CDMIDataTransfer.getPnfsStub2();
+        pnfsHandler = CDMIDataTransfer.getPnfsHandler2();
+        listDirectoryHandler = CDMIDataTransfer.getListDirectoryHandler2();
+        poolStub = CDMIDataTransfer.getPoolStub2();
+        poolMgrStub = CDMIDataTransfer.getPoolMgrStub2();
+        billingStub = CDMIDataTransfer.getBillingStub2();
+    }
+
+    //This function is necessary, otherwise the attributes and servletContext are not set.
+    //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
+    //In other words: contextInitialized() must be called before afterStart().
+    @Override
+    public void contextInitialized(ServletContextEvent servletContextEvent) {
+        Test.write("/tmp/testb001.log", "Init 2...");
+        this.servletContext = servletContextEvent.getServletContext();
+        this.pnfsStub = getCellStubAttribute();
+        this.pnfsHandler = new PnfsHandler(pnfsStub);
+        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
+        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
+        this.poolStub = getPoolAttribute();
+        this.poolMgrStub = getPoolMgrAttribute();
+        this.billingStub = getBillingAttribute();
+        CDMIDataTransfer.setPnfsStub2(pnfsStub);
+        CDMIDataTransfer.setPnfsHandler2(pnfsHandler);
+        CDMIDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
+        CDMIDataTransfer.setPoolStub2(poolStub);
+        CDMIDataTransfer.setPoolMgrStub2(poolMgrStub);
+        CDMIDataTransfer.setBillingStub2(billingStub);
+    }
+
+    @Override
+    public void contextDestroyed(ServletContextEvent sce)
+    {
+    }
+
+    @Override
+    public void afterStart()
+    {
+        Test.write("/tmp/testb001.log", "Start 2...");
+    }
+
+    @Override
+    public void beforeStop()
+    {
+    }
+
+    private CellStub getCellStubAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_PNFSSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private ListDirectoryHandler getListDirAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_LISTER);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not found");
+        }
+        if (!ListDirectoryHandler.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not of type " + ListDirectoryHandler.class);
+        }
+        return (ListDirectoryHandler) attribute;
+    }
+
+    private CellStub getPoolAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private CellStub getPoolMgrAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLMGRSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private CellStub getBillingAttribute()  //tested, ok
+    {
+        if (servletContext == null) {
+            throw new RuntimeException("ServletContext is not set");
+        }
+        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_BILLINGSTUB);
+        if (attribute == null) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not found");
+        }
+        if (!CellStub.class.isInstance(attribute)) {
+            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not of type " + CellStub.class);
+        }
+        return (CellStub) attribute;
+    }
+
+    private String getParentDirectory(String path)
+    {
+        String result = "/";
+        if (path != null) {
+            String tempPath = path;
+            if (path.endsWith("/")) {
+                tempPath = path.substring(0, path.length() - 1);
+            }
+            String parent = tempPath;
+            if (tempPath.contains("/")) {
+                parent = tempPath.substring(0, tempPath.lastIndexOf("/"));
+            }
+            if (parent != null) {
+                result = parent;
+            }
+            if (parent.isEmpty()) {
+                result = "/";
+            }
+        }
+        return result;
+    }
+
+    private String getItem(String path)
+    {
+        String result = "";
+        String tempPath = path;
+        if (path != null) {
+            if (path.endsWith("/")) {
+                tempPath = path.substring(0, path.length() - 1);
+            }
+            String item = tempPath;
+            if (tempPath.contains("/")) {
+                item = tempPath.substring(tempPath.lastIndexOf("/") + 1, tempPath.length());
+            }
+            if (item != null) {
+                result = item;
+            }
+        }
+        return result;
+    }
+
+    private boolean checkIfDirectoryFileExists(String dirPath)
+    {
+        boolean result = false;
+
+        String searchedItem = getItem(dirPath);
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
+        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+            if (entry.getKey().compareTo(searchedItem) == 0) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
+    private Map<String, FileType> listDirectoriesFilesByPath(String path)
+    {
+        String tmpPath = addPrefixSlashToPath(path);
+        FsPath fsPath = new FsPath(tmpPath);
+        Map<String, FileType> result = new HashMap<>();
+        try {
+            listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
+        } catch (InterruptedException | CacheException ex) {
+            _log.warn("Directory and file listing for path '" + path + "' was not possible, internal error message: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    private String addPrefixSlashToPath(String path)
+    {
+        String result = "";
+        if (path != null) {
+            if (!path.startsWith("/")) {
+                result = "/" + path;
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    private String addSuffixSlashToPath(String path)
+    {
+        String result = "";
+        if (path != null) {
+            if (!path.endsWith("/")) {
+                result = path + "/";
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    private String removeSlashesFromPath(String path)
+    {
+        String result = "";
+        if (path != null) {
+            if (path.startsWith("/")) {
+                result = path.substring(1, path.length() - 1);
+            } else {
+                result = path;
+            }
+            if (result.endsWith("/")) {
+                result = result.substring(0, result.length() - 2);
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    private static class ListPrinter implements DirectoryListPrinter
+    {
+        private final Map<String, FileType> list;
+
+        private ListPrinter(Map<String, FileType> list)
+        {
+            this.list = list;
+        }
+
+        @Override
+        public Set<FileAttribute> getRequiredAttributes()
+        {
+            return EnumSet.of(TYPE, SIZE);
+        }
+
+        @Override
+        public void print(FsPath dir, FileAttributes dirAttr, DirectoryEntry entry)
+                throws InterruptedException
+        {
+            FileAttributes attr = entry.getFileAttributes();
+            list.put(entry.getName(), attr.getFileType());
+            Test.write("/tmp/listing.log", "Out_2:" + dir.getName() + "|" + entry.getName() + "|" + String.valueOf(attr.getFileType()) + "|" + String.valueOf(attr.getSize())); //temporary
+        }
+    }
+
+    public boolean writeFile(String filePath, String data)
+    {
+        boolean result = false;
+        try {
+            //The order of all commands is very important!
+            Subject subject = Subjects.ROOT;
+            CDMIDataTransfer.setData(data);
+            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            transfer.setPoolStub(poolStub);
+            transfer.setPoolManagerStub(poolMgrStub);
+            transfer.setBillingStub(billingStub);
+            transfer.setCellName(getCellName());
+            transfer.setDomainName(getCellDomainName());
+            transfer.setProtocolInfo(cdmiProtocolInfo);
+            transfer.setOverwriteAllowed(true);
+            transfer.createNameSpaceEntryWithParents();
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            result = true;
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            _log.error("File could not become written, exception is: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    public byte[] readFile(String filePath)
+    {
+        byte[] result = null;
+        try {
+            //The order of all commands is very important!
+            Subject subject = Subjects.ROOT;
+            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            transfer.setPoolStub(poolStub);
+            transfer.setPoolManagerStub(poolMgrStub);
+            transfer.setBillingStub(billingStub);
+            transfer.setCellName(getCellName());
+            transfer.setDomainName(getCellDomainName());
+            transfer.setProtocolInfo(cdmiProtocolInfo);
+            transfer.readNameSpaceEntry();
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            result = CDMIDataTransfer.getDataAsBytes();
+            _log.error("CDMIDataObjectDaoImpl received data: " + result.toString());
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            _log.error("File could not become read, exception is: " + ex.getMessage());
+        }
+        return result;
+    }
+
 }

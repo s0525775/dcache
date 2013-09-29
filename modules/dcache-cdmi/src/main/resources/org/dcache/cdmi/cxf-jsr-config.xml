@@ -113,6 +113,13 @@
         <property name="baseDirectoryName" value="/data"/>
         <property name="recreate" value="false"/>
     </bean>
+
+    <bean id="dataObjectDao" class="org.snia.cdmiserver.dao.filesystem.DataObjectDaoImpl">
+        <property name="baseDirectoryName" value="/data"/>
+        <property name="containerDao" ref="containerDao"/>
+    </bean>
+
+    <bean id="capabilityDao" class="org.snia.cdmiserver.dao.filesystem.CapabilityDaoImpl"/>
     -->
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.ContainerDaoImpl">
@@ -120,11 +127,11 @@
         <property name="recreate" value="false"/>
     </bean>
 
-    <bean id="dataObjectDao" class="org.snia.cdmiserver.dao.filesystem.DataObjectDaoImpl">
+    <bean id="dataObjectDao" class="org.dcache.cdmi.dao.DataObjectDaoImpl">
         <property name="baseDirectoryName" value="/disk"/>
         <property name="containerDao" ref="containerDao"/>
     </bean>
 
-    <bean id="capabilityDao" class="org.snia.cdmiserver.dao.filesystem.CapabilityDaoImpl"/>
+    <bean id="capabilityDao" class="org.dcache.cdmi.dao.CapabilityDaoImpl"/>
 
 </beans>

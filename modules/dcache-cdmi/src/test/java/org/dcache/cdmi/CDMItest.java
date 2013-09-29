@@ -171,7 +171,7 @@ public class CDMItest {
         }// exception
     }
 
-    @Ignore
+    @Test
     public void testObjectCreate() throws Exception {
         HttpClient httpclient = new DefaultHttpClient();
         waits();
@@ -211,7 +211,7 @@ public class CDMItest {
         }// exception
     }
 
-    @Ignore
+    @Test
     public void testObjectUpdate() throws Exception {
         HttpClient httpclient = new DefaultHttpClient();
         waits();
@@ -251,7 +251,7 @@ public class CDMItest {
         }// exception
     }
 
-    @Ignore
+    @Test
     public void testObjectDelete() throws Exception {
         HttpClient httpclient = new DefaultHttpClient();
         waits();

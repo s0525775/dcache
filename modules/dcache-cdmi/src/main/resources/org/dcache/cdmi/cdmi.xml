@@ -143,6 +143,7 @@
                             <property name="eventListeners">
                                 <list>
                                     <bean class="org.dcache.cdmi.dao.ContainerDaoImpl"/>
+                                    <bean class="org.dcache.cdmi.dao.DataObjectDaoImpl"/>
                                 </list>
                             </property>
                             <property name="contextPath" value="/"/>  <!-- here -->
