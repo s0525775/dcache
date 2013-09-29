@@ -60,7 +60,7 @@ public class CDMItest {
         try {
             // Create the request
             HttpResponse response = null;
-            HttpGet httpget = new HttpGet("http://localhost:8542/cdmi-server/cdmi_capabilities");
+            HttpGet httpget = new HttpGet("http://localhost:8542/cdmi_capabilities");
             httpget.setHeader("Accept", "application/cdmi-capability");
             httpget.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpget);
@@ -97,7 +97,7 @@ public class CDMItest {
         try {
             // Create the request
             HttpResponse response = null;
-            HttpPut httpput = new HttpPut("http://localhost:8542/cdmi-server/TestContainer");
+            HttpPut httpput = new HttpPut("http://localhost:8542/TestContainer");
             httpput.setHeader("Content-Type", "application/cdmi-container");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             httpput.setEntity(new StringEntity("{ \"metadata\" : { } }"));
@@ -136,7 +136,7 @@ public class CDMItest {
         try {
             // Create the request
             HttpResponse response = null;
-            HttpPut httpput = new HttpPut("http://localhost:8542/cdmi-server/TestContainer/");
+            HttpPut httpput = new HttpPut("http://localhost:8542/TestContainer/");
             httpput.setHeader("Content-Type", "application/cdmi-container");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             httpput.setEntity(new StringEntity("{ \"metadata\" : { } }"));
@@ -177,7 +177,7 @@ public class CDMItest {
             HttpResponse response = null;
 
             HttpPut httpput = new HttpPut(
-                    "http://localhost:8542/cdmi-server/TestContainer/TestObject.txt");
+                    "http://localhost:8542/TestContainer/TestObject.txt");
             httpput.setHeader("Content-Type", "application/cdmi-object");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             String respStr = "{\n";
@@ -217,7 +217,7 @@ public class CDMItest {
             HttpResponse response = null;
 
             HttpPut httpput = new HttpPut(
-                    "http://localhost:8542/cdmi-server/TestContainer/TestObject.txt");
+                    "http://localhost:8542/TestContainer/TestObject.txt");
             httpput.setHeader("Content-Type", "application/cdmi-object");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             String respStr = "{\n";
@@ -257,7 +257,7 @@ public class CDMItest {
             HttpResponse response = null;
 
             HttpDelete httpdelete = new HttpDelete(
-                    "http://localhost:8542/cdmi-server/TestContainer/TestObject.txt");
+                    "http://localhost:8542/TestContainer/TestObject.txt");
             httpdelete.setHeader("Content-Type", "application/cdmi-object");
             httpdelete.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpdelete);
@@ -290,7 +290,7 @@ public class CDMItest {
             HttpResponse response = null;
 
             HttpDelete httpdelete = new HttpDelete(
-                    "http://localhost:8542/cdmi-server/TestContainer");
+                    "http://localhost:8542/TestContainer");
             httpdelete.setHeader("Content-Type", "application/cdmi-container");
             httpdelete.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpdelete);

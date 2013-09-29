@@ -116,12 +116,12 @@
     -->
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.ContainerDaoImpl">
-        <property name="baseDirectoryName" value="/data"/>
+        <property name="baseDirectoryName" value="/disk"/>
         <property name="recreate" value="false"/>
     </bean>
 
     <bean id="dataObjectDao" class="org.snia.cdmiserver.dao.filesystem.DataObjectDaoImpl">
-        <property name="baseDirectoryName" value="/data"/>
+        <property name="baseDirectoryName" value="/disk"/>
         <property name="containerDao" ref="containerDao"/>
     </bean>
 

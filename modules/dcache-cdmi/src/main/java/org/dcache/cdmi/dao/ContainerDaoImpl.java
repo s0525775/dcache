@@ -132,7 +132,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         this.baseDirectoryName = baseDirectoryName;
     }
 
-    private boolean recreate = false;
+    private boolean recreate = true;
 
     /**
      * <p>
@@ -176,7 +176,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             // Update.
             //
 
-            if (!checkIfDirectoryExists(directory)) { // Creating Container
+            if (!checkIfDirectoryFileExists(directory)) { // Creating Container
 
                 if (!createDirectory(directory)) {
                     throw new IllegalArgumentException("Cannot create container '" + path + "'");
@@ -281,7 +281,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
         } else { // Moving a Container
 
-            if (checkIfDirectoryExists(directory)) {
+            if (checkIfDirectoryFileExists(directory)) {
                 throw new IllegalArgumentException("Cannot move container '"
                                                    + containerRequest.getMove()
                                                    + "' to '"
@@ -291,7 +291,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
             String sourceContainerFile = absolutePath(containerRequest.getMove());
 
-            if (!checkIfFileExists(sourceContainerFile)) {
+            if (!checkIfDirectoryFileExists(sourceContainerFile)) {
                 throw new NotFoundException("Path '"
                                             + absolutePath(directory)
                                             + "' does not identify an existing container");
@@ -386,6 +386,8 @@ public class ContainerDaoImpl extends AbstractCellComponent
     public void deleteByPath(String path) {
         String directoryOrFile = absolutePath(path);
 
+        _log.error("DELETE: " + directoryOrFile);
+
         //
 
         if (isDirectory(directoryOrFile)) {
@@ -419,14 +421,18 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
         String directory = absolutePath(path);
 
-        if (checkIfDirectoryExists(directory)) {
+        if (directory == null) {
+            directory = "/disk";
+        }
+
+        if (!checkIfDirectoryFileExists(directory)) {
             throw new NotFoundException("Path '"
-                                        + absolutePath(directory)
+                                        + absolutePath(path)
                                         + "' does not identify an existing container");
         }
         if (!isDirectory(directory)) {
             throw new IllegalArgumentException("Path '"
-                                               + absolutePath(directory)
+                                               + absolutePath(path)
                                                + "' does not identify a container");
         }
 
@@ -491,7 +497,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             baseDirectory1 = baseDirectoryName + "/";
             System.out
                     .println("Base Directory Absolute Path = " + absolutePath(baseDirectory1));
-            parentContainerDirectory = baseDirectory1 + "/" + parentContainerName;
+            parentContainerDirectory = baseDirectory1 + parentContainerName;  //CHG
             //
             System.out.println("Parent Container Absolute Path = "
                                + absolutePath(parentContainerDirectory));
@@ -549,13 +555,15 @@ public class ContainerDaoImpl extends AbstractCellComponent
      *            Path of the requested file or directory.
      */
     public String absolutePath(String path) {
-        if (path == null) {
+        if (path == null || path.equals("null")) {
             return baseDirectory();
         } else {
             String tmpPath = addPrefixSlashToPath(path);
             return baseDirectory() + tmpPath;
         }
     }
+
+    private String baseDirectory = null;
 
     /**
      * <p>
@@ -567,15 +575,18 @@ public class ContainerDaoImpl extends AbstractCellComponent
      *                if we cannot create the base directory
      */
     private String baseDirectory() {
-        String baseDirectory = addPrefixSlashToPath(baseDirectoryName);
-        if (recreate) {
-            deleteRecursively(baseDirectory);
-            if (!createDirectory(baseDirectory)) {
-                throw new IllegalArgumentException("Cannot create base directory '"
-                        + baseDirectoryName
-                        + "'");
+        if (baseDirectoryName == null) {
+            if (recreate) {
+                String baseDir = addPrefixSlashToPath(baseDirectoryName);
+                deleteRecursively(baseDir);
+                if (!createDirectory(baseDir)) {
+                    throw new IllegalArgumentException("Cannot create base directory '"
+                            + baseDirectoryName
+                            + "'");
+                }
             }
         }
+        _log.error("BaseDirectory GGG:" + baseDirectory);
         return baseDirectory;
     }
 
@@ -683,10 +694,18 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
     @Override
     public boolean isContainer(String path) {
+        if (listDirectoryHandler == null) {
+            init();
+        }
         String directoryOrFile = absolutePath(path);
+        if (directoryOrFile == null) {
+            directoryOrFile = "/disk";
+        }
         if (isDirectory(directoryOrFile)) {
+            _log.error("ISDIR!!!");
             return true;
         } else {
+            _log.error("ISNOTDIR!!!");
             return false;
         }
     }
@@ -694,6 +713,15 @@ public class ContainerDaoImpl extends AbstractCellComponent
     /**
      * DCache related stuff.
      */
+
+    private void init() {
+        pnfsStub = CDMIDataTransfer.getPnfsStub();
+        pnfsHandler = CDMIDataTransfer.getPnfsHandler();
+        listDirectoryHandler = CDMIDataTransfer.getListDirectoryHandler();
+        poolStub = CDMIDataTransfer.getPoolStub();
+        poolMgrStub = CDMIDataTransfer.getPoolMgrStub();
+        billingStub = CDMIDataTransfer.getBillingStub();
+    }
 
     //This function is necessary, otherwise the attributes and servletContext are not set.
     //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
@@ -708,6 +736,12 @@ public class ContainerDaoImpl extends AbstractCellComponent
         this.poolStub = getPoolAttribute();
         this.poolMgrStub = getPoolMgrAttribute();
         this.billingStub = getBillingAttribute();
+        CDMIDataTransfer.setPnfsStub(pnfsStub);
+        CDMIDataTransfer.setPnfsHandler(pnfsHandler);
+        CDMIDataTransfer.setListDirectoryHandler(listDirectoryHandler);
+        CDMIDataTransfer.setPoolStub(poolStub);
+        CDMIDataTransfer.setPoolMgrStub(poolMgrStub);
+        CDMIDataTransfer.setBillingStub(billingStub);
     }
 
     @Override
@@ -719,20 +753,19 @@ public class ContainerDaoImpl extends AbstractCellComponent
     public void afterStart()
     {
         //Temporary... Start...
-        /*
-        Test.write("/tmp/testb001.log", "0001:" + String.valueOf(test1));
-        boolean test01 = createDirectory("test123");
-        boolean test02 = createDirectory("test345");
-        boolean test1 = createDirectory("test234");
+        Test.write("/tmp/testb001.log", "0001");
+        boolean test01 = createDirectory("/disk/test123");
+        boolean test02 = createDirectory("/disk/test345");
+        boolean test1 = createDirectory("/disk/test234");
         Test.write("/tmp/testb001.log", "0002:" + String.valueOf(test1));
-        boolean test2 = checkIfDirectoryExists("test234");
+        boolean test2 = checkIfDirectoryFileExists("/disk/test234");
         Test.write("/tmp/testb001.log", "0003:" + String.valueOf(test2));
-        boolean test3 = deleteDirectory("test234");
+        boolean test3 = deleteDirectory("/disk/test234");
         Test.write("/tmp/testb001.log", "0004:" + String.valueOf(test3));
-        boolean test4 = checkIfDirectoryExists("test234");
+        boolean test4 = checkIfDirectoryFileExists("/disk/test234");
         Test.write("/tmp/testb001.log", "0005:" + String.valueOf(test4));
-        */
         //Temporary... End...
+        /*
         Test.write("/tmp/testb001.log", "001");
         writeFileExample();
         try {
@@ -760,6 +793,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             Test.write("/tmp/testb001.log", "006_2:" + entry.getKey() + "|" + entry.getValue());
         }
         Test.write("/tmp/testb001.log", "007");
+        */
     }
 
     @Override
@@ -850,34 +884,67 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private boolean checkIfDirectoryExists(String dirPath)
     {
         boolean result = false;
-        List<String> listing = listDirectoriesByPath(baseDirectory());
+        String searchedItem = getItem(dirPath);
+        List<String> listing = listDirectoriesByPath(getParentDirectory(dirPath));
         for (String dir : listing) {
-            if (dir.compareTo(dirPath) == 0) {
+            if (dir.compareTo(searchedItem) == 0) {
                 result = true;
             }
         }
         return result;
     }
 
-    private boolean checkIfFileExists(String filePath)
+    private String getParentDirectory(String path)
     {
-        boolean result = false;
-        List<String> listing = listFilesByPath(baseDirectory());
-        for (String file : listing) {
-            if (file.compareTo(filePath) == 0) {
-                result = true;
+        String result = "/";
+        if (path != null) {
+            String tempPath = path;
+            if (path.endsWith("/")) {
+                tempPath = path.substring(0, path.length() - 2);
+            }
+            String parent = tempPath;
+            if (tempPath.contains("/")) {
+                parent = tempPath.substring(0, tempPath.lastIndexOf("/"));
+            }
+            if (parent != null) {
+                result = parent;
+            }
+            if (parent.isEmpty()) {
+                result = "/";
             }
         }
+        _log.error("TSTG:" + result);
+        return result;
+    }
+
+    private String getItem(String path)
+    {
+        String result = "";
+        String tempPath = path;
+        if (path != null) {
+            if (path.endsWith("/")) {
+                tempPath = path.substring(0, path.length() - 1);
+            }
+            String item = tempPath;
+            if (tempPath.contains("/")) {
+                item = tempPath.substring(tempPath.lastIndexOf("/") + 1, tempPath.length());
+            }
+            if (item != null) {
+                result = item;
+            }
+        }
+        _log.error("TSTG0:" + result);
         return result;
     }
 
     private boolean checkIfDirectoryFileExists(String dirPath)
     {
         boolean result = false;
+        String searchedItem = getItem(dirPath);
         String tmpDirPath = addPrefixSlashToPath(dirPath);
-        Map<String, FileType> listing = listDirectoriesFilesByPath(tmpDirPath);
+        Map<String, FileType> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
         for (Map.Entry<String, FileType> entry : listing.entrySet()) {
-            if (entry.getKey().compareTo(dirPath) == 0) {
+            if (entry.getKey().compareTo(searchedItem) == 0) {
                 result = true;
             }
         }
@@ -928,7 +995,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         boolean result = false;
         String tmpDirPath = addPrefixSlashToPath(dirPath);
         try {
-            pnfsHandler.createPnfsDirectory(tmpDirPath);
+            pnfsHandler.createDirectories(new FsPath(tmpDirPath));
             result = true;
         } catch (CacheException ex) {
             _log.warn("Directory '" + dirPath + "' could not get created, internal error message: " + ex.getMessage());
@@ -1006,10 +1073,12 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String addPrefixSlashToPath(String path)
     {
         String result = "";
-        if (!path.startsWith("/")) {
-            result = "/" + path;
-        } else {
-            result = path;
+        if (path != null) {
+            if (!path.startsWith("/")) {
+                result = "/" + path;
+            } else {
+                result = path;
+            }
         }
         return result;
     }
@@ -1017,10 +1086,12 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String addSuffixSlashToPath(String path)
     {
         String result = "";
-        if (!path.endsWith("/")) {
-            result = path + "/";
-        } else {
-            result = path;
+        if (path != null) {
+            if (!path.endsWith("/")) {
+                result = path + "/";
+            } else {
+                result = path;
+            }
         }
         return result;
     }
@@ -1028,15 +1099,17 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String removeSlashesFromPath(String path)
     {
         String result = "";
-        if (path.startsWith("/")) {
-            result = path.substring(1, path.length() - 1);
-        } else {
-            result = path;
-        }
-        if (result.endsWith("/")) {
-            result = result.substring(0, result.length() - 2);
-        } else {
-            result = path;
+        if (path != null) {
+            if (path.startsWith("/")) {
+                result = path.substring(1, path.length() - 1);
+            } else {
+                result = path;
+            }
+            if (result.endsWith("/")) {
+                result = result.substring(0, result.length() - 2);
+            } else {
+                result = path;
+            }
         }
         return result;
     }
@@ -1110,7 +1183,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             transfer.setProtocolInfo(cdmiProtocolInfo);
             transfer.readNameSpaceEntry();
             transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-            String data = CDMIDataTransfer.getData();
+            String data = CDMIDataTransfer.getDataAsString();
             _log.error("CDMIContainerDaoImpl received data: " + data);
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("File could not become read, exception is: " + ex.getMessage());

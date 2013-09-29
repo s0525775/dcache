@@ -5,8 +5,12 @@ import diskCacheV111.util.PnfsId;
 import diskCacheV111.vehicles.ProtocolInfo;
 import diskCacheV111.vehicles.StorageInfo;
 import dmg.cells.nucleus.CellEndpoint;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.logging.Level;
 import org.dcache.cdmi.temp.Test;
 import org.dcache.pool.movers.IoMode;
 import org.dcache.pool.movers.MoverChannel;
@@ -43,7 +47,7 @@ public class CDMIMover implements MoverProtocol
         if (access == IoMode.WRITE) {
             writeFile();
         } else if (access == IoMode.READ) {
-            readFile();
+            readFileAsBytes();
         }
         closeChannel();
     }
@@ -66,10 +70,10 @@ public class CDMIMover implements MoverProtocol
         return channel.getLastTransferred();
     }
 
-    private synchronized void writeFile() {
+    private void writeFile() {
         if (channel.isOpen()) {
             try {
-                strData = CDMIDataTransfer.getData();
+                strData = CDMIDataTransfer.getDataAsString();
                 ByteBuffer data = Test.stringToByteBuffer(strData);
                 channel.write(data);
                 channel.sync();
@@ -79,7 +83,24 @@ public class CDMIMover implements MoverProtocol
         }
     }
 
-    private synchronized void readFile() {
+    private void readFileAsBytes() {
+        if (channel.isOpen()) {
+            try {
+                int dataSize = (int) channel.getFileAttributes().getSize();
+                if (dataSize > 0) {
+                    channel.position(0);
+                    ByteBuffer data = ByteBuffer.allocate(dataSize);
+                    channel.read(data);
+                    CDMIDataTransfer.setData(data.array());
+                    _log.error("CDMIMover data read:|" + data.array().toString() + "|[" + dataSize + " bytes]");
+                }
+            } catch (IOException ex) {
+                _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void readFileAsString() {
         if (channel.isOpen()) {
             try {
                 int dataSize = (int) channel.getFileAttributes().getSize();
