@@ -254,18 +254,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
             // Write created or updated persisted fields out to the "." file
             //
 
-            try {
-                FileWriter fstream = new FileWriter(absolutePath(containerFieldsFile));
-                BufferedWriter out = new BufferedWriter(fstream);
-                out.write(containerRequest.toJson(true)); // Save it
-                out.close();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                System.out.println("Exception while writing: " + ex);
+            if (!writeFile(absolutePath(containerFieldsFile), containerRequest.toJson(true))) {
+                System.out.println("Exception while writing.");
                 throw new IllegalArgumentException("Cannot write container fields file @"
-                                                   + path
-                                                   + " error : "
-                                                   + ex);
+                                                   + path);
             }
 
             //
@@ -345,18 +337,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
                 // Write created or updated persisted fields out to the "." file
                 //
 
-                try {
-                    FileWriter fstream = new FileWriter(absolutePath(containerFieldsFile));
-                    BufferedWriter out = new BufferedWriter(fstream);
-                    out.write(containerRequest.toJson(true)); // Save it
-                    out.close();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    System.out.println("Exception while writing: " + ex);
+                if (!writeFile(absolutePath(containerFieldsFile), containerRequest.toJson(true))) {
+                    System.out.println("Exception while writing.");
                     throw new IllegalArgumentException("Cannot write container fields file @"
-                                                       + path
-                                                       + " error : "
-                                                       + ex);
+                                                       + path);
                 }
 
             }
@@ -421,7 +405,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
         String directory = absolutePath(path);
 
-        if (directory == null) {
+        if (directory.isEmpty()) {
             directory = "/disk";
         }
 
@@ -502,7 +486,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             System.out.println("Parent Container Absolute Path = "
                                + absolutePath(parentContainerDirectory));
             //
-            containerFieldsFile = parentContainerDirectory + "/" + containerFieldsFileName;
+            containerFieldsFile = parentContainerDirectory + containerFieldsFileName; //CHG
             System.out.println("Container Metadata File Path = "
                                + absolutePath(containerFieldsFile));
         } catch (Exception ex) {
@@ -524,19 +508,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private Container getPersistedContainerFields(String containerFieldsFile) {
         Container containerFields = new Container();
         try {
-            FileInputStream in = new FileInputStream(absolutePath(containerFieldsFile));
-            int inpSize = in.available();
-            System.out.println("Container fields file size:" + inpSize);
-
-            byte[] inBytes = new byte[inpSize];
-            in.read(inBytes);
-
+            byte[] inBytes = readFile(absolutePath(containerFieldsFile));
             containerFields.fromJson(inBytes, true);
             String mds = new String(inBytes);
             System.out.println("Container fields read were:" + mds);
-
-            // Close the output stream
-            in.close();
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
@@ -555,7 +530,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
      *            Path of the requested file or directory.
      */
     public String absolutePath(String path) {
-        if (path == null || path.equals("null")) {
+        if (path == null || path.isEmpty()) {
             return baseDirectory();
         } else {
             String tmpPath = addPrefixSlashToPath(path);
@@ -563,7 +538,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         }
     }
 
-    private String baseDirectory = null;
+    private String baseDirectory = "";
 
     /**
      * <p>
@@ -698,7 +673,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             init();
         }
         String directoryOrFile = absolutePath(path);
-        if (directoryOrFile == null) {
+        if (directoryOrFile.isEmpty()) {
             directoryOrFile = "/disk";
         }
         if (isDirectory(directoryOrFile)) {
@@ -753,17 +728,17 @@ public class ContainerDaoImpl extends AbstractCellComponent
     public void afterStart()
     {
         //Temporary... Start...
-        Test.write("/tmp/testb001.log", "0001");
-        boolean test01 = createDirectory("/disk/test123");
-        boolean test02 = createDirectory("/disk/test345");
-        boolean test1 = createDirectory("/disk/test234");
-        Test.write("/tmp/testb001.log", "0002:" + String.valueOf(test1));
-        boolean test2 = checkIfDirectoryFileExists("/disk/test234");
-        Test.write("/tmp/testb001.log", "0003:" + String.valueOf(test2));
-        boolean test3 = deleteDirectory("/disk/test234");
-        Test.write("/tmp/testb001.log", "0004:" + String.valueOf(test3));
-        boolean test4 = checkIfDirectoryFileExists("/disk/test234");
-        Test.write("/tmp/testb001.log", "0005:" + String.valueOf(test4));
+        Test.write("/tmp/testb001.log", "Start...");
+        //boolean test01 = createDirectory("/disk/test123");
+        //boolean test02 = createDirectory("/disk/test345");
+        //boolean test1 = createDirectory("/disk/test234");
+        //Test.write("/tmp/testb001.log", "0002:" + String.valueOf(test1));
+        //boolean test2 = checkIfDirectoryFileExists("/disk/test234");
+        //Test.write("/tmp/testb001.log", "0003:" + String.valueOf(test2));
+        //boolean test3 = deleteDirectory("/disk/test234");
+        //Test.write("/tmp/testb001.log", "0004:" + String.valueOf(test3));
+        //boolean test4 = checkIfDirectoryFileExists("/disk/test234");
+        //Test.write("/tmp/testb001.log", "0005:" + String.valueOf(test4));
         //Temporary... End...
         /*
         Test.write("/tmp/testb001.log", "001");
@@ -1137,6 +1112,57 @@ public class ContainerDaoImpl extends AbstractCellComponent
             list.put(entry.getName(), attr.getFileType());
             Test.write("/tmp/listing.log", "Out:" + entry.getName() + "|" + String.valueOf(attr.getFileType()) + "|" + String.valueOf(attr.getSize())); //temporary
         }
+    }
+
+    public boolean writeFile(String filePath, String data)
+    {
+        boolean result = false;
+        try {
+            //The order of all commands is very important!
+            Subject subject = Subjects.ROOT;
+            CDMIDataTransfer.setData(data);
+            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            transfer.setPoolStub(poolStub);
+            transfer.setPoolManagerStub(poolMgrStub);
+            transfer.setBillingStub(billingStub);
+            transfer.setCellName(getCellName());
+            transfer.setDomainName(getCellDomainName());
+            transfer.setProtocolInfo(cdmiProtocolInfo);
+            transfer.setOverwriteAllowed(true);
+            transfer.createNameSpaceEntryWithParents();
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            result = true;
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            _log.error("File could not become written, exception is: " + ex.getMessage());
+        }
+        return result;
+    }
+
+    public byte[] readFile(String filePath)
+    {
+        byte[] result = null;
+        try {
+            //The order of all commands is very important!
+            Subject subject = Subjects.ROOT;
+            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
+            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
+            transfer.setPoolStub(poolStub);
+            transfer.setPoolManagerStub(poolMgrStub);
+            transfer.setBillingStub(billingStub);
+            transfer.setCellName(getCellName());
+            transfer.setDomainName(getCellDomainName());
+            transfer.setProtocolInfo(cdmiProtocolInfo);
+            transfer.readNameSpaceEntry();
+            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+            result = CDMIDataTransfer.getDataAsBytes();
+            _log.error("CDMIContainerDaoImpl received data: " + result.toString());
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+            _log.error("File could not become read, exception is: " + ex.getMessage());
+        }
+        return result;
     }
 
     //Minimum to write a file
