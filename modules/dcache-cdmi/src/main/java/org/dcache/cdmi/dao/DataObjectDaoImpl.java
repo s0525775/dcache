@@ -138,7 +138,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         // check for file name
         // path should be <container name>/<file name>
         // Split path into path and filename
-        String[] tokens = path.split("/");
+        String[] tokens = path.split("/");  // << ERROR HERE, PATH IS NULL!
         if (tokens.length < 1) {
             throw new BadRequestException("No object name in path <" + path + ">");
         }
