@@ -34,7 +34,7 @@ import java.nio.channels.NotYetBoundException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-import org.dcache.cells.CellCommandListener;
+import dmg.cells.nucleus.CellCommandListener;
 import org.dcache.cells.CellStub;
 import org.dcache.util.list.DirectoryEntry;				//added
 import org.dcache.util.list.ListDirectoryHandler;			//added
@@ -47,9 +47,9 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.logging.Level;
 import org.dcache.auth.Subjects;
-import org.dcache.cells.AbstractCellComponent;
+import dmg.cells.nucleus.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.util.Transfer;
 import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
