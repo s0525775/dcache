@@ -51,6 +51,12 @@
     <property name="timeoutUnit" value="${xrootd.service.gplazma.timeout.unit}"/>
   </bean>
 
+  <bean id="pool-monitor" class="org.dcache.poolmanager.RemotePoolMonitorFactoryBean" init-method="init">
+    <description>Maintains runtime information about all pools</description>
+    <property name="poolManagerStub" ref="pool-manager-stub"/>
+    <property name="executor" ref="scheduled-thread-pool"/>
+  </bean>
+
   <bean id="scheduled-thread-pool"
         class="java.util.concurrent.Executors"
         factory-method="newScheduledThreadPool"
@@ -70,7 +76,7 @@
         class="org.jboss.netty.handler.execution.MemoryAwareThreadPoolExecutor"
         destroy-method="shutdown">
     <description>Thread pool for xrootd request processing</description>
-    <constructor-arg value="${xrootd.threads}"/>
+    <constructor-arg value="${xrootd.limits.threads}"/>
     <constructor-arg value="${xrootd.max-channel-memory-size}"/>
     <constructor-arg value="${xrootd.max-total-memory-size}"/>
   </bean>
@@ -98,7 +104,7 @@
         init-method="init">
     <description>Netty based Xrootd service</description>
     <property name="port" value="${xrootd.net.port}"/>
-    <property name="address" value="${xrootd.net.listen}"/>
+    <property name="address" value="#{ '${xrootd.net.listen}'.equals('any') ? null : '${xrootd.net.listen}' }"/>
     <property name="backlog" value="${xrootd.net.backlog}"/>
     <property name="requestExecutor" ref="request-thread-pool"/>
     <property name="channelFactory" ref="channel-factory"/>
@@ -145,6 +151,7 @@
     <property name="moverTimeoutUnit" value="${xrootd.mover.timeout.unit}"/>
     <property name="executor" ref="scheduled-thread-pool"/>
     <property name="dirlistTimeoutExecutor" ref="dirlist-timeout-executor" />
+    <property name="poolMonitor" ref="pool-monitor"/>
   </bean>
 
   <bean id="anonymous-loginstrategy" class="org.dcache.auth.AnonymousLoginStrategy">
@@ -157,7 +164,7 @@
     <property name="cellStub" ref="gPlazma-stub" />
   </bean>
 
-  <bean id="lb" class="org.dcache.util.LoginBrokerHandler"
+  <bean id="lb" class="dmg.cells.services.login.LoginBrokerHandler"
         init-method="start"
         destroy-method="stop">
     <description>Notifies LoginBroker </description>
@@ -169,7 +176,7 @@
     <property name="protocolVersion" value="${xrootd.service.loginbroker.version}"/>
     <property name="protocolFamily" value="${xrootd.service.loginbroker.family}"/>
     <property name="port" value="${xrootd.net.port}"/>
-    <property name="address" value="${webdav.net.listen}"/>
+    <property name="address" value="#{ '${xrootd.net.listen}'.equals('any') ? null : '${xrootd.net.listen}' }"/>
     <property name="loginBrokers" value="${xrootd.service.loginbroker}"/>
   </bean>
 </beans>

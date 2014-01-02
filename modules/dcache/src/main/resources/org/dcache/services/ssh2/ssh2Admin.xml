@@ -41,6 +41,7 @@
   <bean id="pcells-factory" class="org.dcache.services.ssh2.PcellsSubsystemFactory"/>
 
   <bean id="ssh2Server" class="org.dcache.services.ssh2.Ssh2Admin">
+    <property name="host" value="#{ '${admin.net.listen}'.equals('any') ? null : '${admin.net.listen}' }"/>
     <property name="port"               value="${admin.net.port}"/>
     <property name="hostKeyPrivate"     value="${admin.paths.dsa-host-key.private}"/>
     <property name="hostKeyPublic"      value="${admin.paths.dsa-host-key.public}"/>
@@ -53,5 +54,7 @@
         <ref bean="pcells-factory"/>
       </list>
     </property>
+    <property name="idleTimeout" value="#{T(org.dcache.commons.util.Strings).parseLong('${admin.ssh.idle-timeout}')}" />
+    <property name="idleTimeoutUnit" value="${admin.ssh.idle-timeout.unit}" />
   </bean>
 </beans>

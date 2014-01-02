@@ -30,6 +30,7 @@ import dmg.cells.nucleus.CellEndpoint;
 import dmg.cells.nucleus.CellMessage;
 import dmg.cells.nucleus.CellPath;
 import dmg.util.Args;
+import java.nio.channels.ClosedByInterruptException;
 
 import org.dcache.net.ProtocolConnectionPool;
 import org.dcache.net.ProtocolConnectionPoolFactory;
@@ -610,7 +611,7 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
                         _log.error(errmsg);
                         cntOut.writeACK(DCapConstants.IOCMD_SEEK_AND_WRITE, CacheException.ERROR_IO_DISK, errmsg);
                         socketChannel.write(cntOut.buffer());
-                    } else if (access == IoMode.WRITE) {
+                    } else if (access != IoMode.WRITE) {
                         String errmsg = "SEEK_AND_WRITE denied (not allowed)";
                         _log.error(errmsg);
                         cntOut.writeACK(DCapConstants.IOCMD_SEEK_AND_WRITE, CacheException.ERROR_IO_DISK, errmsg);
@@ -729,16 +730,18 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
         }catch(RuntimeException e){
             _log.error("Problem in command block : "+requestBlock, e);
             ioException = e;
+        } catch (ClosedByInterruptException ee) {
+            // clear interrupted state
+            Thread.interrupted();
+            ioException = new InterruptedException(ee.getMessage());
         }catch(Exception e){
             ioException = e;
         }finally{
 
             try{
-           	if(_logSocketIO.isDebugEnabled()) {
-                    _logSocketIO.debug("Socket CLOSE remote = " + socketChannel.socket().getInetAddress() + ":" + socketChannel.socket().getPort() +
-                                       " local = " + socketChannel.socket().getLocalAddress() + ":" + socketChannel.socket().getLocalPort());
-           	}
-
+                _logSocketIO.debug("Socket CLOSE remote = {}:{} local {}:{}",
+                        socketChannel.socket().getInetAddress(), socketChannel.socket().getPort(),
+                        socketChannel.socket().getLocalAddress(), socketChannel.socket().getLocalPort());
                 socketChannel.close();
             }catch(Exception xe){}
 
@@ -782,7 +785,7 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
         socketChannel.write(cntOut.buffer());
 
         int blocks = requestBLock.nextInt();
-        _log.info("READV: {} to read", blocks);
+        _log.debug("READV: {} to read", blocks);
         final int maxBuffer = _bigBuffer.capacity() - 4;
         for(int i = 0; i < blocks; i++) {
 
@@ -791,7 +794,7 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
             int count = requestBLock.nextInt();
             int len = count;
 
-            _log.info("READV: offset/len: {}/{}", offset, count);
+            _log.debug("READV: offset/len: {}/{}", offset, count);
 
             while(count > 0) {
 
@@ -804,6 +807,10 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
                     if(rc <= 0) {
                         break;
                     }
+                }catch (ClosedByInterruptException ee) {
+                    // clear interrupted state
+                    Thread.interrupted();
+                    throw new InterruptedException(ee.getMessage());
                 }catch(IOException ee){
                     _io_ok = false;
                     break;
@@ -811,7 +818,7 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
 
                 _bigBuffer.flip();
                 _bigBuffer.putInt(rc).rewind();
-                _log.info("READV: sending: {} bytes", _bigBuffer.limit());
+                _log.debug("READV: sending: {} bytes", _bigBuffer.limit());
                 socketChannel.write(_bigBuffer);
 
                 count -= rc;
@@ -1005,8 +1012,11 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
                         _bigBuffer.flip();
                         bytesAdded += fileChannel.write(_bigBuffer);
                         updateChecksum(_bigBuffer);
-
-                    }catch(Exception ioe){
+                    } catch (ClosedByInterruptException ee) {
+                        // clear interrupted state
+                        Thread.interrupted();
+                        throw new InterruptedException(ee.getMessage());
+                    }catch(IOException ioe){
                         _log.error("IOException in writing data to disk : {}", ioe.toString());
                         _io_ok = false;
                     }
@@ -1063,6 +1073,10 @@ public class DCapProtocol_3_nio implements MoverProtocol, ChecksumMover {
                 if(rc <= 0) {
                     break;
                 }
+            } catch (ClosedByInterruptException ee) {
+                // clear interrupted state
+                Thread.interrupted();
+                throw new InterruptedException(ee.getMessage());
             }catch(IOException ee){
                 _io_ok = false;
                 break;

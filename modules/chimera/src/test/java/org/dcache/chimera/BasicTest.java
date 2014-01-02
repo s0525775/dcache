@@ -1,5 +1,7 @@
 package org.dcache.chimera;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -151,13 +153,13 @@ public class BasicTest extends ChimeraTestCaseHelper {
         }
     }
 
-    @Test
+    @Test(expected=DirNotEmptyHimeraFsException.class)
     public void testDeleteNonEmptyDir() throws Exception {
 
         FsInode base = _rootInode.mkdir("junit");
 
         base.create("testCreateFile", 0, 0, 0644);
-        assertFalse("you can't delete non empty directory", _rootInode.remove("junit"));
+        _rootInode.remove("junit");
 
     }
 
@@ -191,10 +193,22 @@ public class BasicTest extends ChimeraTestCaseHelper {
 
     }
 
-    @Test
+    @Test(expected=FileNotFoundHimeraFsException.class)
     public void testDeleteNonExistingFile() throws Exception {
 
-        assertFalse("you can't delete non existing file", _rootInode.remove("testCreateFile"));
+        _rootInode.remove("testCreateFile");
+    }
+
+    @Test(expected = FileNotFoundHimeraFsException.class)
+    public void testDeleteNonExistingDir() throws Exception {
+        FsInode missingDir = new FsInode(_fs);
+        _fs.remove(missingDir, "aFile");
+    }
+
+    @Test(expected = FileNotFoundHimeraFsException.class)
+    public void testCreateInNonExistingDir() throws Exception {
+        FsInode missingDir = new FsInode(_fs);
+        _fs.createFile(missingDir, "aFile");
     }
 
     @Test
@@ -312,9 +326,8 @@ public class BasicTest extends ChimeraTestCaseHelper {
 
         assertEquals("hard link's  have to increase link count by one", stat.getNlink() + 1, hardLinkInode.stat().getNlink());
 
-        boolean removed = _fs.remove(base, "hardLinkTestDestinationFile");
-        assertTrue("failed to remove hard link", removed);
-        assertTrue("removeing of hard link have to decrease link count by one", 1 == fileInode.stat().getNlink());
+        _fs.remove(base, "hardLinkTestDestinationFile");
+        assertTrue("removing of hard link have to decrease link count by one", 1 == fileInode.stat().getNlink());
 
     }
 
@@ -324,10 +337,28 @@ public class BasicTest extends ChimeraTestCaseHelper {
         FsInode base = _rootInode.mkdir("junit");
 
         _fs.createLink(base, "aLink", "/junit");
+    }
 
-        boolean removed = _fs.remove(base, "aLink");
-        assertTrue("failed to remove symbolic link", removed);
+    @Test
+    public void testRemoveLinkToSomewhare() throws Exception {
 
+        FsInode linkBase = _rootInode.mkdir("links");
+
+        _fs.createLink(linkBase, "file123", 0, 0, 0644, "/files/file123".getBytes(Charsets.UTF_8));
+        _fs.remove("/links/file123");
+    }
+
+    @Test
+    public void testRemoveLinkToFile() throws Exception {
+
+        FsInode fileBase = _rootInode.mkdir("files");
+        FsInode linkBase = _rootInode.mkdir("links");
+        FsInode fileInode = fileBase.create("file123", 0, 0, 0644);
+
+        _fs.createLink(linkBase, "file123", 0, 0, 0644, "/files/file123".getBytes(Charsets.UTF_8));
+        _fs.remove("/links/file123");
+
+        assertTrue("original file is gone!", fileInode.exists());
     }
 
     @Ignore("broken test, normal filesystems do not allow directory hard-links. Why does chimera?")
@@ -475,17 +506,17 @@ public class BasicTest extends ChimeraTestCaseHelper {
 
     }
 
-    @Test
+    @Test(expected=FileNotFoundHimeraFsException.class)
     public void testRemoveNonexistgById() throws Exception {
 
         FsInode inode = new FsInode(_fs, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
-        assertFalse("was able to remove non existing entry", _fs.remove(inode));
+        _fs.remove(inode);
     }
 
-    @Test
+    @Test(expected=FileNotFoundHimeraFsException.class)
     public void testRemoveNonexistgByPath() throws Exception {
         FsInode base = _rootInode.mkdir("junit");
-        assertFalse("was able to remove non existing entry", _fs.remove(base, "notexist"));
+        _fs.remove(base, "notexist");
     }
 
     @Test
@@ -829,6 +860,25 @@ public class BasicTest extends ChimeraTestCaseHelper {
 
     }
 
+    @Test(expected = InvalidNameChimeraException.class)
+    public void testNameTooDirLong() throws Exception {
+        String tooLongName = Strings.repeat("a", 257);
+        FsInode base = _rootInode.mkdir(tooLongName);
+    }
+
+    @Test(expected = InvalidNameChimeraException.class)
+    public void testNameTooFileLong() throws Exception {
+        String tooLongName = Strings.repeat("a", 257);
+        FsInode base = _rootInode.create(tooLongName, 0, 0, 0644);
+    }
+
+    @Test(expected = InvalidNameChimeraException.class)
+    public void testNameTooMoveLong() throws Exception {
+        String tooLongName = Strings.repeat("a", 257);
+        _rootInode.mkdir("testNameTooMoveLong");
+        _fs.move(_rootInode, "testNameTooMoveLong", _rootInode, tooLongName);
+    }
+
     @Test
     public void testChangeTagOwner() throws Exception {
 
@@ -903,5 +953,17 @@ public class BasicTest extends ChimeraTestCaseHelper {
         _fs.setInodeAttributes(tagInode, 0, stat);
 
         assertEquals(baseStat, base.stat());
+    }
+
+    @Test
+    public void testBackwardCompatibility() throws Exception {
+
+        byte[] oldId = "0:TAG:0000DA875B38D9E0461F9ADFEA7C7422A956:somelongtagname".getBytes(Charsets.UTF_8);
+        final FsInode inodeWithOldId = _fs.inodeFromBytes(oldId);
+        byte[] newId = inodeWithOldId.getIdentifier();
+        final FsInode inodeWithNewId = _fs.inodeFromBytes(newId);
+
+        assertTrue(newId.length < oldId.length);
+        assertEquals(inodeWithOldId, inodeWithNewId);
     }
 }

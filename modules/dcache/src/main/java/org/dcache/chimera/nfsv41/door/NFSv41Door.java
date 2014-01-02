@@ -4,6 +4,8 @@
 package org.dcache.chimera.nfsv41.door;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.glassfish.grizzly.Buffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +19,6 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,58 +42,61 @@ import dmg.cells.nucleus.CellPath;
 import dmg.cells.nucleus.CellInfoProvider;
 import dmg.cells.services.login.LoginManagerChildrenInfo;
 import dmg.util.Args;
+import java.util.Set;
 
 import org.dcache.auth.Subjects;
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.cells.CellStub;
 import org.dcache.chimera.FsInode;
 import org.dcache.chimera.FsInodeType;
 import org.dcache.chimera.JdbcFs;
-import org.dcache.chimera.nfs.ChimeraNFSException;
-import org.dcache.chimera.nfs.ExportFile;
-import org.dcache.chimera.nfs.nfsstat;
-import org.dcache.chimera.nfs.v3.MountServer;
-import org.dcache.chimera.nfs.v3.NfsServerV3;
-import org.dcache.chimera.nfs.v3.xdr.mount_prot;
-import org.dcache.chimera.nfs.v3.xdr.nfs3_prot;
-import org.dcache.chimera.nfs.v4.CompoundContext;
-import org.dcache.chimera.nfs.v4.Layout;
-import org.dcache.chimera.nfs.v4.MDSOperationFactory;
-import org.dcache.chimera.nfs.v4.NFS4Client;
-import org.dcache.chimera.nfs.v4.NFSServerV41;
-import org.dcache.chimera.nfs.v4.NFSv41DeviceManager;
-import org.dcache.chimera.nfs.v4.NFSv41Session;
-import org.dcache.chimera.nfs.v4.NfsIdMapping;
-import org.dcache.chimera.nfs.v4.RoundRobinStripingPattern;
-import org.dcache.chimera.nfs.v4.StripingPattern;
-import org.dcache.chimera.nfs.v4.xdr.device_addr4;
-import org.dcache.chimera.nfs.v4.xdr.deviceid4;
-import org.dcache.chimera.nfs.v4.xdr.layout4;
-import org.dcache.chimera.nfs.v4.xdr.layoutiomode4;
-import org.dcache.chimera.nfs.v4.xdr.layouttype4;
-import org.dcache.chimera.nfs.v4.xdr.multipath_list4;
-import org.dcache.chimera.nfs.v4.xdr.netaddr4;
-import org.dcache.chimera.nfs.v4.xdr.nfs4_prot;
-import org.dcache.chimera.nfs.v4.xdr.nfs_fh4;
-import org.dcache.chimera.nfs.v4.xdr.nfsv4_1_file_layout_ds_addr4;
-import org.dcache.chimera.nfs.v4.xdr.stateid4;
-import org.dcache.chimera.nfs.vfs.ChimeraVfs;
-import org.dcache.chimera.nfs.vfs.Inode;
-import org.dcache.chimera.nfs.vfs.VirtualFileSystem;
+import org.dcache.nfs.ChimeraNFSException;
+import org.dcache.nfs.ExportFile;
+import org.dcache.nfs.nfsstat;
+import org.dcache.nfs.v3.MountServer;
+import org.dcache.nfs.v3.NfsServerV3;
+import org.dcache.nfs.v3.xdr.mount_prot;
+import org.dcache.nfs.v3.xdr.nfs3_prot;
+import org.dcache.nfs.v4.CompoundContext;
+import org.dcache.nfs.v4.Layout;
+import org.dcache.nfs.v4.MDSOperationFactory;
+import org.dcache.nfs.v4.NFS4Client;
+import org.dcache.nfs.v4.NFSServerV41;
+import org.dcache.nfs.v4.NFSv41DeviceManager;
+import org.dcache.nfs.v4.NFSv41Session;
+import org.dcache.nfs.v4.RoundRobinStripingPattern;
+import org.dcache.nfs.v4.StripingPattern;
+import org.dcache.nfs.v4.xdr.device_addr4;
+import org.dcache.nfs.v4.xdr.deviceid4;
+import org.dcache.nfs.v4.xdr.layout4;
+import org.dcache.nfs.v4.xdr.layoutiomode4;
+import org.dcache.nfs.v4.xdr.layouttype4;
+import org.dcache.nfs.v4.xdr.multipath_list4;
+import org.dcache.nfs.v4.xdr.netaddr4;
+import org.dcache.nfs.v4.xdr.nfs4_prot;
+import org.dcache.nfs.v4.xdr.nfs_fh4;
+import org.dcache.nfs.v4.xdr.nfsv4_1_file_layout_ds_addr4;
+import org.dcache.nfs.v4.xdr.stateid4;
+import org.dcache.nfs.vfs.ChimeraVfs;
+import org.dcache.nfs.vfs.Inode;
+import org.dcache.nfs.vfs.VirtualFileSystem;
 import org.dcache.chimera.nfsv41.mover.NFS4ProtocolInfo;
+import org.dcache.commons.stats.RequestExecutionTimeGauges;
 import org.dcache.commons.util.NDC;
+import dmg.cells.services.login.LoginBrokerHandler;
 import org.dcache.util.RedirectedTransfer;
 import org.dcache.util.Transfer;
 import org.dcache.util.TransferRetryPolicy;
 import org.dcache.utils.Bytes;
-import org.dcache.xdr.IpProtocolType;
 import org.dcache.xdr.OncRpcException;
 import org.dcache.xdr.OncRpcProgram;
 import org.dcache.xdr.OncRpcSvc;
+import org.dcache.xdr.OncRpcSvcBuilder;
 import org.dcache.xdr.XdrBuffer;
 import org.dcache.xdr.gss.GssSessionManager;
+import org.springframework.beans.factory.annotation.Required;
 
 public class NFSv41Door extends AbstractCellComponent implements
         NFSv41DeviceManager, CellCommandListener,
@@ -100,11 +104,10 @@ public class NFSv41Door extends AbstractCellComponent implements
 
     private static final Logger _log = LoggerFactory.getLogger(NFSv41Door.class);
 
-    /** dCache-friendly NFS device id to pool name mapping */
-    private Map<String, PoolDS> _poolNameToIpMap = new HashMap<>();
-
-    /** All known devices */
-    private Map<deviceid4, PoolDS> _deviceMap = new HashMap<>();
+    /**
+     * A mapping between pool name, nfs device id and pool's ip addresses.
+     */
+    private final PoolDeviceMap _poolDeviceMap = new PoolDeviceMap();
 
     /** next device id, 0 reserved for MDS */
     private final AtomicInteger _nextDeviceID = new AtomicInteger(1);
@@ -116,16 +119,17 @@ public class NFSv41Door extends AbstractCellComponent implements
     private final Map<stateid4, NfsTransfer> _ioMessages = new ConcurrentHashMap<>();
 
     /**
-     * The usual timeout for NFS ops. is 30s.
-     * We will use a bit shorter (27s) one to avoid retries.
+     * The usual timeout for NFS operations is 30s. Nevertheless, as client
+     * will block, we try to block as short as we can. The rule for interactive users:
+     * never block longer than 10s.
      */
-    private final static long NFS_REPLY_TIMEOUT = TimeUnit.SECONDS.toMillis(27);
+    private final static long NFS_REPLY_TIMEOUT = TimeUnit.SECONDS.toMillis(3);
 
     /**
      * Given that the timeout is pretty short, the retry period has to
      * be rather small too.
      */
-    private final static long NFS_RETRY_PERIOD = TimeUnit.SECONDS.toMillis(1);
+    private final static long NFS_RETRY_PERIOD = 500; // In millis
 
     /**
      * Cell communication helper.
@@ -144,9 +148,12 @@ public class NFSv41Door extends AbstractCellComponent implements
     private int _port;
 
     /**
-     * Should we run nfs v3 server.
+     * nfs versions to run.
      */
-    boolean _enableV3;
+    private Set<String> _versions;
+
+    private final static String V3 = "3";
+    private final static String V41 = "4.1";
 
     /**
      * embedded nfs server
@@ -158,22 +165,29 @@ public class NFSv41Door extends AbstractCellComponent implements
      */
     private  OncRpcSvc _rpcService;
 
-    private NfsIdMapping _idMapper;
+    private StrategyIdMapper _idMapper;
 
-    private GssSessionManager _gssSessionManager;
+    private boolean _enableRpcsecGss;
 
     private VirtualFileSystem _vfs;
+
+    private LoginBrokerHandler _loginBrokerHandler;
 
     private final static TransferRetryPolicy RETRY_POLICY =
         new TransferRetryPolicy(Integer.MAX_VALUE, NFS_RETRY_PERIOD,
                                 NFS_REPLY_TIMEOUT, NFS_REPLY_TIMEOUT);
 
-    public void setGssSessionManager(GssSessionManager sessionManager) {
-        _gssSessionManager = sessionManager;
+    /**
+     * Data striping pattern for a file.
+     */
+    private final StripingPattern<InetSocketAddress[]> _stripingPattern =
+            new RoundRobinStripingPattern<>();
+
+    public void setEnableRpcsecGss(boolean enable) {
+        _enableRpcsecGss = enable;
     }
 
-    public void setIdMapper(NfsIdMapping idMapper)
-    {
+    public void setIdMapper(StrategyIdMapper idMapper)    {
         _idMapper = idMapper;
     }
     public void setPoolManagerStub(CellStub stub)
@@ -203,38 +217,60 @@ public class NFSv41Door extends AbstractCellComponent implements
         _port = port;
     }
 
-    public void setEnableV3(boolean enable) {
-        _enableV3 = enable;
+    public void setVersions(String[] versions) {
+        _versions = Sets.newHashSet(versions);
+    }
+
+    @Required
+    public void setLoginBrokerHandler(LoginBrokerHandler loginBrokerHandler) {
+        _loginBrokerHandler = loginBrokerHandler;
     }
 
     public void init() throws Exception {
 
         _cellName = getCellName();
         _domainName = getCellDomainName();
-        final NFSv41DeviceManager _dm = this;
 
-        _rpcService = new OncRpcSvc(_port, IpProtocolType.TCP, true);
-        _rpcService.setGssSessionManager(_gssSessionManager);
-
-        _vfs = new ChimeraVfs(_fileFileSystemProvider, _idMapper);
-        _nfs4 = new NFSServerV41( new MDSOperationFactory(),
-                _dm, _vfs, _idMapper, _exportFile);
-
-        MountServer ms = new MountServer(_exportFile, _vfs);
-
-        if(_enableV3) {
-            NfsServerV3 nfs3 = new NfsServerV3(_exportFile, _vfs);
-            _rpcService.register(new OncRpcProgram(nfs3_prot.NFS_PROGRAM, nfs3_prot.NFS_V3), nfs3);
+        _rpcService = new OncRpcSvcBuilder()
+                .withPort(_port)
+                .withTCP()
+                .withAutoPublish()
+                .build();
+        if (_enableRpcsecGss) {
+            _rpcService.setGssSessionManager(new GssSessionManager(_idMapper));
         }
 
-        _rpcService.register(new OncRpcProgram(nfs4_prot.NFS4_PROGRAM, nfs4_prot.NFS_V4), _nfs4);
+        _vfs = new ChimeraVfs(_fileFileSystemProvider, _idMapper);
+
+        MountServer ms = new MountServer(_exportFile, _vfs);
         _rpcService.register(new OncRpcProgram(mount_prot.MOUNT_PROGRAM, mount_prot.MOUNT_V3), ms);
         _rpcService.register(new OncRpcProgram(mount_prot.MOUNT_PROGRAM, mount_prot.MOUNT_V3), ms);
+
+        for (String version : _versions) {
+            switch (version) {
+                case V3:
+                    NfsServerV3 nfs3 = new NfsServerV3(_exportFile, _vfs);
+                    _rpcService.register(new OncRpcProgram(nfs3_prot.NFS_PROGRAM, nfs3_prot.NFS_V3), nfs3);
+                    break;
+                case V41:
+                     final NFSv41DeviceManager _dm = this;
+                    _nfs4 = new NFSServerV41(new MDSOperationFactory(),
+                            _dm, _vfs, _idMapper, _exportFile);
+                    _rpcService.register(new OncRpcProgram(nfs4_prot.NFS4_PROGRAM, nfs4_prot.NFS_V4), _nfs4);
+                    _loginBrokerHandler.start();
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unsupported NFS version: " + version);
+            }
+        }
+
+
         _rpcService.start();
 
     }
 
     public void destroy() throws IOException {
+        _loginBrokerHandler.stop();
         _rpcService.stop();
     }
 
@@ -252,29 +288,17 @@ public class NFSv41Door extends AbstractCellComponent implements
         _log.debug("NFS mover ready: {}", poolName);
 
         InetSocketAddress[] poolAddress = message.socketAddresses();
-        PoolDS device = _poolNameToIpMap.get(poolName);
+        PoolDS device = _poolDeviceMap.getByPoolName(poolName);
 
         if (device == null || !Arrays.equals(device.getInetSocketAddress(), poolAddress)) {
             /* pool is unknown yet or has been restarted so create new device and device-id */
-            int id = this.nextDeviceID();
+            final int id = this.nextDeviceID();
+            final deviceid4 deviceid = deviceidOf(id);
+            final PoolDS newDevice = new PoolDS(deviceid, _stripingPattern, poolAddress);
 
-            if (device != null) {
-                /*
-                 * clean stale entry
-                 */
-                deviceid4 oldId = device.getDeviceId();
-                _deviceMap.remove(oldId);
-            }
-            /*
-             * TODO: the PoolPassiveIoFileMessage have to be adopted to send
-             * list of all interfaces
-             */
-            deviceid4 deviceid = deviceidOf(id);
-            device = new PoolDS(deviceid, poolAddress);
-
-            _poolNameToIpMap.put(poolName, device);
-            _deviceMap.put(deviceid, device);
-            _log.debug("new mapping: {}", device);
+            _log.debug("new mapping: {}", newDevice);
+            _poolDeviceMap.add(poolName, newDevice);
+            device = newDevice;
         }
 
         stateid4 stateid = message.challange();
@@ -323,7 +347,7 @@ public class NFSv41Door extends AbstractCellComponent implements
                     new InetSocketAddress[] { context.getRpcCall().getTransport().getLocalSocketAddress() } );
         }
 
-        PoolDS ds = _deviceMap.get(deviceId);
+        PoolDS ds = _poolDeviceMap.getByDeviceId(deviceId);
         if( ds == null) {
             return null;
         }
@@ -354,15 +378,15 @@ public class NFSv41Door extends AbstractCellComponent implements
                  */
                 deviceid = MDS_ID;
             } else {
-                InetSocketAddress remote = context.getRpcCall().getTransport().getRemoteSocketAddress();
-                PnfsId pnfsId = new PnfsId(inode.toString());
+                final InetSocketAddress remote = context.getRpcCall().getTransport().getRemoteSocketAddress();
+                final PnfsId pnfsId = new PnfsId(inode.toString());
+                final NFS4ProtocolInfo protocolInfo = new NFS4ProtocolInfo(remote, stateid);
+
                 Transfer.initSession();
-                NfsTransfer transfer = new NfsTransfer(_pnfsHandler, Subjects.ROOT, new FsPath("/"),
-                        remote, stateid);
+                final NfsTransfer transfer = new NfsTransfer(_pnfsHandler,
+                        context.getRpcCall().getCredential().getSubject());
 
-                NFS4ProtocolInfo protocolInfo = transfer.getProtocolInfoForPool();
-                protocolInfo.door(new CellPath(getCellAddress()));
-
+                transfer.setProtocolInfo(protocolInfo);
                 transfer.setCellName(this.getCellName());
                 transfer.setDomainName(this.getCellDomainName());
                 transfer.setBillingStub(_billingStub);
@@ -425,11 +449,7 @@ public class NFSv41Door extends AbstractCellComponent implements
 
     @Override
     public List<deviceid4> getDeviceList(CompoundContext context) {
-        List<deviceid4> knownDevices = new ArrayList<>();
-
-        knownDevices.addAll(_deviceMap.keySet());
-
-        return knownDevices;
+        return Lists.newArrayList(_poolDeviceMap.getDeviceIds());
     }
 
 
@@ -472,27 +492,29 @@ public class NFSv41Door extends AbstractCellComponent implements
     @Override
     public void getInfo(PrintWriter pw) {
 
-        pw.println("NFSv4.1 door (MDS):");
-        pw.printf("  IO queue: %s\n", _ioQueue);
-        pw.println("  Known pools (DS):\n");
-        for(Map.Entry<String, PoolDS> ioDevice: _poolNameToIpMap.entrySet()) {
-            pw.println( String.format("    %s : [%s]", ioDevice.getKey(),ioDevice.getValue() ));
-        }
+        pw.println("NFS (" + _versions + ") door (MDS):");
+        if (_nfs4 != null) {
+            pw.printf("  IO queue: %s\n", _ioQueue);
+            pw.println("  Known pools (DS):\n");
+            for (Map.Entry<String, PoolDS> ioDevice : _poolDeviceMap.getEntries()) {
+                pw.println(String.format("    %s : [%s]", ioDevice.getKey(), ioDevice.getValue()));
+            }
 
-        pw.println();
-        pw.println("  Known movers (layouts):");
-        for(Transfer io: _ioMessages.values()) {
-            pw.println( String.format("    %s : %s@%s", io.getPnfsId(), io.getMoverId(), io.getPool() ));
-        }
+            pw.println();
+            pw.println("  Known movers (layouts):");
+            for (NfsTransfer io : _ioMessages.values()) {
+                pw.println(io);
+            }
 
-        pw.println();
-        pw.println("  Known clients:");
-        for (NFS4Client client : _nfs4.getClients()) {
-            pw.println( String.format("    %s", client ));
-            for (NFSv41Session session: client.sessions()) {
-                pw.println( String.format("        %s, max slot: %d/%d",
-                             session, session.getHighestSlot(), session.getHighestUsedSlot() ));
+            pw.println();
+            pw.println("  Known clients:");
+            for (NFS4Client client : _nfs4.getClients()) {
+                pw.println(String.format("    %s", client));
+                for (NFSv41Session session : client.sessions()) {
+                    pw.println(String.format("        %s, max slot: %d/%d",
+                            session, session.getHighestSlot(), session.getHighestUsedSlot()));
 
+                }
             }
         }
     }
@@ -531,16 +553,17 @@ public class NFSv41Door extends AbstractCellComponent implements
         return new deviceid4(deviceidBytes);
     }
 
-    private static class PoolDS {
+    static class PoolDS {
 
         private final deviceid4 _deviceId;
         private final InetSocketAddress[] _socketAddress;
         private final device_addr4 _deviceAddr;
 
-        public PoolDS(deviceid4 deviceId, InetSocketAddress[] ip) {
+        public PoolDS(deviceid4 deviceId, StripingPattern<InetSocketAddress[]> stripingPattern,
+                InetSocketAddress[] ip) {
             _deviceId = deviceId;
             _socketAddress = ip;
-            _deviceAddr = deviceAddrOf(new RoundRobinStripingPattern<InetSocketAddress[]>(), ip);
+            _deviceAddr = deviceAddrOf(stripingPattern, ip);
         }
 
         public deviceid4 getDeviceId() {
@@ -564,26 +587,20 @@ public class NFSv41Door extends AbstractCellComponent implements
 
     private static class NfsTransfer extends RedirectedTransfer<PoolDS> {
 
-        private final stateid4 _stateid;
-        private final NFS4ProtocolInfo _protocolInfo;
-
-        NfsTransfer(PnfsHandler pnfs, Subject subject, FsPath path, InetSocketAddress client,
-                stateid4 stateid) {
-            super(pnfs, subject, path);
-            _stateid = stateid;
-            _protocolInfo = new NFS4ProtocolInfo(client, _stateid);
+        NfsTransfer(PnfsHandler pnfs, Subject ioSubject) {
+            super(pnfs, Subjects.ROOT, ioSubject,  new FsPath("/"));
         }
 
         @Override
-        protected NFS4ProtocolInfo getProtocolInfoForPoolManager() {
-            return _protocolInfo;
+        public String toString() {
+            return String.format("    %s : %s@%s, OS=%s,cl=[%s]",
+                    getPnfsId(),
+                    getMoverId(),
+                    getPool(),
+                    ((NFS4ProtocolInfo)getProtocolInfoForPool()).stateId(),
+                    ((NFS4ProtocolInfo)getProtocolInfoForPool()).getSocketAddress().getAddress().getHostAddress());
         }
-
-        @Override
-        protected NFS4ProtocolInfo getProtocolInfoForPool() {
-            return _protocolInfo;
-        }
-        }
+    }
 
     /**
      * To allow the transfer monitoring in the httpd cell to recognize us
@@ -675,10 +692,19 @@ public class NFSv41Door extends AbstractCellComponent implements
         return multipath;
     }
 
+    public final static String fh_stats =
+            "stats [-c] # show nfs requests statstics\n\n" +
+            "  Print nfs operation statistics.\n" +
+            "    -c clear current statistics values";
+    public final static String hh_stats = " [-c] # show nfs requests statstics";
     public String ac_stats(Args args) {
+        RequestExecutionTimeGauges<String> gauges = _nfs4.getStatistics();
         StringBuilder sb = new StringBuilder();
-        sb.append("Stats:").append("\n").append(_nfs4.getStatistics());
+        sb.append("Stats:").append("\n").append(gauges);
 
+        if (args.hasOption("c")) {
+            gauges.reset();
+        }
         return sb.toString();
     }
 }

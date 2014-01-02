@@ -8,6 +8,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import com.google.common.collect.Sets;
 
 import java.io.Serializable;
 import java.lang.reflect.Array;
@@ -16,7 +17,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import dmg.util.Args;
@@ -49,6 +52,8 @@ public class AnnotatedCommandExecutor implements CommandExecutor
                     .put(HelpFormat.ANSI, new AnsiHelpPrinter())
                     .build();
 
+    private static final Joiner AS_COMMA_LIST = Joiner.on(", ");
+
     private final Object _parent;
     private final Command _command;
     private final Constructor<? extends Callable<? extends Serializable>> _constructor;
@@ -60,7 +65,7 @@ public class AnnotatedCommandExecutor implements CommandExecutor
         _parent = parent;
         _command = command;
         _constructor = constructor;
-        _handlers = createFieldHandlers(_constructor.getDeclaringClass());
+        _handlers = createFieldHandlers(command, _constructor.getDeclaringClass());
     }
 
     @Override
@@ -214,19 +219,39 @@ public class AnnotatedCommandExecutor implements CommandExecutor
         }
     }
 
-    private static List<Handler> createFieldHandlers(Class<? extends Callable<?>> clazz)
+    private static Handler createFieldHandler(Command command, Field field, CommandLine commandLine)
     {
+        Class<?> type = field.getType();
+        if (type.isAssignableFrom(Args.class)) {
+            return new ArgsHandler(field);
+        } else if (type.isAssignableFrom(String.class)) {
+            return new CommandLineHandler(command, field);
+        } else {
+            throw new IllegalArgumentException("CommandLine annotation is only applicable to Args and String fields");
+        }
+    }
+
+    private static List<Handler> createFieldHandlers(Command command, Class<? extends Callable<?>> clazz)
+    {
+        Set<String> names = new HashSet<>();
+
         List<Handler> handlers = Lists.newArrayList();
         for (Class<?> c = clazz; c != null; c = c.getSuperclass()) {
             for (Field field: c.getDeclaredFields()) {
                 Option option = field.getAnnotation(Option.class);
                 if (option != null) {
                     handlers.add(createFieldHandler(field, option));
+                    names.add(option.name());
                 }
 
                 Argument argument = field.getAnnotation(Argument.class);
                 if (argument != null) {
                     handlers.add(createFieldHandler(field, argument));
+                }
+
+                CommandLine commandLine = field.getAnnotation(CommandLine.class);
+                if (commandLine != null) {
+                    handlers.add(createFieldHandler(command, field, commandLine));
                 }
             }
         }
@@ -236,6 +261,8 @@ public class AnnotatedCommandExecutor implements CommandExecutor
         if (maxArgs < Integer.MAX_VALUE) {
             handlers.add(new MaxArgumentsHandler(maxArgs));
         }
+
+        handlers.add(new CheckOptionsKnownHandler(names));
 
         return handlers;
     }
@@ -561,7 +588,9 @@ public class AnnotatedCommandExecutor implements CommandExecutor
             if (!values.isEmpty()) {
                 List<String> fragments = Lists.newArrayList();
                 for (String value: values) {
-                    addAll(fragments, _splitter.split(value));
+                    if (!value.isEmpty()) {
+                        addAll(fragments, _splitter.split(value));
+                    }
                 }
                 return toArray(transform(fragments, _typeConverter),
                         (Class) _field.getType().getComponentType());
@@ -569,6 +598,86 @@ public class AnnotatedCommandExecutor implements CommandExecutor
                 throw new IllegalArgumentException("Option " + _option.name() + " is required");
             }
             return null;
+        }
+    }
+
+    /**
+     * Assigns the entire Args object to a field.
+     */
+    private static class ArgsHandler extends FieldHandler
+    {
+        private ArgsHandler(Field field)
+        {
+            super(field);
+        }
+
+        @Override
+        protected Object getValue(Args args)
+        {
+            return args;
+        }
+
+        @Override
+        public int getMaxArguments()
+        {
+            return 0;
+        }
+    }
+
+    /**
+     * Assigns the command line to a field.
+     */
+    private static class CommandLineHandler extends FieldHandler
+    {
+        private final String command;
+
+        private CommandLineHandler(Command command, Field field)
+        {
+            super(field);
+            this.command = command.name();
+        }
+
+        @Override
+        protected Object getValue(Args args)
+        {
+            return (args.optc() == 0 && args.argc() == 0) ? command : (command + " " + args);
+        }
+
+        @Override
+        public int getMaxArguments()
+        {
+            return 0;
+        }
+    }
+
+    /**
+     * Prevents running a command if user supplied any options that are unknown.
+     */
+    private static class CheckOptionsKnownHandler implements Handler
+    {
+        private final Set<String> _known;
+
+        private CheckOptionsKnownHandler(Set<String> names)
+        {
+            _known = names;
+        }
+
+        @Override
+        public void apply(Object object, Args args) throws IllegalAccessException
+        {
+            Set<String> supplied = args.options().keySet();
+            Set<String> unknown = Sets.difference(supplied, _known);
+            if (!unknown.isEmpty()) {
+                throw new IllegalArgumentException("Unknown option" +
+                        (unknown.size() > 1 ? "s" : "") + ": " +
+                        AS_COMMA_LIST.join(unknown));
+            }
+        }
+
+        @Override
+        public int getMaxArguments()
+        {
+            return Integer.MAX_VALUE;
         }
     }
 

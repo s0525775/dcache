@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import javax.annotation.Nonnull;
+
 import java.io.FileNotFoundException;
 import java.io.Reader;
 import java.io.StringReader;
@@ -16,11 +18,16 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import dmg.util.Pinboard;
 import dmg.util.logback.FilterThresholds;
@@ -45,7 +52,8 @@ public class CellNucleus implements ThreadFactory
     private static CellGlue __cellGlue;
     private final  String    _cellName;
     private final  String    _cellType;
-    private        ThreadGroup _threads;
+    private final  ThreadGroup _threads;
+    private final  AtomicInteger _threadCounter = new AtomicInteger();
     private final  Cell      _cell;
     private final  Date      _creationTime   = new Date();
 
@@ -57,6 +65,7 @@ public class CellNucleus implements ThreadFactory
 
     private volatile ExecutorService _callbackExecutor;
     private volatile ExecutorService _messageExecutor;
+    private AtomicInteger _eventQueueSize = new AtomicInteger();
 
     private boolean _isPrivateCallbackExecutor = true;
     private boolean _isPrivateMessageExecutor = true;
@@ -130,20 +139,18 @@ public class CellNucleus implements ThreadFactory
                         : parentNucleus.getLoggingThresholds();
         setLoggingThresholds(new FilterThresholds(parentThresholds));
 
-        //
-        // for the use in restricted sandboxes
-        //
-        try {
+        _threads = new ThreadGroup(__cellGlue.getMasterThreadGroup(), _cellName + "-threads");
 
-            _threads = new ThreadGroup(__cellGlue.getMasterThreadGroup(),
-                                       _cellName+"-threads");
-
-        } catch(SecurityException se) {
-            _threads = null;
-        }
-
-        _callbackExecutor = Executors.newSingleThreadExecutor(this);
-        _messageExecutor = Executors.newSingleThreadExecutor(this);
+        _callbackExecutor =
+                new ThreadPoolExecutor(1, 1,
+                        0L, TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<Runnable>(),
+                        this);
+        _messageExecutor =
+                new ThreadPoolExecutor(1, 1,
+                        0L, TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<Runnable>(),
+                        this);
 
         _state = ACTIVE;
 
@@ -292,9 +299,17 @@ public class CellNucleus implements ThreadFactory
     public synchronized void setAsyncCallback(boolean asyncCallback)
     {
         if (asyncCallback) {
-            setCallbackExecutor(Executors.newCachedThreadPool(this));
+            setCallbackExecutor(
+                    new ThreadPoolExecutor(1, Integer.MAX_VALUE,
+                            60L, TimeUnit.SECONDS,
+                            new SynchronousQueue<Runnable>(),
+                            this));
         } else {
-            setCallbackExecutor(Executors.newSingleThreadExecutor(this));
+            setCallbackExecutor(
+                    new ThreadPoolExecutor(1, 1,
+                            0L, TimeUnit.MILLISECONDS,
+                            new LinkedBlockingQueue<Runnable>(),
+                            this));
         }
         _isPrivateCallbackExecutor = true;
     }
@@ -580,6 +595,21 @@ public class CellNucleus implements ThreadFactory
     /**
      * Blocks until the given cell is dead.
      *
+     * @throws InterruptedException if another thread interrupted the
+     * current thread before or while the current thread was waiting
+     * for a notification. The interrupted status of the current
+     * thread is cleared when this exception is thrown.
+     * @return True if the cell died, false in case of a timeout.
+     */
+    public boolean join(String cellName)
+        throws InterruptedException
+    {
+        return __cellGlue.join(cellName, 0);
+    }
+
+    /**
+     * Blocks until the given cell is dead.
+     *
      * @param timeout the maximum time to wait in milliseconds.
      * @throws InterruptedException if another thread interrupted the
      * current thread before or while the current thread was waiting
@@ -660,13 +690,22 @@ public class CellNucleus implements ThreadFactory
         };
     }
 
-    @Override
-    public Thread newThread(Runnable target)
+    /**
+     * Submits a task for execution on the message thread.
+     */
+    <T> Future<T> invokeOnMessageThread(Callable<T> task)
     {
-        return new Thread(_threads, wrapLoggingContext(target));
+        return _messageExecutor.submit(task);
     }
 
-    public Thread newThread(Runnable target, String name)
+    @Override @Nonnull
+    public Thread newThread(@Nonnull Runnable target)
+    {
+        return newThread(target, getCellName() + "-" + _threadCounter.getAndIncrement());
+    }
+
+    @Nonnull
+    public Thread newThread(@Nonnull Runnable target, @Nonnull String name)
     {
         return new Thread(_threads, wrapLoggingContext(target), name);
     }
@@ -698,12 +737,7 @@ public class CellNucleus implements ThreadFactory
 
     int getEventQueueSize()
     {
-        if (_messageExecutor instanceof ThreadPoolExecutor) {
-            ThreadPoolExecutor executor =
-                (ThreadPoolExecutor) _messageExecutor;
-            return executor.getQueue().size();
-        }
-        return 0;
+        return _eventQueueSize.get();
     }
 
     void addToEventQueue(MessageEvent ce) {
@@ -722,7 +756,7 @@ public class CellNucleus implements ThreadFactory
                 // mainly useful for debuggin purposes (see alias
                 // package.
                 //
-                ce = new MessageEvent(((RoutedMessageEvent)ce).getMessage());
+                ce = new MessageEvent(ce.getMessage());
             }
         }
 
@@ -943,11 +977,13 @@ public class CellNucleus implements ThreadFactory
         {
             _lock = lock;
             _message = message;
+            _eventQueueSize.incrementAndGet();
         }
 
         @Override
         public void innerRun()
         {
+            _eventQueueSize.decrementAndGet();
             try (CDC ignored = _lock.getCdc().restore()) {
                 CellMessageAnswerable callback =
                         _lock.getCallback();
@@ -984,12 +1020,14 @@ public class CellNucleus implements ThreadFactory
         {
             _event = event;
             EventLogger.queueBegin(_event);
+            _eventQueueSize.incrementAndGet();
         }
 
         @Override
         public void innerRun()
         {
             EventLogger.queueEnd(_event);
+            _eventQueueSize.decrementAndGet();
 
             if (_event instanceof LastMessageEvent) {
                 LOGGER.trace("messageThread : LastMessageEvent arrived");

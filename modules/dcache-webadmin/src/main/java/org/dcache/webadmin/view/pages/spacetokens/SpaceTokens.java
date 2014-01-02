@@ -1,6 +1,7 @@
 package org.dcache.webadmin.view.pages.spacetokens;
 
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.link.Link;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.panel.FeedbackPanel;
@@ -9,11 +10,11 @@ import org.apache.wicket.model.PropertyModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.dcache.webadmin.controller.exceptions.LinkGroupsServiceException;
-import org.dcache.webadmin.view.pages.basepage.BasePage;
+import org.dcache.webadmin.view.pages.basepage.SortableBasePage;
 import org.dcache.webadmin.view.pages.spacetokens.beans.LinkGroupBean;
 import org.dcache.webadmin.view.pages.spacetokens.beans.SpaceReservationBean;
 import org.dcache.webadmin.view.pages.spacetokens.spacereservationpanel.SpaceReservationPanel;
@@ -22,36 +23,43 @@ import org.dcache.webadmin.view.util.EvenOddListView;
 /**
  * @author jans
  */
-public class SpaceTokens extends BasePage {
+public class SpaceTokens extends SortableBasePage {
 
     private static final long serialVersionUID = -8335635306002254217L;
     private SpaceReservationPanel _spaceReservationsPanel =
             new SpaceReservationPanel("spaceReservationsPanel",
             new PropertyModel<List<SpaceReservationBean>>(
-            this, "_currentLinkGroup._reservations"));
+            this, "reservations"));
     private LinkGroupBean _currentLinkGroup;
-    private List<LinkGroupBean> _linkGroups;
     private static final Logger _log = LoggerFactory.getLogger(SpaceTokens.class);
 
     public SpaceTokens() {
         createMarkup();
-        getTokenInfo();
     }
 
     private void createMarkup() {
-        add(new FeedbackPanel("feedback"));
-        add(new LinkGroupListView("linkGroupView", new PropertyModel(this,
-                "_linkGroups")));
-        add(_spaceReservationsPanel);
+        Form<?> form = getAutoRefreshingForm("spaceTokensForm");
+        form.add(new FeedbackPanel("feedback"));
+        form.add(new LinkGroupListView("linkGroupView", new PropertyModel(this,
+                "tokenInfo")));
+        form.add(_spaceReservationsPanel);
+        add(form);
     }
 
-    private void getTokenInfo() {
+    public List<SpaceReservationBean> getReservations() {
+        if (_currentLinkGroup == null) {
+            return Collections.emptyList();
+        }
+        return _currentLinkGroup.getReservations();
+    }
+
+    public List<LinkGroupBean> getTokenInfo() {
         try {
-            _linkGroups = getWebadminApplication().getLinkGroupsService().getLinkGroups();
+            return getWebadminApplication().getLinkGroupsService().getLinkGroups();
         } catch (LinkGroupsServiceException ex) {
             this.error(getStringResource("error.getTokenInfoFailed") + ex.getMessage());
             _log.debug("getTokenInfo failed {}", ex.getMessage());
-            _linkGroups = new ArrayList<>();
+            return Collections.emptyList();
         }
     }
 

@@ -70,8 +70,11 @@ COPYRIGHT STATUS:
 
 package diskCacheV111.srm.dcache;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Ranges;
+import com.google.common.collect.Range;
 import org.apache.axis.types.UnsignedLong;
 import org.globus.gsi.gssapi.GlobusGSSCredentialImpl;
 import org.ietf.jgss.GSSCredential;
@@ -79,7 +82,9 @@ import org.ietf.jgss.GSSException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Required;
+import org.springframework.dao.DataAccessException;
 
+import javax.annotation.Nonnull;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 import javax.naming.directory.Attribute;
@@ -95,7 +100,6 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -108,6 +112,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -156,11 +161,12 @@ import dmg.util.Args;
 import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AccessType;
 import org.dcache.auth.Subjects;
-import org.dcache.cells.AbstractCellComponent;
+import dmg.cells.nucleus.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.cells.CellStub;
+import org.dcache.commons.util.Strings;
 import org.dcache.namespace.ACLPermissionHandler;
 import org.dcache.namespace.ChainedPermissionHandler;
 import org.dcache.namespace.FileAttribute;
@@ -176,7 +182,7 @@ import org.dcache.srm.FileMetaData;
 import org.dcache.srm.PinCallbacks;
 import org.dcache.srm.PrepareToPutCallbacks;
 import org.dcache.srm.PrepareToPutInSpaceCallbacks;
-import org.dcache.srm.RemoveFileCallbacks;
+import org.dcache.srm.RemoveFileCallback;
 import org.dcache.srm.SRM;
 import org.dcache.srm.SRMAuthorizationException;
 import org.dcache.srm.SRMDuplicationException;
@@ -184,10 +190,11 @@ import org.dcache.srm.SRMException;
 import org.dcache.srm.SRMInternalErrorException;
 import org.dcache.srm.SRMInvalidPathException;
 import org.dcache.srm.SRMInvalidRequestException;
+import org.dcache.srm.SRMNonEmptyDirectoryException;
 import org.dcache.srm.SRMUser;
 import org.dcache.srm.SrmCancelUseOfSpaceCallbacks;
-import org.dcache.srm.SrmReleaseSpaceCallbacks;
-import org.dcache.srm.SrmReserveSpaceCallbacks;
+import org.dcache.srm.SrmReleaseSpaceCallback;
+import org.dcache.srm.SrmReserveSpaceCallback;
 import org.dcache.srm.SrmUseSpaceCallbacks;
 import org.dcache.srm.UnpinCallbacks;
 import org.dcache.srm.request.Job;
@@ -202,14 +209,20 @@ import org.dcache.srm.v2_2.TRetentionPolicy;
 import org.dcache.srm.v2_2.TRetentionPolicyInfo;
 import org.dcache.srm.v2_2.TReturnStatus;
 import org.dcache.srm.v2_2.TStatusCode;
-import org.dcache.util.LoginBrokerHandler;
+import dmg.cells.services.login.LoginBrokerHandler;
+
+import org.dcache.srm.request.GetFileRequest;
 import org.dcache.util.Version;
 import org.dcache.util.list.DirectoryEntry;
 import org.dcache.util.list.DirectoryListPrinter;
 import org.dcache.util.list.DirectoryListSource;
+import org.dcache.util.list.DirectoryStream;
+import org.dcache.util.list.NullListPrinter;
 import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.net.InetAddresses.isInetAddress;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.dcache.namespace.FileAttribute.*;
 
 /**
@@ -224,8 +237,6 @@ public final class Storage
                CellCommandListener, CellMessageReceiver
 {
     private final static Logger _log = LoggerFactory.getLogger(Storage.class);
-
-    private final static String INFINITY = "infinity";
 
     private static final String SPACEMANAGER_DISABLED_MESSAGE =
             "space reservation is disabled";
@@ -244,7 +255,7 @@ public final class Storage
      * loops.
      */
     private final static long TRANSIENT_FAILURE_DELAY =
-        TimeUnit.MILLISECONDS.toMillis(10);
+        MILLISECONDS.toMillis(10);
     private static final Version VERSION = Version.of(Storage.class);
 
     private CellStub _pnfsStub;
@@ -260,13 +271,13 @@ public final class Storage
     private final PermissionHandler permissionHandler =
             new ChainedPermissionHandler(new ACLPermissionHandler(),
                                          new PosixPermissionHandler());
+    private final Set<FileAttribute> attributesRequiredForRmdir;
 
     private PoolMonitor _poolMonitor;
 
     private SRM srm;
     private Configuration config;
     private Thread storageInfoUpdateThread;
-    private boolean ignoreClientProtocolOrder; //falseByDefault
     private boolean customGetHostByAddr; //falseByDefault
 
     private FsPath _xrootdRootPath;
@@ -276,6 +287,12 @@ public final class Storage
 
     private boolean _isOnlinePinningEnabled = true;
     private boolean _isSpaceManagerEnabled;
+
+    public Storage()
+    {
+        attributesRequiredForRmdir = EnumSet.of(TYPE);
+        attributesRequiredForRmdir.addAll(permissionHandler.getRequiredAttributes());
+    }
 
     @Required
     public void setLoginBrokerStub(CellStub loginBrokerStub)
@@ -413,22 +430,10 @@ public final class Storage
         customGetHostByAddr = value;
     }
 
-    public void setIgnoreClientProtocolOrder(boolean ignore)
-    {
-        ignoreClientProtocolOrder = ignore;
-    }
-
-    public void start() throws SQLException, CacheException, IOException,
+    public void start() throws CacheException, IOException,
             InterruptedException, IllegalStateTransition
     {
         _log.info("Starting SRM");
-
-        if (config.getJdbcPass() == null && config.getJdbcPwdfile() == null) {
-            String error = "database parameters are not specified; use options " +
-                "-jdbcUrl, -jdbcDriver, -dbUser and -dbPass/-pgPass";
-            _log.error(error);
-            throw new IllegalStateException(error);
-        }
 
         while (_poolMonitor == null) {
             try {
@@ -455,16 +460,6 @@ public final class Storage
         _listSource = source;
     }
 
-    public static long parseTime(String s)
-    {
-        return s.equals(INFINITY) ? Long.MAX_VALUE : Long.parseLong(s);
-    }
-
-    public static long parseTime(String s, TimeUnit unit)
-    {
-        return s.equals(INFINITY) ? Long.MAX_VALUE : TimeUnit.MILLISECONDS.convert(Long.parseLong(s),unit);
-    }
-
     @Required
     public void setLoginBrokerHandler(LoginBrokerHandler handler)
         throws UnknownHostException
@@ -485,20 +480,8 @@ public final class Storage
         if (info != null) {
             pw.println(info);
         }
-
         pw.println(config);
-
-        try {
-            StringBuilder sb = new StringBuilder();
-            srm.printGetSchedulerInfo(sb);
-            srm.printPutSchedulerInfo(sb);
-            srm.printCopySchedulerInfo(sb);
-            srm.printBringOnlineSchedulerInfo(sb);
-            srm.printLsSchedulerInfo(sb);
-            pw.println(sb);
-        } catch (SQLException e) {
-            _log.error(e.toString());
-        }
+        pw.println(srm.getSchedulerInfo());
     }
 
     public final static String hh_set_switch_to_async_mode_delay_get =
@@ -509,7 +492,7 @@ public final class Storage
         "always use asynchronous replies.";
     public String ac_set_switch_to_async_mode_delay_get_$_1(Args args)
     {
-        config.setGetSwitchToAsynchronousModeDelay(parseTime(args.argv(0)));
+        config.setGetSwitchToAsynchronousModeDelay(Strings.parseTime(args.argv(0), TimeUnit.MILLISECONDS));
         return "";
     }
 
@@ -521,7 +504,7 @@ public final class Storage
         "always use asynchronous replies.";
     public String ac_set_switch_to_async_mode_delay_put_$_1(Args args)
     {
-        config.setPutSwitchToAsynchronousModeDelay(parseTime(args.argv(0)));
+        config.setPutSwitchToAsynchronousModeDelay(Strings.parseTime(args.argv(0), TimeUnit.MILLISECONDS));
         return "";
     }
 
@@ -533,7 +516,7 @@ public final class Storage
         "always use asynchronous replies.";
     public String ac_set_switch_to_async_mode_delay_ls_$_1(Args args)
     {
-        config.setLsSwitchToAsynchronousModeDelay(parseTime(args.argv(0)));
+        config.setLsSwitchToAsynchronousModeDelay(Strings.parseTime(args.argv(0), TimeUnit.MILLISECONDS));
         return "";
     }
 
@@ -545,7 +528,7 @@ public final class Storage
         "and use 0 to always use asynchronous replies.";
     public String ac_set_switch_to_async_mode_delay_bring_online_$_1(Args args)
     {
-        config.setBringOnlineSwitchToAsynchronousModeDelay(parseTime(args.argv(0)));
+        config.setBringOnlineSwitchToAsynchronousModeDelay(Strings.parseTime(args.argv(0), TimeUnit.MILLISECONDS));
         return "";
     }
 
@@ -608,9 +591,6 @@ public final class Storage
             return "Invalid request: "+ire.getMessage();
         } catch (NumberFormatException e) {
             return e.toString();
-        } catch (SQLException e) {
-            _log.warn(e.toString());
-            return e.toString();
         }
     }
 
@@ -659,10 +639,7 @@ public final class Storage
                 srm.cancelAllLsRequests(sb, pattern);
             }
             return sb.toString();
-        } catch (RuntimeException e) {
-            _log.error("Failure in cancelall", e);
-            return e.toString();
-        } catch (Exception e) {
+        } catch (DataAccessException | SRMException e) {
             _log.warn("Failure in cancelall: " + e.getMessage());
             return e.toString();
         }
@@ -670,131 +647,113 @@ public final class Storage
     public final static String fh_ls= " Syntax: ls [-get] [-put] [-copy] [-bring] [-reserve] [-ls] [-l] [<id>] "+
             "#will list all requests";
     public final static String hh_ls= " [-get] [-put] [-copy] [-bring] [-reserve] [-ls] [-l] [<id>]";
-    public String ac_ls_$_0_1(Args args) {
-        try {
-            boolean get=args.hasOption("get");
-            boolean put=args.hasOption("put");
-            boolean copy=args.hasOption("copy");
-            boolean bring=args.hasOption("bring");
-            boolean reserve=args.hasOption("reserve");
-            boolean ls=args.hasOption("ls");
-            boolean longformat = args.hasOption("l");
-            StringBuilder sb = new StringBuilder();
-            if(args.argc() == 1) {
-                try {
-                    Long reqId = Long.valueOf(args.argv(0));
-                    srm.listRequest(sb, reqId, longformat);
-                } catch( NumberFormatException nfe) {
-                    return "id must be an integer, you gave id="+args.argv(0);
-                }
-            } else {
-                if( !get && !put && !copy && !bring && !reserve && !ls) {
-                    get=true;
-                    put=true;
-                    copy=true;
-                    bring=true;
-                    reserve=true;
-                    ls=true;
-                }
-                if(get) {
-                    sb.append("Get Requests:\n");
-                    srm.listGetRequests(sb);
-                }
-                if(put) {
-                    sb.append("Put Requests:\n");
-                    srm.listPutRequests(sb);
-                }
-                if(copy) {
-                    sb.append("Copy Requests:\n");
-                    srm.listCopyRequests(sb);
-                }
-                if(copy) {
-                    sb.append("Bring Online Requests:\n");
-                    srm.listBringOnlineRequests(sb);
-                }
-                if(reserve) {
-                    sb.append("Reserve Space Requests:\n");
-                    srm.listReserveSpaceRequests(sb);
-                }
-                if(ls) {
-                    sb.append("Ls Requests:\n");
-                    srm.listLsRequests(sb);
-                }
+    public String ac_ls_$_0_1(Args args) throws SRMInvalidRequestException, DataAccessException
+    {
+        boolean get=args.hasOption("get");
+        boolean put=args.hasOption("put");
+        boolean copy=args.hasOption("copy");
+        boolean bring=args.hasOption("bring");
+        boolean reserve=args.hasOption("reserve");
+        boolean ls=args.hasOption("ls");
+        boolean longformat = args.hasOption("l");
+        StringBuilder sb = new StringBuilder();
+        if(args.argc() == 1) {
+            try {
+                Long reqId = Long.valueOf(args.argv(0));
+                srm.listRequest(sb, reqId, longformat);
+            } catch( NumberFormatException nfe) {
+                return "id must be an integer, you gave id="+args.argv(0);
             }
-            return sb.toString();
-        } catch(Throwable t) {
-            t.printStackTrace();
-            return t.toString();
+        } else {
+            if( !get && !put && !copy && !bring && !reserve && !ls) {
+                get=true;
+                put=true;
+                copy=true;
+                bring=true;
+                reserve=true;
+                ls=true;
+            }
+            if(get) {
+                sb.append("Get Requests:\n");
+                srm.listGetRequests(sb);
+            }
+            if(put) {
+                sb.append("Put Requests:\n");
+                srm.listPutRequests(sb);
+            }
+            if(copy) {
+                sb.append("Copy Requests:\n");
+                srm.listCopyRequests(sb);
+            }
+            if(copy) {
+                sb.append("Bring Online Requests:\n");
+                srm.listBringOnlineRequests(sb);
+            }
+            if(reserve) {
+                sb.append("Reserve Space Requests:\n");
+                srm.listReserveSpaceRequests(sb);
+            }
+            if(ls) {
+                sb.append("Ls Requests:\n");
+                srm.listLsRequests(sb);
+            }
         }
+        return sb.toString();
     }
     public final static String fh_ls_queues= " Syntax: ls queues " +
         "[-get] [-put] [-copy] [-bring] [-ls] [-l]  "+
             "#will list schedule queues";
     public final static String hh_ls_queues= " [-get] [-put] [-copy] [-bring] [-ls] [-l] ";
     public String ac_ls_queues_$_0(Args args) {
-        try {
-            boolean get=args.hasOption("get");
-            boolean put=args.hasOption("put");
-            boolean ls=args.hasOption("ls");
-            boolean copy=args.hasOption("copy");
-            boolean bring=args.hasOption("bring");
-            StringBuilder sb = new StringBuilder();
+        boolean get=args.hasOption("get");
+        boolean put=args.hasOption("put");
+        boolean ls=args.hasOption("ls");
+        boolean copy=args.hasOption("copy");
+        boolean bring=args.hasOption("bring");
+        StringBuilder sb = new StringBuilder();
 
-            if( !get && !put && !copy && !bring && !ls ) {
-                get=true;
-                put=true;
-                copy=true;
-                bring=true;
-                ls=true;
-            }
-            if(get) {
-                sb.append("Get Request Scheduler:\n");
-                srm.printGetSchedulerThreadQueue(sb);
-                srm.printGetSchedulerPriorityThreadQueue(sb);
-                srm.printCopySchedulerReadyThreadQueue(sb);
-                sb.append('\n');
-            }
-            if(put) {
-                sb.append("Put Request Scheduler:\n");
-                srm.printPutSchedulerThreadQueue(sb);
-                srm.printPutSchedulerPriorityThreadQueue(sb);
-                srm.printPutSchedulerReadyThreadQueue(sb);
-                sb.append('\n');
-            }
-            if(copy) {
-                sb.append("Copy Request Scheduler:\n");
-                srm.printCopySchedulerThreadQueue(sb);
-                srm.printCopySchedulerPriorityThreadQueue(sb);
-                srm.printCopySchedulerReadyThreadQueue(sb);
-                sb.append('\n');
-            }
-            if(bring) {
-                sb.append("Bring Online Request Scheduler:\n");
-                srm.printBringOnlineSchedulerThreadQueue(sb);
-                srm.printBringOnlineSchedulerPriorityThreadQueue(sb);
-                srm.printBringOnlineSchedulerReadyThreadQueue(sb);
-                sb.append('\n');
-            }
-            if(ls) {
-                sb.append("Ls Request Scheduler:\n");
-                srm.printLsSchedulerThreadQueue(sb);
-                srm.printLsSchedulerPriorityThreadQueue(sb);
-                srm.printLsSchedulerReadyThreadQueue(sb);
-                sb.append('\n');
-            }
-            return sb.toString();
-        } catch(Throwable t) {
-            t.printStackTrace();
-            return t.toString();
+        if( !get && !put && !copy && !bring && !ls ) {
+            get=true;
+            put=true;
+            copy=true;
+            bring=true;
+            ls=true;
         }
+        if(get) {
+            sb.append("Get Request Scheduler:\n");
+            sb.append(srm.getGetSchedulerInfo());
+            sb.append('\n');
+        }
+        if(put) {
+            sb.append("Put Request Scheduler:\n");
+            sb.append(srm.getPutSchedulerInfo());
+            sb.append('\n');
+        }
+        if(copy) {
+            sb.append("Copy Request Scheduler:\n");
+            sb.append(srm.getCopySchedulerInfo());
+            sb.append('\n');
+        }
+        if(bring) {
+            sb.append("Bring Online Request Scheduler:\n");
+            sb.append(srm.getBringOnlineSchedulerInfo());
+            sb.append('\n');
+        }
+        if(ls) {
+            sb.append("Ls Request Scheduler:\n");
+            sb.append(srm.getLsSchedulerInfo());
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     public final static String fh_ls_completed= " Syntax: ls completed [-get] [-put]" +
-        " [-copy] [-l] [max_count]"+
+        " [-copy] [max_count]"+
             " #will list completed (done, failed or canceled) requests, " +
         "if max_count is not specified, it is set to 50";
-    public final static String hh_ls_completed= " [-get] [-put] [-copy] [-l] [max_count]";
-    public String ac_ls_completed_$_0_1(Args args) throws Exception{
+    public final static String hh_ls_completed= " [-get] [-put] [-copy] [max_count]";
+    public String ac_ls_completed_$_0_1(Args args) throws DataAccessException
+    {
         boolean get=args.hasOption("get");
         boolean put=args.hasOption("put");
         boolean copy=args.hasOption("copy");
@@ -854,12 +813,9 @@ public final class Storage
             StringBuilder sb = new StringBuilder();
             srm.listRequest(sb, requestId, true);
             return sb.toString();
-        } catch (RuntimeException e) {
-            _log.error("Failure in set job priority", e);
-            return e.toString();
         } catch (SRMInvalidRequestException e) {
             return e.getMessage() + "\n";
-        } catch (Exception e) {
+        } catch (DataAccessException e) {
             _log.warn("Failure in set job priority: " + e.getMessage());
             return e.toString();
         }
@@ -874,8 +830,7 @@ public final class Storage
             throw new IllegalArgumentException("count is not specified");
         }
         int value = Integer.parseInt(args.argv(0));
-        config.setPutMaxReadyJobs(value);
-        srm.getPutRequestScheduler().setMaxReadyJobs(value);
+        srm.setPutMaxReadyJobs(value);
         _log.info("put-req-max-ready-requests="+value);
         return "put-req-max-ready-requests="+value;
     }
@@ -888,8 +843,7 @@ public final class Storage
             throw new IllegalArgumentException("count is not specified");
         }
         int value = Integer.parseInt(args.argv(0));
-        config.setGetMaxReadyJobs(value);
-        srm.getGetRequestScheduler().setMaxReadyJobs(value);
+        srm.setGetMaxReadyJobs(value);
         _log.info("get-req-max-ready-requests="+value);
         return "get-req-max-ready-requests="+value;
     }
@@ -902,8 +856,7 @@ public final class Storage
             throw new IllegalArgumentException("count is not specified");
         }
         int value = Integer.parseInt(args.argv(0));
-        config.setBringOnlineMaxReadyJobs(value);
-        srm.getBringOnlineRequestScheduler().setMaxReadyJobs(value);
+        srm.setBringOnlineMaxReadyJobs(value);
         _log.info("bring-online-req-max-ready-requests="+value);
         return "bring-online-req-max-ready-requests="+value;
     }
@@ -924,8 +877,7 @@ public final class Storage
             throw new IllegalArgumentException("count is not specified");
         }
         int value = Integer.parseInt(args.argv(0));
-        config.setLsMaxReadyJobs(value);
-        srm.getLsRequestScheduler().setMaxReadyJobs(value);
+        srm.setLsMaxReadyJobs(value);
         _log.info("ls-request-max-ready-requests="+value);
         return "ls-request-max-ready-requests="+value;
     }
@@ -993,7 +945,7 @@ public final class Storage
                         URI surl,
                         String clientHost,
                         long pinLifetime,
-                        long requestId,
+                        String requestToken,
                         PinCallbacks callbacks)
     {
         try {
@@ -1002,7 +954,7 @@ public final class Storage
                                  clientHost,
                                  callbacks,
                                  pinLifetime,
-                                 requestId,
+                                 requestToken,
                                  _isOnlinePinningEnabled,
                                  _poolMonitor,
                                  _pnfsStub,
@@ -1029,10 +981,10 @@ public final class Storage
     @Override
     public void unPinFileBySrmRequestId(SRMUser user, String fileId,
                                         UnpinCallbacks callbacks,
-                                        long srmRequestId)
+                                        String requestToken)
     {
         UnpinCompanion.unpinFileBySrmRequestId(((DcacheUser) user).getSubject(),
-                new PnfsId(fileId), srmRequestId, callbacks, _pinManagerStub);
+                new PnfsId(fileId), requestToken, callbacks, _pinManagerStub);
     }
 
     @Override
@@ -1042,65 +994,52 @@ public final class Storage
                                  new PnfsId(fileId), callbacks, _pinManagerStub);
     }
 
-    public String selectGetProtocol(String[] protocols)
+    private String selectGetProtocol(String[] protocols)
             throws SRMException {
         return selectProtocolFor(protocols, srmGetNotSupportedProtocols);
     }
 
-    public String selectPutProtocol(String[] protocols)
+    private String selectPutProtocol(String[] protocols)
             throws SRMException {
         return selectProtocolFor(protocols, srmPutNotSupportedProtocols);
     }
 
     private String selectProtocolFor(String[] protocols, String[] excludes)
-    throws SRMException {
-        Set<String> available_protocols = listAvailableProtocols();
-        available_protocols.retainAll(Arrays.asList(protocols));
-        available_protocols.removeAll(Arrays.asList(excludes));
-        if(available_protocols.isEmpty()) {
-            _log.error("can not find sutable protocol");
-            throw new SRMException("can not find sutable put protocol");
-        }
-
-         /*
-          *this is incorrect, need to select on basis of client's preferences
-          * But we need to continue doing this while old srmcp clients
-          * are out there in the wild
-          */
-         if(ignoreClientProtocolOrder) {
-             for (String protocol : srmPreferredProtocols) {
-                 if (available_protocols.contains(protocol)) {
-                     return protocol;
-                 }
-             }
-         }
-
-
-        for (String protocol : protocols) {
-            if (available_protocols.contains(protocol)) {
+            throws SRMException
+    {
+        Set<String> availableProtocols = listAvailableProtocols();
+        availableProtocols.retainAll(Arrays.asList(protocols));
+        availableProtocols.removeAll(Arrays.asList(excludes));
+        for (String protocol : srmPreferredProtocols) {
+            if (availableProtocols.contains(protocol)) {
                 return protocol;
             }
         }
-
-        // we should never get here
-        throw new SRMException("can not find sutable put protocol");
+        for (String protocol : protocols) {
+            if (availableProtocols.contains(protocol)) {
+                return protocol;
+            }
+        }
+        _log.warn("Cannot find suitable protocol. Client requested one of {}.",
+                Arrays.toString(protocols));
+        throw new SRMException("Cannot find suitable transfer protocol.");
     }
 
     @Override
     public String[] supportedGetProtocols()
-    throws SRMException {
+            throws SRMInternalErrorException
+    {
         Set<String> protocols = listAvailableProtocols();
+        protocols.removeAll(Arrays.asList(srmGetNotSupportedProtocols));
         return protocols.toArray(new String[protocols.size()]);
     }
 
     @Override
     public String[] supportedPutProtocols()
-    throws SRMException {
+            throws SRMInternalErrorException
+    {
         Set<String> protocols = listAvailableProtocols();
-        // "http" is for getting only
-        if(protocols.contains("http")) {
-            protocols.remove("http");
-        }
+        protocols.removeAll(Arrays.asList(srmPutNotSupportedProtocols));
         return protocols.toArray(new String[protocols.size()]);
     }
 
@@ -1262,12 +1201,6 @@ public final class Storage
         return transferPath;
     }
 
-    public LoginBrokerInfo[] getLoginBrokerInfos()
-        throws SRMException
-    {
-        return getLoginBrokerInfos(null);
-    }
-
     // These hashtables are used as a caching mechanizm for the login
     // broker infos. Here we asume that no protocol called "null" is
     // going to be ever used.
@@ -1276,10 +1209,10 @@ public final class Storage
     private final Map<String,Long> latestLoginBrokerInfosTimes =
         new HashMap<>();
     private long LOGINBROKERINFO_VALIDITYSPAN = 30 * 1000;
-    private static final int MAX_LOGIN_BROKER_RETRIES=5;
+    private static final int MAX_LOGIN_BROKER_RETRIES = 5;
 
-    public LoginBrokerInfo[] getLoginBrokerInfos(String protocol)
-        throws SRMException
+    private LoginBrokerInfo[] getLoginBrokerInfos(String protocol)
+        throws SRMInternalErrorException
     {
         String key = (protocol == null) ? "null" : protocol;
 
@@ -1305,8 +1238,7 @@ public final class Storage
         try {
             int retry = 0;
             do {
-                _log.debug("getLoginBrokerInfos sending \"" + brokerMessage +
-                           "\"  to LoginBroker");
+                _log.debug("getLoginBrokerInfos sending \"{}\" to LoginBroker", brokerMessage);
                 try {
                     LoginBrokerInfo[] infos =
                         _loginBrokerStub.sendAndWait(brokerMessage,
@@ -1324,17 +1256,17 @@ public final class Storage
                 Thread.sleep(5 * 1000);
             } while (++retry < MAX_LOGIN_BROKER_RETRIES);
         } catch (InterruptedException e) {
-            throw new SRMException("Request was interrupted", e);
+            throw new SRMInternalErrorException("Request was interrupted", e);
         }
 
-        throw new SRMException(error);
+        throw new SRMInternalErrorException(error);
     }
 
     public Set<String> listAvailableProtocols()
-        throws SRMException
+            throws SRMInternalErrorException
     {
         Set<String> protocols = new HashSet<>();
-        for (LoginBrokerInfo info: getLoginBrokerInfos()) {
+        for (LoginBrokerInfo info: getLoginBrokerInfos(null)) {
             protocols.add(info.getProtocolFamily());
         }
         return protocols;
@@ -1342,7 +1274,7 @@ public final class Storage
 
     @Override
     public boolean isLocalTransferUrl(URI url)
-        throws SRMException
+            throws SRMInternalErrorException
     {
         String protocol = url.getScheme();
         String host = url.getHost();
@@ -1357,77 +1289,58 @@ public final class Storage
 
 
     private String selectHost(String protocol)
-        throws SRMException
+            throws SRMInternalErrorException
     {
-        _log.debug("selectHost("+protocol+")");
-        LoginBrokerInfo[]loginBrokerInfos = getLoginBrokerInfos(protocol);
-        return selectHost(loginBrokerInfos);
+        _log.trace("selectHost({})", protocol);
+        LoginBrokerInfo[] loginBrokerInfos = getLoginBrokerInfos(protocol);
+        Arrays.sort(loginBrokerInfos, LOAD_ORDER);
+        int len = loginBrokerInfos.length;
+        if (len <=0){
+            return null;
+        }
+        int selected_indx;
+        synchronized (rand) {
+            selected_indx = rand.nextInt(Math.min(len, numDoorInRanSelection));
+        }
+        String doorHostPort = lbiToDoor(loginBrokerInfos[selected_indx]);
+
+        _log.trace("selectHost returns {}", doorHostPort);
+        return doorHostPort;
     }
 
     private final Random rand = new Random();
 
-    int numDoorInRanSelection=3;
+    private int numDoorInRanSelection = 3;
 
-   /**
-     *  HostnameCacheRecord TTL in millis
-     */
-    private static final long doorToHostnameCacheTTL = 600000L; // ten minutes
+    private final LoadingCache<String,String> doorToHostnameCache =
+            CacheBuilder.newBuilder()
+                    .expireAfterWrite(10, MINUTES)
+                    .build(new CacheLoader<String, String>()
+                    {
+                        @Override
+                        public String load(String door) throws Exception
+                        {
+                            InetAddress address = InetAddress.getByName(door);
+                            String resolvedHost = address.getHostName();
+                            if (customGetHostByAddr && isInetAddress(resolvedHost)) {
+                                resolvedHost = getHostByAddr(address.getAddress());
+                            }
+                            return resolvedHost;
+                        }
+                    });
 
-    private static final class HostnameCacheRecord {
-        private String hostname;
-        /**
-         *  in millis
-         */
-        private long  creationTime;
-        public HostnameCacheRecord( String hostname ) {
-            this.hostname = hostname;
-            this.creationTime = System.currentTimeMillis();
+    private String lbiToDoor(LoginBrokerInfo lbi) throws SRMInternalErrorException
+    {
+        try {
+            String resolvedHost = doorToHostnameCache.get(lbi.getHost());
+            return resolvedHost +":"+ lbi.getPort();
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            throw new SRMInternalErrorException("Failed to resolve door: " + cause, cause);
         }
-        /**
-         * @return the hostname
-         */
-        public String getHostname() {
-            return hostname;
-        }
-
-        public boolean expired() {
-            return
-                System.currentTimeMillis() - creationTime >
-                doorToHostnameCacheTTL;
-        }
-
-    }
-     private Map<String,HostnameCacheRecord> doorToHostnameMap =
-            new HashMap<>();
-    private String lbiToDoor(LoginBrokerInfo lbi) throws SRMException {
-
-            String thehost =lbi.getHost();
-            String resolvedHost;
-            HostnameCacheRecord resolvedHostRecord = doorToHostnameMap.get(thehost);
-            if(resolvedHostRecord == null || resolvedHostRecord.expired() ) {
-                try {
-
-                    InetAddress address = InetAddress.getByName(thehost);
-                    resolvedHost = address.getHostName();
-                    if ( customGetHostByAddr && isInetAddress(resolvedHost) ) {
-                        resolvedHost = getHostByAddr( address.getAddress() );
-                    }
-                } catch (IOException e) {
-                    throw new SRMException("selectHost " + e, e);
-                }
-                // cache record
-                doorToHostnameMap.put(thehost,
-                        new HostnameCacheRecord(resolvedHost));
-            } else {
-                resolvedHost = resolvedHostRecord.getHostname();
-            }
-
-
-            return resolvedHost+":"+ lbi.getPort();
-
     }
 
-    private final static Comparator<LoginBrokerInfo> LOAD_ORDER =
+    private static final Comparator<LoginBrokerInfo> LOAD_ORDER =
         new Comparator<LoginBrokerInfo>() {
             @Override
             public int compare(LoginBrokerInfo info1, LoginBrokerInfo info2)
@@ -1435,25 +1348,6 @@ public final class Storage
                 return (int)Math.signum(info1.getLoad() - info2.getLoad());
             }
         };
-
-    public String selectHost(LoginBrokerInfo[]loginBrokerInfos)
-        throws SRMException
-    {
-        Arrays.sort(loginBrokerInfos, LOAD_ORDER);
-        int len = loginBrokerInfos.length;
-        if (len <=0){
-            return null;
-        }
-
-        int selected_indx;
-        synchronized (rand) {
-            selected_indx = rand.nextInt(Math.min(len, numDoorInRanSelection));
-        }
-        String doorHostPort = lbiToDoor(loginBrokerInfos[selected_indx]);
-
-        _log.debug("selectHost returns "+doorHostPort);
-        return doorHostPort;
-    }
 
 
     /**
@@ -1558,9 +1452,6 @@ public final class Storage
             FileAttributes updatedAttributes = new FileAttributes();
             updatedAttributes.setMode(dfmd.permMode);
             handler.setFileAttributes(dfmd.getPnfsId(), updatedAttributes);
-
-            FileAttributes attributes = dfmd.getFileAttributes();
-            attributes.setMode(dfmd.permMode);
         } catch (TimeoutCacheException e) {
             throw new SRMInternalErrorException("PnfsManager is unavailable: "
                                                 + e.getMessage(), e);
@@ -1575,7 +1466,7 @@ public final class Storage
         }
     }
 
-    @Override
+    @Override @Nonnull
     public FileMetaData getFileMetaData(SRMUser user, URI surl, boolean read)
         throws SRMException
     {
@@ -1709,39 +1600,33 @@ public final class Storage
             return;
         }
 
-        RemoveFileCallbacks removeFileCallback = new RemoveFileCallbacks() {
+        RemoveFileCallback removeFileCallback = new RemoveFileCallback() {
                 @Override
-                public void RemoveFileSucceeded()
+                public void success()
                 {
                     callback.AdvisoryDeleteSuccesseded();
                 }
 
                 @Override
-                public void RemoveFileFailed(String reason)
+                public void failure(String reason)
                 {
                     callback.AdvisoryDeleteFailed(reason);
                 }
 
                 @Override
-                public void FileNotFound(String error)
+                public void notFound(String error)
                 {
                     callback.AdvisoryDeleteFailed(error);
                 }
 
                 @Override
-                public void Exception(Exception e)
-                {
-                    callback.Exception(e);
-                }
-
-                @Override
-                public void Timeout()
+                public void timeout()
                 {
                     callback.Timeout();
                 }
 
                 @Override
-                public void PermissionDenied()
+                public void permissionDenied()
                 {
                     callback.AdvisoryDeleteFailed("Permission denied");
                 }
@@ -1761,10 +1646,9 @@ public final class Storage
     @Override
     public void removeFile(final SRMUser user,
                            final URI surl,
-                           RemoveFileCallbacks callbacks)
+                           RemoveFileCallback callbacks)
     {
-        _log.debug("Storage.removeFile");
-
+        _log.trace("Storage.removeFile");
         try {
             RemoveFileCompanion.removeFile(((DcacheUser) user).getSubject(),
                                            getPath(surl).toString(),
@@ -1772,29 +1656,150 @@ public final class Storage
                                            _pnfsStub,
                                            getCellEndpoint());
         } catch (SRMInvalidPathException e) {
-            callbacks.FileNotFound(e.getMessage());
+            callbacks.notFound(e.getMessage());
+        }
+    }
+
+    /**
+     * Adds transitive subdirectories of {@code dir} to {@code result}.
+     *
+     * @param subject Issuer of rmdir
+     * @param dir Path to directory
+     * @param attributes File attributes of {@code dir}
+     * @param result List that subdirectories are added to
+     * @throws SRMAuthorizationException if {@code subject} is not authorized to list
+     *                                   {@code dir} or not authorized to list or delete
+     *                                   any of its transitive subdirectories.
+     * @throws SRMNonEmptyDirectoryException if {@code dir} or any of its transitive
+     *                                       subdirectories contains non-directory entries.
+     * @throws SRMInternalErrorException in case of transient errors.
+     * @throws SRMInvalidPathException if {@code dir} is not a directory.
+     * @throws SRMException in case of other errors.
+     */
+    private void listSubdirectoriesRecursivelyForDelete(Subject subject, FsPath dir, FileAttributes attributes,
+                                                        List<FsPath> result)
+            throws SRMException
+    {
+        List<DirectoryEntry> children = new ArrayList<>();
+        try (DirectoryStream list = _listSource.list(subject, dir, null, Range.<Integer>all(), attributesRequiredForRmdir)) {
+            for (DirectoryEntry child: list) {
+                FileAttributes childAttributes = child.getFileAttributes();
+                AccessType canDelete = permissionHandler.canDeleteDir(subject, attributes, childAttributes);
+                if (canDelete != AccessType.ACCESS_ALLOWED) {
+                    throw new SRMAuthorizationException(dir + "/" + child.getName() + " (permission denied)");
+                }
+                if (childAttributes.getFileType() != FileType.DIR) {
+                    throw new SRMNonEmptyDirectoryException(dir + "/" + child.getName() + " (not empty)");
+                }
+                children.add(child);
+            }
+        } catch (NotDirCacheException e) {
+            throw new SRMInvalidPathException(dir + " (not a directory)", e);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            // Somebody removed the directory before we could.
+        } catch (PermissionDeniedCacheException e) {
+            throw new SRMAuthorizationException(dir + " (permission denied)", e);
+        } catch (InterruptedException e) {
+            throw new SRMInternalErrorException("Operation interrupted", e);
+        } catch (TimeoutCacheException e) {
+            throw new SRMInternalErrorException("Name space timeout", e);
+        } catch (CacheException e) {
+            throw new SRMException(dir + " (" + e.getMessage() + ")");
+        }
+
+        // Result list uses post-order so directories will be deleted bottom-up.
+        for (DirectoryEntry child : children) {
+            FsPath path = new FsPath(dir, child.getName());
+            listSubdirectoriesRecursivelyForDelete(subject, path, child.getFileAttributes(), result);
+            result.add(path);
+        }
+    }
+
+    private void removeSubdirectories(Subject subject, FsPath path) throws SRMException
+    {
+        PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
+
+        FileAttributes parentAttributes;
+        FileAttributes attributes;
+        try {
+            parentAttributes = pnfs.getFileAttributes(path.getParent().toString(), attributesRequiredForRmdir);
+            attributes = pnfs.getFileAttributes(path.toString(), attributesRequiredForRmdir);
+        } catch (TimeoutCacheException e) {
+            throw new SRMInternalErrorException("Name space timeout", e);
+        } catch (PermissionDeniedCacheException e) {
+            throw new SRMAuthorizationException("Permission denied", e);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException e) {
+            throw new SRMInvalidPathException("No such file or directory", e);
+        } catch (CacheException e) {
+            throw new SRMException("Name space failure (" + e.getMessage() + ")");
+        }
+        if (attributes.getFileType() != FileType.DIR) {
+            throw new SRMInvalidPathException("Not a directory");
+        }
+        if (permissionHandler.canDeleteDir(subject, parentAttributes, attributes) != AccessType.ACCESS_ALLOWED) {
+            throw new SRMAuthorizationException("Permission denied");
+        }
+
+        List<FsPath> directories = new ArrayList<>();
+        listSubdirectoriesRecursivelyForDelete(subject, path, attributes, directories);
+
+        for (FsPath directory: directories) {
+            try {
+                pnfs.deletePnfsEntry(directory.toString(), EnumSet.of(FileType.DIR));
+            } catch (TimeoutCacheException e) {
+                throw new SRMInternalErrorException("Name space timeout", e);
+            } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+                // Somebody removed the directory before we could.
+            } catch (PermissionDeniedCacheException | NotDirCacheException e) {
+                // Only directories are included in the list output, and we checked that we
+                // have permission to delete them.
+                throw new SRMException(directory + " (directory tree was modified concurrently)");
+            } catch (CacheException e) {
+                // Could be because the directory is no longer empty (concurrent modification),
+                // but could also be some other error.
+                _log.error("Failed to delete {}: {}", directory, e.getMessage());
+                throw new SRMException(directory + " (" + e.getMessage() + ")");
+            }
         }
     }
 
     @Override
-    public void removeDirectory(SRMUser user, List<URI> surls)
+    public void removeDirectory(SRMUser user, URI surl, boolean recursive)
         throws SRMException
     {
-        _log.debug("Storage.removeDirectory");
-        for (URI surl: surls) {
-            FsPath path = getPath(surl);
+        Subject subject = ((DcacheUser) user).getSubject();
+        FsPath path = getPath(surl);
+
+        if (path.isEmpty()) {
+            throw new SRMAuthorizationException("Permission denied");
+        }
+
+        if (recursive) {
+            removeSubdirectories(subject, path);
+        }
+
+        try {
+            PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
+            pnfs.deletePnfsEntry(path.toString(), EnumSet.of(FileType.DIR));
+        } catch (TimeoutCacheException e) {
+            throw new SRMInternalErrorException("Name space timeout");
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new SRMInvalidPathException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new SRMInvalidPathException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new SRMAuthorizationException("Permission denied", e);
+        } catch (CacheException e) {
             try {
-                _pnfs.deletePnfsEntry(path.toString());
-            } catch (TimeoutCacheException e) {
-                _log.error("Failed to delete " + path + " due to timeout");
-                throw new SRMInternalErrorException("Internal name space timeout while deleting " + surl);
-            } catch (FileNotFoundCacheException | NotInTrashCacheException e) {
-                throw new SRMException("File does not exist: " + surl);
-            } catch (CacheException e) {
-                _log.error("Failed to delete " + path + ": " + e.getMessage());
-                throw new SRMException("Failed to delete " + surl + ": "
-                                       + e.getMessage());
+                int count = _listSource.printDirectory(subject, new NullListPrinter(), path, null, Range.<Integer>all());
+                if (count > 0) {
+                    throw new SRMNonEmptyDirectoryException("Directory is not empty", e);
+                }
+            } catch (InterruptedException | CacheException suppressed) {
+                e.addSuppressed(suppressed);
             }
+            _log.error("Failed to delete {}: {}", path, e.getMessage());
+            throw new SRMException("Name space failure (" + e.getMessage() + ")", e);
         }
     }
 
@@ -1872,7 +1877,7 @@ public final class Storage
             throw new SRMInvalidPathException("No such directory: " +
                                               parent, e);
         } catch (PermissionDeniedCacheException e) {
-            throw new SRMException("Permission denied");
+            throw new SRMAuthorizationException("Permission denied");
         } catch (TimeoutCacheException e) {
             _log.error("Failed to rename " + fromPath + " due to timeout");
             throw new SRMInternalErrorException("Internal name space timeout");
@@ -1999,7 +2004,7 @@ public final class Storage
      * @param remoteTURL
      * @param surl
      * @param remoteUser
-     * @param remoteCredetial
+     * @param remoteCredentialId
      * @param callbacks
      * @throws SRMException
      * @return copy handler id
@@ -2051,7 +2056,7 @@ public final class Storage
      * @param surl
      * @param remoteTURL
      * @param remoteUser
-     * @param remoteCredetial
+     * @param remoteCredentialId
      * @param callbacks
      * @throws SRMException
      * @return copy handler id
@@ -2362,57 +2367,6 @@ public final class Storage
         }
     }
 
-    /**
-     * Provides a directory listing of surl if and only if surl is not
-     * a symbolic link. As a side effect, the method checks that surl
-     * can be deleted by the user.
-     *
-     * @param user The SRMUser performing the operation; this must be
-     * of type AuthorizationRecord
-     * @param surl The directory to delete
-     * @return The array of directory entries or null if directoryName
-     * is a symbolic link
-     */
-    @Override
-    public List<URI> listNonLinkedDirectory(SRMUser user, URI surl)
-        throws SRMException
-    {
-        Subject subject = ((DcacheUser) user).getSubject();
-
-        FsPath path = getPath(surl);
-        try {
-            Set<FileAttribute> requestedAttributes = EnumSet.of(TYPE);
-            requestedAttributes.addAll(permissionHandler.getRequiredAttributes());
-            FileAttributes parentAttr =
-                _pnfs.getFileAttributes(path.getParent().toString(), requestedAttributes);
-            FileAttributes childAttr =
-                _pnfs.getFileAttributes(path.toString(), requestedAttributes);
-
-            AccessType canDelete =
-                permissionHandler.canDeleteDir(subject, parentAttr, childAttr);
-            if (canDelete != AccessType.ACCESS_ALLOWED) {
-                _log.warn("Cannot delete directory " + path +
-                          ": Permission denied");
-                throw new SRMAuthorizationException("Permission denied");
-            }
-
-            if (childAttr.getFileType() == FileType.LINK)  {
-                return null;
-            }
-        } catch (FileNotFoundCacheException | NotInTrashCacheException e) {
-            throw new SRMInvalidPathException("No such file or directory", e);
-        } catch (TimeoutCacheException e) {
-            throw new SRMInternalErrorException("Internal name space timeout", e);
-        } catch (CacheException e) {
-            _log.error("Failed to list directory " + path + ": "
-                       + e.getMessage());
-            throw new SRMException(String.format("Failed delete directory [rc=%d,msg=%s]",
-                                                 e.getRc(), e.getMessage()));
-        }
-
-        return listDirectory(user, surl, null);
-    }
-
     @Override
     public List<URI> listDirectory(SRMUser user, URI surl,
                                    FileMetaData fileMetaData)
@@ -2440,7 +2394,7 @@ public final class Storage
 
         try {
             _listSource.printDirectory(subject, printer, path, null,
-                                       Ranges.<Integer>all());
+                                       Range.<Integer>all());
             return result;
         } catch (TimeoutCacheException e) {
             throw new SRMInternalErrorException("Internal name space timeout", e);
@@ -2470,7 +2424,7 @@ public final class Storage
             FmdListPrinter printer =
                 verbose ? new VerboseListPrinter() : new FmdListPrinter();
             _listSource.printDirectory(subject, printer, path, null,
-                                       Ranges.closedOpen(offset, offset + count));
+                                       Range.closedOpen(offset, offset + count));
             return printer.getResult();
         } catch (TimeoutCacheException e) {
             throw new SRMInternalErrorException("Internal name space timeout", e);
@@ -2626,14 +2580,13 @@ public final class Storage
             String retentionPolicy,
             String accessLatency,
             String description,
-            SrmReserveSpaceCallbacks callbacks) {
-
+            SrmReserveSpaceCallback callback) {
         if (_isSpaceManagerEnabled) {
             SrmReserveSpaceCompanion.reserveSpace(((DcacheUser) user).getSubject(),
                     sizeInBytes, spaceReservationLifetime, retentionPolicy,
-                    accessLatency, description, callbacks, _spaceManagerStub);
+                    accessLatency, description, callback, _spaceManagerStub);
         } else {
-            callbacks.ReserveSpaceFailed(SPACEMANAGER_DISABLED_MESSAGE);
+            callback.failed(SPACEMANAGER_DISABLED_MESSAGE);
         }
     }
 
@@ -2641,18 +2594,12 @@ public final class Storage
     public void srmReleaseSpace(SRMUser user,
             String spaceToken,
             Long releaseSizeInBytes, // everything is null
-            SrmReleaseSpaceCallbacks callbacks) {
+            SrmReleaseSpaceCallback callbacks) {
         if (_isSpaceManagerEnabled) {
-            try {
-                long token = Long.parseLong(spaceToken);
-
-                SrmReleaseSpaceCompanion.releaseSpace(((DcacheUser) user).getSubject(),
-                    token, releaseSizeInBytes, callbacks, _spaceManagerStub);
-            } catch(NumberFormatException e){
-                callbacks.ReleaseSpaceFailed("invalid space token="+spaceToken);
-            }
+            SrmReleaseSpaceCompanion.releaseSpace(((DcacheUser) user).getSubject(),
+                    spaceToken, releaseSizeInBytes, callbacks, _spaceManagerStub);
         } else {
-            callbacks.ReleaseSpaceFailed(SPACEMANAGER_DISABLED_MESSAGE);
+            callbacks.failed(SPACEMANAGER_DISABLED_MESSAGE);
         }
     }
 
@@ -2720,17 +2667,16 @@ public final class Storage
                                                 String[] spaceTokens)
         throws SRMException
     {
-        _log.debug("srmGetSpaceMetaData");
         guardSpaceManagerEnabled();
-        if(spaceTokens == null) {
-            throw new SRMException("null array of space tokens");
-        }
         long[] tokens = new long[spaceTokens.length];
-        for(int i = 0; i<spaceTokens.length; ++i) {
-            try{
+        for (int i = 0; i < spaceTokens.length; ++i) {
+            try {
                 tokens[i] = Long.parseLong(spaceTokens[i]);
-            } catch (Exception e) {
-                throw new SRMException("invalid token: "+spaceTokens[i]);
+            } catch (NumberFormatException e) {
+                /* Space manager enumerates spaces starting at 0, so -1 will cause it to return
+                 * a null value below, which in turn will be reported as SRM_INVALID_REQUEST.
+                 */
+                tokens[i] = -1;
             }
         }
 
@@ -2738,84 +2684,65 @@ public final class Storage
         try {
             getSpaces = _spaceManagerStub.sendAndWait(getSpaces);
         } catch (TimeoutCacheException e) {
-            throw new SRMInternalErrorException("SrmSpaceManager is unavailable: " +
-                                                e.getMessage(), e);
-        } catch (CacheException e) {
-            _log.warn("GetSpaceMetaData failed with rc=" + e.getRc()+
-                      " error="+e.getMessage());
-            throw new SRMException("GetSpaceMetaData failed with rc="+
-                                   e.getRc() + " error=" + e.getMessage(), e);
+            throw new SRMInternalErrorException("Space manager timeout", e);
         } catch (InterruptedException e) {
-            throw new SRMException("Request to SrmSpaceManaget got interrupted", e);
+            throw new SRMInternalErrorException("Operation interrupted", e);
+        } catch (CacheException e) {
+            _log.warn("GetSpaceMetaData failed with rc={} error={}", e.getRc(), e.getMessage());
+            throw new SRMException("Space manager failure: " + e.getMessage(), e);
         }
 
         Space[] spaces = getSpaces.getSpaces();
-        tokens =  getSpaces.getSpaceTokens();
         TMetaDataSpace[] spaceMetaDatas = new TMetaDataSpace[spaces.length];
-        for(int i = 0; i<spaceMetaDatas.length; ++i){
-            if(spaces[i] != null) {
-                Space space = spaces[i];
-                spaceMetaDatas[i] = new TMetaDataSpace();
-                spaceMetaDatas[i].setSpaceToken(Long.toString(space.getId()));
+        for (int i = 0; i < spaceMetaDatas.length; ++i){
+            Space space = spaces[i];
+            TMetaDataSpace metaDataSpace = new TMetaDataSpace();
+            TReturnStatus status;
+            if (space != null) {
                 long lifetime = space.getLifetime();
-                int lifetimeleft;
-                if ( lifetime == -1) {  // -1 corresponds to infinite lifetime
-                    lifetimeleft = -1;
-                    spaceMetaDatas[i].setLifetimeAssigned(-1);
-                    spaceMetaDatas[i].setLifetimeLeft(-1);
+                if (lifetime == -1) {  // -1 corresponds to infinite lifetime
+                    metaDataSpace.setLifetimeAssigned(-1);
+                    metaDataSpace.setLifetimeLeft(-1);
                 } else {
-			lifetimeleft = (int)((space.getCreationTime()+lifetime - System.currentTimeMillis())/1000);
-                    lifetimeleft= lifetimeleft < 0? 0: lifetimeleft;
-                    spaceMetaDatas[i].setLifetimeAssigned((int) (lifetime / 1000));
-                    spaceMetaDatas[i].setLifetimeLeft(lifetimeleft);
+                    long lifetimeleft = Math.max(0, MILLISECONDS.toSeconds(space.getCreationTime() + lifetime - System.currentTimeMillis()));
+                    metaDataSpace.setLifetimeAssigned((int) MILLISECONDS.toSeconds(lifetime));
+                    metaDataSpace.setLifetimeLeft((int) lifetimeleft);
                 }
+
+                RetentionPolicy retentionPolicy = space.getRetentionPolicy();
                 TRetentionPolicy policy =
-                    space.getRetentionPolicy().equals( RetentionPolicy.CUSTODIAL)?
-                      TRetentionPolicy.CUSTODIAL :
-                        space.getRetentionPolicy().equals(RetentionPolicy.OUTPUT)?
-                            TRetentionPolicy.OUTPUT:TRetentionPolicy.REPLICA;
+                    retentionPolicy.equals(RetentionPolicy.CUSTODIAL)
+                            ? TRetentionPolicy.CUSTODIAL
+                            : retentionPolicy.equals(RetentionPolicy.OUTPUT) ? TRetentionPolicy.OUTPUT : TRetentionPolicy.REPLICA;
+                AccessLatency accessLatency = space.getAccessLatency();
                 TAccessLatency latency =
-                    space.getAccessLatency().equals(AccessLatency.ONLINE) ?
-                            TAccessLatency.ONLINE: TAccessLatency.NEARLINE;
-                spaceMetaDatas[i].setRetentionPolicyInfo(
-                    new TRetentionPolicyInfo(policy,latency));
-                spaceMetaDatas[i].setTotalSize(
-                    new UnsignedLong(
-                        space.getSizeInBytes()));
-                spaceMetaDatas[i].setGuaranteedSize(
-                    spaceMetaDatas[i].getTotalSize());
-                spaceMetaDatas[i].setUnusedSize(
-                    new UnsignedLong(
-                        space.getSizeInBytes() - space.getUsedSizeInBytes()));
-                SpaceState spaceState =space.getState();
-                if(SpaceState.RESERVED.equals(spaceState)) {
-                    if(lifetimeleft == 0 ) {
-                        spaceMetaDatas[i].setStatus(
-                                new TReturnStatus(
-                                TStatusCode.SRM_SPACE_LIFETIME_EXPIRED,"expired"));
-                    }
-                    else {
-                        spaceMetaDatas[i].setStatus(
-                                new TReturnStatus(TStatusCode.SRM_SUCCESS,"ok"));
-                    }
-                } else if(SpaceState.EXPIRED.equals(
-                    spaceState)) {
-                    spaceMetaDatas[i].setStatus(
-                        new TReturnStatus(
-                        TStatusCode.SRM_SPACE_LIFETIME_EXPIRED,"expired"));
+                    accessLatency.equals(AccessLatency.ONLINE)
+                            ? TAccessLatency.ONLINE
+                            : TAccessLatency.NEARLINE;
+                UnsignedLong totalSize = new UnsignedLong(space.getSizeInBytes());
+                UnsignedLong unusedSize = new UnsignedLong(space.getSizeInBytes() - space.getUsedSizeInBytes());
+
+                metaDataSpace.setRetentionPolicyInfo(new TRetentionPolicyInfo(policy, latency));
+                metaDataSpace.setTotalSize(totalSize);
+                metaDataSpace.setGuaranteedSize(totalSize);
+                metaDataSpace.setUnusedSize(unusedSize);
+
+                SpaceState spaceState = space.getState();
+                if (SpaceState.RESERVED.equals(spaceState)) {
+                    status = new TReturnStatus(TStatusCode.SRM_SUCCESS, null);
+                } else if (SpaceState.EXPIRED.equals(spaceState)) {
+                    status = new TReturnStatus(TStatusCode.SRM_SPACE_LIFETIME_EXPIRED,
+                            "The lifetime on the space that is associated with the spaceToken has expired already");
                 } else {
-                    spaceMetaDatas[i].setStatus(
-                            new TReturnStatus(TStatusCode.SRM_FAILURE,
-                            "space has been released "));
+                    status = new TReturnStatus(TStatusCode.SRM_FAILURE, "Space has been released");
                 }
-                spaceMetaDatas[i].setOwner("VoGroup="+space.getVoGroup()+"" +
-                    " VoRole="+space.getVoRole());
+                metaDataSpace.setOwner("VoGroup=" + space.getVoGroup() + " VoRole=" + space.getVoRole());
             } else {
-                spaceMetaDatas[i] = new TMetaDataSpace();
-                spaceMetaDatas[i].setSpaceToken(Long.toString(tokens[i]));
-                spaceMetaDatas[i].setStatus(new TReturnStatus(
-						   TStatusCode.SRM_INVALID_REQUEST,"space not found"));
+                status = new TReturnStatus(TStatusCode.SRM_INVALID_REQUEST, "No such space");
             }
+            metaDataSpace.setStatus(status);
+            metaDataSpace.setSpaceToken(spaceTokens[i]);
+            spaceMetaDatas[i] = metaDataSpace;
         }
         return spaceMetaDatas;
     }
@@ -2826,11 +2753,11 @@ public final class Storage
      * @throws SRMException
      * @return
      */
-    @Override
+    @Override @Nonnull
     public String[] srmGetSpaceTokens(SRMUser user, String description)
         throws SRMException
     {
-        _log.debug("srmGetSpaceTokens ("+description+")");
+        _log.trace("srmGetSpaceTokens ({})", description);
         guardSpaceManagerEnabled();
         DcacheUser duser = (DcacheUser) user;
         GetSpaceTokens getTokens = new GetSpaceTokens(description);
@@ -2838,27 +2765,27 @@ public final class Storage
         try {
             getTokens = _spaceManagerStub.sendAndWait(getTokens);
         } catch (TimeoutCacheException e) {
-            throw new SRMInternalErrorException("SrmSpaceManager is unavailable: " +
-                                                e.getMessage(), e);
+            throw new SRMInternalErrorException("Space manager timeout", e);
+        } catch (InterruptedException e) {
+            throw new SRMInternalErrorException("Operation interrupted", e);
         } catch (CacheException e) {
             _log.warn("GetSpaceTokens failed with rc=" + e.getRc() +
                       " error="+e.getMessage());
             throw new SRMException("GetSpaceTokens failed with rc="+
                                    e.getRc() + " error=" + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            throw new SRMException("Request to SrmSpaceManager got interrupted", e);
         }
         long tokens[] = getTokens.getSpaceTokens();
         String tokenStrings[] = new String[tokens.length];
-        for(int i = 0; i < tokens.length; ++i) {
+        for (int i = 0; i < tokens.length; ++i) {
             tokenStrings[i] = Long.toString(tokens[i]);
-            _log.debug("srmGetSpaceTokens returns token#"+i+" : "+tokenStrings[i]);
         }
-
+        if (_log.isTraceEnabled()) {
+            _log.trace("srmGetSpaceTokens returns: {}", Arrays.toString(tokenStrings));
+        }
         return tokenStrings;
     }
 
-    @Override
+    @Override @Nonnull
     public String[] srmGetRequestTokens(SRMUser user,String description)
         throws SRMException {
         try {
@@ -2875,14 +2802,13 @@ public final class Storage
             Long[] tokenLongs = tokens
                     .toArray(new Long[tokens.size()]);
             String[] tokenStrings = new String[tokenLongs.length];
-            for(int i=0;i<tokenLongs.length;++i) {
+            for (int i = 0; i < tokenLongs.length; ++i) {
                 tokenStrings[i] = tokenLongs[i].toString();
             }
             return tokenStrings;
-        } catch (SQLException e) {
-            _log.error("srmGetRequestTokens failed: " + e.getMessage());
-            throw new SRMException("srmGetRequestTokens failed: " +
-                                   e.getMessage(), e);
+        } catch (DataAccessException e) {
+            _log.error("srmGetRequestTokens failed: {}", e.getMessage());
+            throw new SRMInternalErrorException("Database failure", e);
         }
     }
 
@@ -2892,7 +2818,7 @@ public final class Storage
      * the call to succeed.
      *
      * @param user The user ID
-     * @param path The path to the file
+     * @param surl The path to the file
      * @throws SRMAuthorizationException if the user lacks write privileges
      *         for this path.
      * @throws SRMInvalidPathException if the file does not exist
@@ -2924,6 +2850,7 @@ public final class Storage
     /**
      *
      * we support only permanent file, lifetime is always -1
+     *
      * @param newLifetime SURL lifetime in seconds
      *   -1 stands for infinite lifetime
      * @return long lifetime left in seconds
@@ -2931,7 +2858,7 @@ public final class Storage
      *
      */
     @Override
-    public int srmExtendSurlLifetime(SRMUser user, URI surl, int newLifetime)
+    public long srmExtendSurlLifetime(SRMUser user, URI surl, long newLifetime)
         throws SRMException
     {
         checkWritePrivileges(user, surl);
@@ -2970,7 +2897,7 @@ public final class Storage
                                    e.getRc()+" errorObject = "+
                                    e.getMessage());
         } catch (InterruptedException e) {
-            throw new SRMException("Request to SrmSpaceManager got interrupted", e);
+            throw new SRMInternalErrorException("Request to SrmSpaceManager got interrupted", e);
         }
     }
 
@@ -3008,7 +2935,7 @@ public final class Storage
         } catch (CacheException e) {
             throw new SRMException("extendPinLifetime failed, PinManagerExtendLifetimeMessage.returnCode="+ e.getRc() + " errorObject = " + e.getMessage());
         } catch (InterruptedException e) {
-            throw new SRMException("Request to PinManager got interrupted", e);
+            throw new SRMInternalErrorException("Request to PinManager got interrupted", e);
         }
     }
 
@@ -3018,7 +2945,8 @@ public final class Storage
     }
 
     @Override
-    public boolean exists(SRMUser user, URI surl)  throws SRMException
+    public boolean exists(SRMUser user, URI surl)
+            throws SRMInternalErrorException, SRMInvalidPathException
     {
         FsPath path = getPath(surl);
         try {
@@ -3029,7 +2957,7 @@ public final class Storage
             return false;
         } catch (CacheException e) {
             _log.error("Failed to find file by path : " + e.getMessage());
-            throw new SRMException("Failed to find file by path due to internal system failure or timeout: " + e.getMessage());
+            throw new SRMInternalErrorException("Failed to check existence of file: " + e.getMessage());
         }
     }
 

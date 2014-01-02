@@ -64,9 +64,9 @@ import dmg.util.command.Argument;
 import dmg.util.command.Command;
 import dmg.util.command.Option;
 
-import org.dcache.cells.AbstractCellComponent;
+import dmg.cells.nucleus.AbstractCellComponent;
 import org.dcache.cells.CellStub;
-import org.dcache.cells.CellCommandListener;
+import dmg.cells.nucleus.CellCommandListener;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.pool.repository.EntryState;
 import org.dcache.pool.repository.IllegalTransitionException;
@@ -80,6 +80,9 @@ import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Iterables.getFirst;
+import static org.dcache.namespace.FileAttribute.PNFSID;
+import static org.dcache.namespace.FileAttribute.SIZE;
+import static org.dcache.namespace.FileAttribute.STORAGEINFO;
 
 public class HsmStorageHandler2
     extends AbstractCellComponent implements CellCommandListener
@@ -741,7 +744,8 @@ public class HsmStorageHandler2
                     String output = new HsmRunSystem(storeCommand, MAX_LINES, _maxStoreRun).execute();
                     for (String uri : Splitter.on("\n").trimResults().omitEmptyStrings().split(output)) {
                         try {
-                            URI location = HsmLocationExtractorFactory.validate(new URI(uri));
+                            URI location = new URI(uri);
+                            HsmLocationExtractorFactory.validate(location);
                             storageInfo.addLocation(location);
                             storageInfo.isSetAddLocation(true);
                             LOGGER.debug("{}: added HSM location {}", pnfsId, location);
@@ -1092,7 +1096,7 @@ public class HsmStorageHandler2
                 @Override
                 public void run() {
                     try {
-                        FileAttributes attributes = _pnfs.getStorageInfoByPnfsId(pnfsId).getFileAttributes();
+                        FileAttributes attributes = _pnfs.getFileAttributes(pnfsId, EnumSet.of(PNFSID, SIZE, STORAGEINFO));
                         fetch(attributes, block ? cfa : null);
                     } catch (CacheException e) {
                         cfa.cacheFileAvailable(pnfsId, e);

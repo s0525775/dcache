@@ -21,12 +21,10 @@ import diskCacheV111.vehicles.PnfsDeleteEntryMessage;
 import diskCacheV111.vehicles.PnfsFlagMessage;
 import diskCacheV111.vehicles.PnfsGetCacheLocationsMessage;
 import diskCacheV111.vehicles.PnfsGetParentMessage;
-import diskCacheV111.vehicles.PnfsGetStorageInfoMessage;
 import diskCacheV111.vehicles.PnfsMapPathMessage;
 import diskCacheV111.vehicles.PnfsMessage;
 import diskCacheV111.vehicles.PnfsRenameMessage;
 import diskCacheV111.vehicles.PnfsSetChecksumMessage;
-import diskCacheV111.vehicles.PnfsSetFileMetaDataMessage;
 import diskCacheV111.vehicles.PoolFileFlushedMessage;
 
 import dmg.cells.nucleus.CellEndpoint;
@@ -34,13 +32,14 @@ import dmg.cells.nucleus.CellPath;
 import dmg.cells.nucleus.NoRouteToCellException;
 
 import org.dcache.acl.enums.AccessMask;
-import org.dcache.cells.CellMessageSender;
+import dmg.cells.nucleus.CellMessageSender;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.FileType;
 import org.dcache.util.Checksum;
 import org.dcache.util.ChecksumType;
 import org.dcache.vehicles.FileAttributes;
+import org.dcache.vehicles.PnfsCreateSymLinkMessage;
 import org.dcache.vehicles.PnfsGetFileAttributes;
 import org.dcache.vehicles.PnfsRemoveChecksumMessage;
 import org.dcache.vehicles.PnfsSetFileAttributes;
@@ -277,9 +276,10 @@ public class PnfsHandler
         }
 
         /* In case of incomplete create, delete the directory right
-         * away.
+         * away. FIXME: PnfsManagerV3 has the exact opposite comment,
+         * saying that lack of attributes is a non-error.
          */
-        if (message.getStorageInfo() == null) {
+        if (message.getFileAttributes() == null) {
             try {
                 deletePnfsEntry(message.getPnfsId(), path.toString());
             } catch (FileNotFoundCacheException e) {
@@ -301,10 +301,11 @@ public class PnfsHandler
 
    }
 
-    public void pnfsSetFileMetaData(PnfsId pnfsId, FileMetaData meta)
-        throws CacheException
-    {
-        pnfsRequest(new PnfsSetFileMetaDataMessage(pnfsId, meta));
+    public PnfsCreateEntryMessage createSymLink(String path, String dest, int uid, int gid)
+            throws CacheException {
+
+        return pnfsRequest(new PnfsCreateSymLinkMessage(path, dest, uid, gid));
+
     }
 
     public void renameEntry(PnfsId pnfsId, String newName)
@@ -329,29 +330,6 @@ public class PnfsHandler
           throws CacheException                {
 
        return pnfsRequest( new PnfsCreateEntryMessage( path , uid , gid , mode ) ) ;
-
-   }
-
-   public PnfsGetStorageInfoMessage getStorageInfoByPnfsId( PnfsId pnfsId )
-          throws CacheException                {
-      return  pnfsRequest(new PnfsGetStorageInfoMessage( pnfsId )) ;
-
-   }
-
-   public PnfsGetStorageInfoMessage getStorageInfoByPath( String pnfsPath )
-          throws CacheException                {
-      return getStorageInfoByPath(pnfsPath, false) ;
-
-   }
-
-   public PnfsGetStorageInfoMessage getStorageInfoByPath( String pnfsPath ,
-       boolean requestChecksum)
-          throws CacheException                {
-
-      PnfsGetStorageInfoMessage sInfo = new PnfsGetStorageInfoMessage() ;
-      sInfo.setPnfsPath( pnfsPath ) ;
-      sInfo.setChecksumsRequested(requestChecksum);
-      return pnfsRequest( sInfo ) ;
 
    }
 

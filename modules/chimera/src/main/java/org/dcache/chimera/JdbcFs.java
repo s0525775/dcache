@@ -25,6 +25,7 @@ import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
@@ -61,6 +62,11 @@ public class JdbcFs implements FileSystemProvider {
     static private final int LEVELS_NUMBER = 7;
     private final FsInode _rootInode;
     private final String _wormID;
+
+    /**
+     * minimal binary handle size which can be processed.
+    */
+    private final static int MIN_HANDLE_LEN = 4;
     /**
      * SQL query engine
      */
@@ -83,6 +89,11 @@ public class JdbcFs implements FileSystemProvider {
      * total files
      */
     private static final long TOTAL_FILES = 62914560L;
+
+    /**
+     * maximal length of an object name in a directory.
+     */
+    private final static int MAX_NAME_LEN = 255;
 
     public JdbcFs(DataSource dataSource, String dialect) {
         this(dataSource, dialect, 0);
@@ -182,6 +193,8 @@ public class JdbcFs implements FileSystemProvider {
     @Override
     public FsInode createLink(FsInode parent, String name, int uid, int gid, int mode, byte[] dest) throws ChimeraFsException {
 
+        checkNameLength(name);
+
         Connection dbConnection;
         try {
             // get from pool
@@ -234,6 +247,8 @@ public class JdbcFs implements FileSystemProvider {
      */
     @Override
     public FsInode createHLink(FsInode parent, FsInode inode, String name) throws ChimeraFsException {
+
+        checkNameLength(name);
 
         Connection dbConnection;
         try {
@@ -386,24 +401,24 @@ public class JdbcFs implements FileSystemProvider {
 
             try {
 
-                if (!parent.exists()) {
+                checkNameLength(name);
+
+                dbConnection.setAutoCommit(false);
+                Stat parentStat = _sqlDriver.stat(dbConnection, parent);
+                if (parentStat == null) {
                     throw new FileNotFoundHimeraFsException("parent=" + parent.toString());
                 }
 
-                if (parent.isDirectory()) {
-                    // read/write only
-                    dbConnection.setAutoCommit(false);
-
-                    if ((parent.statCache().getMode() & UnixPermission.S_ISGID) != 0) {
-                        group = parent.statCache().getGid();
-                    }
-
-                    inode = _sqlDriver.createFile(dbConnection, parent, name, owner, group, mode, type);
-                    dbConnection.commit();
-
-                } else {
+                if ((parentStat.getMode() & UnixPermission.S_IFDIR) != UnixPermission.S_IFDIR) {
                     throw new NotDirChimeraException(parent);
                 }
+
+                if ((parentStat.getMode() & UnixPermission.S_ISGID) != 0) {
+                    group = parent.statCache().getGid();
+                }
+
+                inode = _sqlDriver.createFile(dbConnection, parent, name, owner, group, mode, type);
+                dbConnection.commit();
 
             } catch (SQLException se) {
 
@@ -444,6 +459,8 @@ public class JdbcFs implements FileSystemProvider {
      */
     @Override
     public void createFileWithId(FsInode parent, FsInode inode, String name, int owner, int group, int mode, int type) throws ChimeraFsException {
+
+        checkNameLength(name);
 
         Connection dbConnection;
         try {
@@ -597,22 +614,22 @@ public class JdbcFs implements FileSystemProvider {
     }
 
     @Override
-    public boolean remove(String path) throws ChimeraFsException {
-
-        FsInode inode = path2inode(path);
-        FsInode parent = this.getParentOf(inode);
-        if (parent == null) {
-            return false;
-        }
+    public void remove(String path) throws ChimeraFsException {
 
         File filePath = new File(path);
-        String name = filePath.getName();
 
-        return this.remove(parent, name);
+        String parentPath = filePath.getParent();
+        if (parentPath == null) {
+            throw new ChimeraFsException("Cannot delete file system root.");
+        }
+
+        FsInode parent = path2inode(parentPath);
+        String name = filePath.getName();
+        this.remove(parent, name);
     }
 
     @Override
-    public boolean remove(FsInode parent, String name) throws ChimeraFsException {
+    public void remove(FsInode parent, String name) throws ChimeraFsException {
 
         Connection dbConnection;
         try {
@@ -622,46 +639,34 @@ public class JdbcFs implements FileSystemProvider {
             throw new BackEndErrorHimeraFsException(e.getMessage());
         }
 
-        boolean rc = false;
-
         try {
-
-            FsInode inode = this.inodeOf(parent, name);
-
-            if (inode.type() != FsInodeType.INODE) {
-                // now allowed
-                return false;
-            }
-
             // read/write only
             dbConnection.setAutoCommit(false);
 
-            rc = _sqlDriver.remove(dbConnection, parent, name);
-            if (rc) {
-                dbConnection.commit();
-            } else {
-                dbConnection.rollback();
-            }
-
+            _sqlDriver.remove(dbConnection, parent, name);
+            dbConnection.commit();
         } catch (ChimeraFsException hfe) {
-            rc = false;
+            try {
+                dbConnection.rollback();
+            } catch (SQLException e) {
+                _log.error("delete rollback", e);
+            }
+            throw hfe;
         } catch (SQLException e) {
             _log.error("delete", e);
             try {
                 dbConnection.rollback();
             } catch (SQLException e1) {
-                _log.error("delete rollback", e);
+                _log.error("delete rollback", e1);
             }
-            rc = false;
+            throw new BackEndErrorHimeraFsException(e.getMessage(), e);
         } finally {
             tryToClose(dbConnection);
         }
-
-        return rc;
     }
 
     @Override
-    public boolean remove(FsInode inode) throws ChimeraFsException {
+    public void remove(FsInode inode) throws ChimeraFsException {
 
 
         Connection dbConnection;
@@ -671,8 +676,6 @@ public class JdbcFs implements FileSystemProvider {
         } catch (SQLException e) {
             throw new BackEndErrorHimeraFsException(e.getMessage());
         }
-
-        boolean rc = false;
 
         try {
 
@@ -681,36 +684,34 @@ public class JdbcFs implements FileSystemProvider {
 
             FsInode parent = _sqlDriver.getParentOf(dbConnection, inode);
             if (parent == null) {
-                return false;
+                throw new FileNotFoundHimeraFsException("No such file.");
             }
 
             if (inode.type() != FsInodeType.INODE) {
                 // now allowed
-                return false;
+                throw new FileNotFoundHimeraFsException("Not a file.");
             }
 
-            if (_sqlDriver.remove(dbConnection, parent, inode)) {
-                dbConnection.commit();
-                rc = true;
-            } else {
-                dbConnection.rollback();
-                rc = false;
-            }
+            _sqlDriver.remove(dbConnection, parent, inode);
+            dbConnection.commit();
         } catch (ChimeraFsException hfe) {
-            rc = false;
+            try {
+                dbConnection.rollback();
+            } catch (SQLException e) {
+                _log.error("delete rollback", e);
+            }
+            throw hfe;
         } catch (SQLException e) {
             _log.error("delete", e);
             try {
                 dbConnection.rollback();
             } catch (SQLException e1) {
-                _log.error("delete rollback", e);
+                _log.error("delete rollback", e1);
             }
-            rc = false;
+            throw new BackEndErrorHimeraFsException(e.getMessage(), e);
         } finally {
             tryToClose(dbConnection);
         }
-
-        return rc;
     }
 
     @Override
@@ -778,6 +779,8 @@ public class JdbcFs implements FileSystemProvider {
 
     @Override
     public FsInode mkdir(FsInode parent, String name, int owner, int group, int mode) throws ChimeraFsException {
+
+        checkNameLength(name);
 
         Connection dbConnection;
         try {
@@ -984,7 +987,7 @@ public class JdbcFs implements FileSystemProvider {
                 if (cmd.length != 2) {
                     throw new FileNotFoundHimeraFsException(name);
                 }
-                FsInode constInode = new FsInode_CONST(this, cmd[1]);
+                FsInode constInode = new FsInode_CONST(this, parent.toString());
                 if (!constInode.exists()) {
                     throw new FileNotFoundHimeraFsException(name);
                 }
@@ -1311,6 +1314,8 @@ public class JdbcFs implements FileSystemProvider {
 
     @Override
     public void setFileName(FsInode dir, String oldName, String newName) throws ChimeraFsException {
+
+        checkNameLength(newName);
 
         Connection dbConnection;
         try {
@@ -1750,6 +1755,8 @@ public class JdbcFs implements FileSystemProvider {
 
     @Override
     public boolean move(FsInode srcDir, String source, FsInode destDir, String dest) throws ChimeraFsException {
+
+        checkNameLength(dest);
 
         Connection dbConnection;
         try {
@@ -2578,6 +2585,12 @@ public class JdbcFs implements FileSystemProvider {
         }
     }
 
+    private static void checkNameLength(String name) throws InvalidNameChimeraException {
+        if (name.length() > MAX_NAME_LEN) {
+            throw new InvalidNameChimeraException("Name too long");
+        }
+    }
+
     /**
      * internal class to hide caching mechanism.
      */
@@ -2661,9 +2674,142 @@ public class JdbcFs implements FileSystemProvider {
         }
     }
 
+    private final static byte[] FH_V0_BIN = new byte[] {0x30, 0x30, 0x30, 0x30};
+    private final static byte[] FH_V0_REG = new byte[]{0x30, 0x3a};
+    private final static byte[] FH_V0_PFS = new byte[]{0x32, 0x35, 0x35, 0x3a};
+
+    private static boolean arrayStartsWith(byte[] a1, byte[] a2) {
+        if (a1.length < a2.length) {
+            return false;
+        }
+        for (int i = 0; i < a2.length; i++) {
+            if (a1[i] != a2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public FsInode inodeFromBytes(byte[] handle) throws ChimeraFsException {
 
+        if (arrayStartsWith(handle, FH_V0_REG) || arrayStartsWith(handle, FH_V0_PFS)) {
+            return inodeFromBytesOld(handle);
+        } else if (arrayStartsWith(handle, FH_V0_BIN)) {
+            return inodeFromBytesNew(InodeId.hexStringToByteArray(new String(handle)));
+        } else {
+            return inodeFromBytesNew(handle);
+        }
+    }
+
+    private final static char[] HEX = new char[]{
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+    };
+
+    /**
+     * Returns a hexadecimal representation of given byte array.
+     *
+     * @param bytes whose string representation to return
+     * @return a string representation of <tt>bytes</tt>
+     */
+    public static String toHexString(byte[] bytes) {
+
+        char[] chars = new char[bytes.length * 2];
+        int p = 0;
+        for (byte b : bytes) {
+            int i = b & 0xff;
+            chars[p++] = HEX[i / 16];
+            chars[p++] = HEX[i % 16];
+        }
+        return new String(chars);
+    }
+
+    private String[] getArgs(byte[] bytes) {
+
+        StringTokenizer st = new StringTokenizer(new String(bytes), "[:]");
+        int argc = st.countTokens();
+        String[] args = new String[argc];
+        for (int i = 0; i < argc; i++) {
+            args[i] = st.nextToken();
+        }
+
+        return args;
+    }
+
+    FsInode inodeFromBytesNew(byte[] handle) throws ChimeraFsException {
+
+        FsInode inode;
+
+        if (handle.length < MIN_HANDLE_LEN) {
+            throw new FileNotFoundHimeraFsException("File handle too short");
+        }
+
+        ByteBuffer b = ByteBuffer.wrap(handle);
+        int fsid = b.get();
+        int type = b.get();
+        int idLen = b.get();
+        byte[] id = new byte[idLen];
+        b.get(id);
+        int opaqueLen = b.get();
+        if (opaqueLen > b.remaining()) {
+            throw new FileNotFoundHimeraFsException("Bad Opaque len");
+        }
+
+        byte[] opaque = new byte[opaqueLen];
+        b.get(opaque);
+
+        FsInodeType inodeType = FsInodeType.valueOf(type);
+        String inodeId = toHexString(id);
+
+        switch (inodeType) {
+            case INODE:
+                int level = Integer.parseInt( new String(opaque));
+                inode = new FsInode(this, inodeId, level);
+                break;
+
+            case ID:
+                inode = new FsInode_ID(this, inodeId);
+                break;
+
+            case TAGS:
+                inode = new FsInode_TAGS(this, inodeId);
+                break;
+
+            case TAG:
+                String tag = new String(opaque);
+                inode = new FsInode_TAG(this, inodeId, tag);
+                break;
+
+            case NAMEOF:
+                inode = new FsInode_NAMEOF(this, inodeId);
+                break;
+            case PARENT:
+                inode = new FsInode_PARENT(this, inodeId);
+                break;
+
+            case PATHOF:
+                inode = new FsInode_PATHOF(this, inodeId);
+                break;
+
+            case CONST:
+                inode = new FsInode_CONST(this, inodeId);
+                break;
+
+            case PSET:
+                inode = new FsInode_PSET(this, inodeId, getArgs(opaque));
+                break;
+
+            case PGET:
+                inode = getPGET(inodeId, getArgs(opaque));
+                break;
+            default:
+                throw new FileNotFoundHimeraFsException("Unsupported file handle type: " + inodeType);
+        }
+        return inode;
+    }
+
+    FsInode inodeFromBytesOld(byte[] handle) throws ChimeraFsException {
         FsInode inode = null;
 
         String strHandle = new String(handle);
@@ -2766,7 +2912,7 @@ public class JdbcFs implements FileSystemProvider {
 
     @Override
     public byte[] inodeToBytes(FsInode inode) throws ChimeraFsException {
-        return inode.toFullString().getBytes();
+        return inode.getIdentifier();
     }
 
     /**

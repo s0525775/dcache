@@ -1,16 +1,10 @@
 package org.dcache.chimera.nfsv41.mover;
 
-/*
- * dCache specific part
- */
-
 import java.net.InetSocketAddress;
 
 import diskCacheV111.vehicles.IpProtocolInfo;
 
-import dmg.cells.nucleus.CellPath;
-
-import org.dcache.chimera.nfs.v4.xdr.stateid4;
+import org.dcache.nfs.v4.xdr.stateid4;
 
 public class NFS4ProtocolInfo implements IpProtocolInfo {
 
@@ -19,7 +13,6 @@ public class NFS4ProtocolInfo implements IpProtocolInfo {
     private static final int _minor = 1;
     private static final int _major = 4;
     private final stateid4 _stateId;
-    private CellPath _door;
     private final InetSocketAddress _socketAddress;
 
     public NFS4ProtocolInfo(InetSocketAddress clientSocketAddress, stateid4 stateId) {
@@ -52,14 +45,6 @@ public class NFS4ProtocolInfo implements IpProtocolInfo {
 
     public boolean isFileCheckRequired() {
         return false;
-    }
-
-    public CellPath door() {
-        return _door;
-    }
-
-    public void door(CellPath door) {
-        _door = door;
     }
 
     public stateid4 stateId() {

@@ -52,18 +52,43 @@ public interface NameSpaceProvider
     public static final int SI_APPEND = 2;
 
     /**
-     * Create file or directory for given path.
+     * Create a file for a given path and type.
      *
      * @param subject Subject of user who invoked this method.
      * @param path full path of new object
      * @param uid uid of new entry or -1 for default
      * @param gid gid of new entry or -1 for default
      * @param mode mode of new entry or -1 for default
-     * @param isDirectory create a directory if true
      * @return PnfsId of newly created object
      * @throws CacheException
      */
-    PnfsId createEntry(Subject subject, String path, int uid, int gid, int mode, boolean isDirectory) throws CacheException;
+    PnfsId createFile(Subject subject, String path, int uid, int gid, int mode) throws CacheException;
+
+    /**
+     * Create a directory for a given path and type.
+     *
+     * @param subject Subject of user who invoked this method.
+     * @param path full path of new object
+     * @param uid uid of new entry or -1 for default
+     * @param gid gid of new entry or -1 for default
+     * @param mode mode of new entry or -1 for default
+     * @return PnfsId of newly created object
+     * @throws CacheException
+     */
+    PnfsId createDirectory(Subject subject, String path, int uid, int gid, int mode) throws CacheException;
+
+    /**
+     * Create a symbolic link with a given path.
+     *
+     * @param subject Subject of user who invoked this method.
+     * @param path full path of new object
+     * @param dest target where symbolik link points to
+     * @param uid uid of new entry or -1 for default
+     * @param gid gid of new entry or -1 for default
+     * @return PnfsId of newly created object
+     * @throws CacheException
+     */
+    PnfsId createSymLink(Subject subject, String path, String dest, int uid, int gid) throws CacheException;
 
     /**
      * remove file or directory associated with given pnfsid

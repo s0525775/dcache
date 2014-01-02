@@ -1,7 +1,9 @@
 package org.dcache.util;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,6 +107,7 @@ public class ConfigurationProperties
 
     private final Map<String,AnnotatedKey> _annotatedKeys =
             new HashMap<>();
+    private final UsageChecker _usageChecker;
 
     private boolean _loading;
     private boolean _isService;
@@ -113,15 +116,22 @@ public class ConfigurationProperties
     public ConfigurationProperties()
     {
         super();
+        _usageChecker = new UniversalUsageChecker();
     }
 
     public ConfigurationProperties(Properties defaults)
+    {
+        this(defaults, new UniversalUsageChecker());
+    }
+
+    public ConfigurationProperties(Properties defaults, UsageChecker usageChecker)
     {
         super(defaults);
 
         if( defaults instanceof ConfigurationProperties) {
             _problemConsumer = ((ConfigurationProperties) defaults)._problemConsumer;
         }
+        _usageChecker = usageChecker;
     }
 
     public void setProblemConsumer(ProblemConsumer consumer)
@@ -194,7 +204,6 @@ public class ConfigurationProperties
         try (Reader reader = new FileReader(file)) {
             load(file.getName(), 0, reader);
         }
-
     }
 
     /**
@@ -208,10 +217,21 @@ public class ConfigurationProperties
     {
         LineNumberReader lnr = new LineNumberReader(reader);
         lnr.setLineNumber(line);
+        load(source, lnr);
+    }
+
+    /**
+     * Wrapper method that ensures error and warning messages have
+     * the correct line number.
+     * @param source a label describing where Reader is obtaining information
+     * @param reader Source of the property information
+     */
+    public void load(String source, LineNumberReader reader) throws IOException
+    {
         _problemConsumer.setFilename(source);
-        _problemConsumer.setLineNumberReader(lnr);
+        _problemConsumer.setLineNumberReader(reader);
         try {
-            load(new ConfigurationParserAwareReader(lnr));
+            load(new ConfigurationParserAwareReader(reader));
         } finally {
             _problemConsumer.setFilename(null);
         }
@@ -251,10 +271,15 @@ public class ConfigurationProperties
         if (existingKey != null) {
             checkKeyValid(existingKey, key);
             checkDataValid(existingKey, value);
+        } else if (!_usageChecker.isStandardProperty(defaults, name)) {
+            // TODO: It would be nice if we could check whether the property is actually
+            // used, ie if it appears as part of the value of a standard property. To do this
+            // we need to implement a multi-pass parser and that means rewriting
+            // the entire property checking logic.
+            _problemConsumer.info("Property " + name + " is not a standard property");
         }
         checkDataValid(key, value);
     }
-
 
     private void checkKeyValid(AnnotatedKey existingKey, AnnotatedKey key)
     {
@@ -301,6 +326,22 @@ public class ConfigurationProperties
                         Joiner.on("\", \"").join(validValues) + "\"";
                 _problemConsumer.error("Property " + key.getPropertyName() +
                         ": \"" + value + "\" is not a valid value.  Must be one of "
+                        + validValuesList);
+            }
+        }
+        if (key.hasAnnotation(Annotation.ANY_OF)) {
+            String anyOfParameter = key.getParameter(Annotation.ANY_OF);
+            Set<String> values = Sets.newHashSet(Splitter.on(',')
+                    .omitEmptyStrings()
+                    .trimResults().split(value));
+            Set<String> validValues = ImmutableSet.copyOf(anyOfParameter.split("\\|"));
+            values.removeAll(validValues);
+            if (!values.isEmpty()) {
+                String validValuesList = "\""
+                        + Joiner.on("\", \"").join(validValues) + "\"";
+                _problemConsumer.error("Property " + key.getPropertyName()
+                        + ": \"" + value
+                        + "\" is not a valid value. Must be a comma separated list of "
                         + validValuesList);
             }
         }
@@ -556,7 +597,8 @@ public class ConfigurationProperties
         ONE_OF("one-of", true),
         DEPRECATED("deprecated"),
         NOT_FOR_SERVICES("not-for-services"),
-        IMMUTABLE("immutable");
+        IMMUTABLE("immutable"),
+        ANY_OF("any-of", true);
 
         private static final Map<String,Annotation> ANNOTATION_LABELS =
                 new HashMap<>();
@@ -607,8 +649,8 @@ public class ConfigurationProperties
         public void setLineNumberReader(LineNumberReader reader);
         public void error(String message);
         public void warning(String message);
+        public void info(String message);
     }
-
 
     /**
      * This class provides the default behaviour if no problem
@@ -642,12 +684,20 @@ public class ConfigurationProperties
         }
 
         @Override
-        public void setFilename( String name) {
+        public void info(String message)
+        {
+            _log.info(addContextTo(message));
+        }
+
+        @Override
+        public void setFilename(String name)
+        {
             _filename = name;
         }
 
         @Override
-        public void setLineNumberReader( LineNumberReader reader) {
+        public void setLineNumberReader(LineNumberReader reader)
+        {
             _reader = reader;
         }
     }
@@ -735,6 +785,20 @@ public class ConfigurationProperties
         @Override
         public void close() throws IOException {
             _inner.close();
+        }
+    }
+
+    public interface UsageChecker
+    {
+        boolean isStandardProperty(Properties defaults, String name);
+    }
+
+    public static class UniversalUsageChecker implements UsageChecker
+    {
+        @Override
+        public boolean isStandardProperty(Properties defaults, String name)
+        {
+            return true;
         }
     }
 }

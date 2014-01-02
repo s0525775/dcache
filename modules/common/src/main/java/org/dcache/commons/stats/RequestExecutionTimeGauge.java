@@ -71,11 +71,16 @@ public interface RequestExecutionTimeGauge {
     /**
      * @return the updateNum
      */
-    int getUpdateNum();
+    long getUpdateNum();
 
     /**
      *
      * @param nextExecTime
      */
     void update(long nextExecTime);
+
+    /**
+     * Reset the gauge.
+     */
+    void reset();
 }

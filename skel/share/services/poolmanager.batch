@@ -3,6 +3,7 @@
 onerror shutdown
 
 check -strong poolmanager.cell.name
+check -strong poolmanager.cell.export
 check -strong poolmanager.plugins.selection-unit
 check -strong poolmanager.plugins.thread-pool
 check -strong poolmanager.plugins.quota-manager
@@ -11,6 +12,7 @@ check -strong poolmanager.service.pnfsmanager
 check -strong poolmanager.service.billing
 check -strong poolmanager.service.pool.timeout
 check -strong poolmanager.service.pool.timeout.unit
+check -strong poolmanager.enable.cache-hit-message
 check poolmanager.setup.file
 
 # External settings
@@ -65,7 +67,7 @@ create org.dcache.cells.UniversalSpringCell ${poolmanager.cell.name} \
    "!poolmanager.defaults \
     classpath:diskCacheV111/poolManager/poolmanager.xml \
     -setupFile=${poolmanager.setup.file} \
-    -export \
+    -export=${poolmanager.cell.export} \
     -cellClass=PoolManager \
     -replyObject \
    "

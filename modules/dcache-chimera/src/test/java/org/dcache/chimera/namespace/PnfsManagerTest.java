@@ -1,21 +1,25 @@
 package org.dcache.chimera.namespace;
 
-import com.jolbox.bonecp.BoneCPDataSource;
+import com.google.common.io.Resources;
 import junit.framework.JUnit4TestAdapter;
+import liquibase.Liquibase;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.URI;
+import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 
 import diskCacheV111.namespace.PnfsManagerV3;
 import diskCacheV111.util.AccessLatency;
@@ -28,7 +32,6 @@ import diskCacheV111.vehicles.PnfsCreateDirectoryMessage;
 import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import diskCacheV111.vehicles.PnfsDeleteEntryMessage;
 import diskCacheV111.vehicles.PnfsGetCacheLocationsMessage;
-import diskCacheV111.vehicles.PnfsGetStorageInfoMessage;
 import diskCacheV111.vehicles.PnfsSetChecksumMessage;
 import diskCacheV111.vehicles.StorageInfo;
 
@@ -38,24 +41,31 @@ import org.dcache.chimera.FsInode;
 import org.dcache.chimera.JdbcFs;
 import org.dcache.chimera.UnixPermission;
 import org.dcache.chimera.posix.Stat;
-import org.dcache.commons.util.SqlHelper;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.PosixPermissionHandler;
 import org.dcache.vehicles.FileAttributes;
 import org.dcache.vehicles.PnfsGetFileAttributes;
 import org.dcache.vehicles.PnfsSetFileAttributes;
 
+import static org.dcache.namespace.FileAttribute.*;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.*;
 
 public class PnfsManagerTest
 {
+    private final static URL DB_TEST_PROPERTIES
+            = Resources.getResource("org/dcache/chimera/chimera-test.properties");
+
+    private static final Set<FileAttribute> SOME_ATTRIBUTES =
+            EnumSet.of(OWNER, OWNER_GROUP, MODE, TYPE, SIZE,
+                    CREATION_TIME, ACCESS_TIME, MODIFICATION_TIME, CHANGE_TIME,
+                    PNFSID, STORAGEINFO, ACCESS_LATENCY, RETENTION_POLICY);
+
     private static final String OSM_URI_STEM = "osm://example-osm-instance/";
 
     private PnfsManagerV3 _pnfsManager;
     private Connection _conn;
     private JdbcFs _fs;
-    private BoneCPDataSource _ds;
 
     @Before
     public void setUp() throws Exception {
@@ -63,35 +73,31 @@ public class PnfsManagerTest
          * init Chimera DB
          */
 
-        Class.forName("org.hsqldb.jdbcDriver");
+        Properties dbProperties = new Properties();
+        dbProperties.load(Resources.newInputStreamSupplier(DB_TEST_PROPERTIES).getInput());
 
-        _conn = DriverManager.getConnection("jdbc:hsqldb:mem:chimeramem", "sa", "");
-        StringBuilder sql = new StringBuilder();
+        Class.forName(dbProperties.getProperty("chimera.db.driver"));
+        _conn = DriverManager.getConnection(dbProperties.getProperty("chimera.db.url"),
+                dbProperties.getProperty("chimera.db.user"), dbProperties.getProperty("chimera.db.password"));
 
-        BufferedReader dataStr =
-            new BufferedReader(new InputStreamReader(ClassLoader.getSystemResourceAsStream("org/dcache/chimera/sql/create-hsqldb.sql")));
-        String inLine;
+        _conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 
-        while ((inLine = dataStr.readLine()) != null) {
-            sql.append(inLine);
-        }
+        Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(_conn));
+        Liquibase liquibase = new Liquibase("org/dcache/chimera/changelog/changelog-master.xml",
+                new ClassLoaderResourceAccessor(), database);
+        // Uncomment the following line when testing with mysql database
+      /*
+         * Liquibase liquibase = new Liquibase(changeLogFile, new
+         * ClassLoaderResourceAccessor(), new JdbcConnection(conn));
+         */
 
-        String[] statements = sql.toString().split(";");
-        for (String statement : statements) {
-            Statement st = _conn.createStatement();
-            st.executeUpdate(statement);
-            SqlHelper.tryToClose(st);
-        }
-
-        _ds = new BoneCPDataSource();
-        _ds.setJdbcUrl("jdbc:hsqldb:mem:chimeramem");
-        _ds.setUsername("sa");
-        _ds.setPassword("");
-        _ds.getConfig().setMaxConnectionsPerPartition(2); // seems to require >= 2
-        _ds.getConfig().setMinConnectionsPerPartition(1);
-        _ds.getConfig().setPartitionCount(1);
-
-        _fs = new JdbcFs(_ds, "HsqlDB");
+        liquibase.update("");
+        _fs = ChimeraFsHelper.getFileSystemProvider(
+                dbProperties.getProperty("chimera.db.url"),
+                dbProperties.getProperty("chimera.db.driver"),
+                dbProperties.getProperty("chimera.db.user"),
+                dbProperties.getProperty("chimera.db.password"),
+                dbProperties.getProperty("chimera.db.dialect"));
 
         ChimeraNameSpaceProvider chimera = new ChimeraNameSpaceProvider();
         chimera.setExtractor(new ChimeraOsmStorageInfoExtractor(StorageInfo.DEFAULT_ACCESS_LATENCY, StorageInfo.DEFAULT_RETENTION_POLICY));
@@ -139,7 +145,7 @@ public class PnfsManagerTest
         _pnfsManager.createEntry(pnfsCreateEntryMessage);
 
         assertTrue("failed to create an entry", pnfsCreateEntryMessage.getReturnCode() == 0 );
-        assertNotNull("failed to get StrageInfo", pnfsCreateEntryMessage.getStorageInfo());
+        assertNotNull("failed to get StrageInfo", pnfsCreateEntryMessage.getFileAttributes());
 
     }
 
@@ -248,12 +254,12 @@ public class PnfsManagerTest
 
 
     @Test
-    public void testGetStoreInfoNonExist() {
+    public void testGetFileAttributesNonExist() {
 
-        PnfsGetStorageInfoMessage pnfsGetStorageInfoMessage = new PnfsGetStorageInfoMessage(new PnfsId("000000000000000000000000000000000001"));
-        _pnfsManager.getFileAttributes(pnfsGetStorageInfoMessage);
+        PnfsGetFileAttributes message = new PnfsGetFileAttributes(new PnfsId("000000000000000000000000000000000001"), EnumSet.noneOf(FileAttribute.class));
+        _pnfsManager.getFileAttributes(message);
 
-        assertTrue("get storageInfo of non existing file should return FILE_NOT_FOUND", pnfsGetStorageInfoMessage.getReturnCode() == CacheException.FILE_NOT_FOUND );
+        assertTrue("get storageInfo of non existing file should return FILE_NOT_FOUND", message.getReturnCode() == CacheException.FILE_NOT_FOUND );
 
     }
 
@@ -272,7 +278,7 @@ public class PnfsManagerTest
         PnfsCreateEntryMessage pnfsCreateEntryMessage = new PnfsCreateEntryMessage("/pnfs/testRoot/writeTokenTestFile");
         _pnfsManager.createEntry(pnfsCreateEntryMessage);
 
-        StorageInfo storageInfo = pnfsCreateEntryMessage.getStorageInfo();
+        StorageInfo storageInfo = pnfsCreateEntryMessage.getFileAttributes().getStorageInfo();
 
         assertEquals("Invalid entry in storageInfo map", writeToken, storageInfo.getMap().get("writeToken") );
 
@@ -343,8 +349,8 @@ public class PnfsManagerTest
     public void testGetStorageInfoNoTags() throws ChimeraFsException {
 
         FsInode rootInode = _fs.path2inode("/pnfs");
-        PnfsGetStorageInfoMessage pnfsGetStorageInfoMessage = new PnfsGetStorageInfoMessage(new PnfsId(rootInode.toString()));
-        _pnfsManager.getFileAttributes(pnfsGetStorageInfoMessage);
+        PnfsGetFileAttributes message = new PnfsGetFileAttributes(new PnfsId(rootInode.toString()), SOME_ATTRIBUTES);
+        _pnfsManager.getFileAttributes(message);
 
         // I don't know yet what is expected reply, but not NPE !
     }
@@ -411,7 +417,7 @@ public class PnfsManagerTest
         _pnfsManager.createEntry(pnfsCreateEntryMessage);
         assertThat("Creating entry failed", pnfsCreateEntryMessage.getReturnCode(), is(0));
 
-        StorageInfo si = pnfsCreateEntryMessage.getStorageInfo();
+        StorageInfo si = pnfsCreateEntryMessage.getFileAttributes().getStorageInfo();
         si.addLocation(new URI(OSM_URI_STEM + "?store=tape"));
         si.isSetAddLocation(true);
 
@@ -425,11 +431,11 @@ public class PnfsManagerTest
         _pnfsManager.setFileAttributes(setFileAttributesMessage);
         assertThat("Setting storage info failed", setFileAttributesMessage.getReturnCode(), is(0));
 
-        PnfsGetStorageInfoMessage pnfsGetStorageInfoMessage =
-            new PnfsGetStorageInfoMessage(pnfsCreateEntryMessage.getPnfsId());
-        _pnfsManager.getFileAttributes(pnfsGetStorageInfoMessage);
+        PnfsGetFileAttributes message =
+            new PnfsGetFileAttributes(pnfsCreateEntryMessage.getPnfsId(), SOME_ATTRIBUTES);
+        _pnfsManager.getFileAttributes(message);
 
-        assertEquals("failed to get storageInfo for flushed files", 0,pnfsGetStorageInfoMessage.getReturnCode() );
+        assertEquals("failed to get storageInfo for flushed files", 0, message.getReturnCode());
 
     }
 
@@ -439,7 +445,7 @@ public class PnfsManagerTest
         PnfsCreateEntryMessage pnfsCreateEntryMessage = new PnfsCreateEntryMessage("/pnfs/testRoot/tapeFileDup");
         _pnfsManager.createEntry(pnfsCreateEntryMessage);
 
-        StorageInfo si = pnfsCreateEntryMessage.getStorageInfo();
+        StorageInfo si = pnfsCreateEntryMessage.getFileAttributes().getStorageInfo();
 
         si.addLocation(new URI(OSM_URI_STEM + "?store=tape1"));
         si.isSetAddLocation(true);
@@ -491,11 +497,12 @@ public class PnfsManagerTest
 
         FsInode dir = _fs.mkdir("/notags");
         FsInode inode = _fs.createFile(dir, "afile");
-        PnfsGetStorageInfoMessage pnfsGetStorageInfoMessage =
-            new PnfsGetStorageInfoMessage( new PnfsId(inode.toString()));
-        _pnfsManager.getFileAttributes(pnfsGetStorageInfoMessage);
+        PnfsGetFileAttributes message =
+            new PnfsGetFileAttributes(new PnfsId(inode.toString()), SOME_ATTRIBUTES);
+        _pnfsManager.getFileAttributes(message);
 
-        assertEquals("failed to get storageInfo for a directory without tags", 0,pnfsGetStorageInfoMessage.getReturnCode() );
+        assertEquals("failed to get storageInfo for a directory without tags", 0, message
+                .getReturnCode());
 
     }
 
@@ -518,23 +525,30 @@ public class PnfsManagerTest
                 stat.getMode() & ~UnixPermission.S_PERMS | mode , new_stat.getMode());
     }
 
+    @Test
+    public void testCreationTime() throws Exception {
+        FsInode base = _fs.path2inode("/pnfs");
+        FsInode inode = _fs.createFile(base, "afile");
+        Stat stat = _fs.stat(inode);
+        _fs.setFileCTime(inode, stat.getCTime() + 10000);
+
+        PnfsGetFileAttributes pnfsGetFileAttributes
+                = new PnfsGetFileAttributes(new PnfsId(inode.toString()),
+                EnumSet.of(FileAttribute.CHANGE_TIME, FileAttribute.CREATION_TIME));
+        _pnfsManager.getFileAttributes(pnfsGetFileAttributes);
+
+        assertEquals(stat.getCrTime(), pnfsGetFileAttributes.getFileAttributes().getCreationTime());
+        assertTrue("Creation time can't be in the past", pnfsGetFileAttributes.getFileAttributes().getCreationTime()
+                < pnfsGetFileAttributes.getFileAttributes().getChangeTime());
+    }
+
     @After
     public void tearDown() throws Exception
     {
-        _ds.close();
+        _fs.close();
         _conn.createStatement().execute("SHUTDOWN;");
         _conn.close();
     }
-
-    static void tryToClose(Statement o) {
-        try {
-            if (o != null) {
-                o.close();
-            }
-        } catch (SQLException e) {
-        }
-    }
-
 
     public static junit.framework.Test suite() {
         return new JUnit4TestAdapter(PnfsManagerTest.class);

@@ -20,13 +20,14 @@
         <property name="webappResourceUrl" value="${httpd.container.default-webapp}"/>
         <property name="tmpUnpackDir" value="${httpd.container.webapps.tmp-dir}"/>
         <property name="authenticated" value="${httpd.enable.authn}"/>
+        <property name="host" value="#{ '${httpd.net.listen}'.equals('any') ? null : '${httpd.net.listen}' }"/>
         <property name="httpPort" value="${httpd.net.port}"/>
         <property name="httpsPort" value="${httpd.net.https-port}"/>
         <property name="keystore" value="${httpd.authn.keystore}"/>
         <property name="keystorePassword" value="${httpd.authn.keystore.password}"/>
         <property name="truststore" value="${httpd.authn.truststore}"/>
         <property name="trustPassword" value="${httpd.authn.truststore.password}"/>
-        <property name="cipherFlags" value="${httpd.security.ciphers}"/>
+        <property name="cipherFlags" value="${httpd.authn.ciphers}"/>
         <property name="maxIdleTime" value="${httpd.limits.idle-time}"/>
         <property name="maxIdleTimeUnit" value="${httpd.limits.idle-time.unit}"/>
         <property name="maxThreads" value="${httpd.limits.threads}"/>

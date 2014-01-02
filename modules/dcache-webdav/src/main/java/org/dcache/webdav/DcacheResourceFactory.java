@@ -5,11 +5,10 @@ import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Ranges;
+import com.google.common.collect.Range;
 import com.google.common.io.ByteStreams;
 import com.google.common.net.InetAddresses;
 import io.milton.http.HttpManager;
-import io.milton.http.Range;
 import io.milton.http.Request;
 import io.milton.http.ResourceFactory;
 import io.milton.resource.Resource;
@@ -71,15 +70,16 @@ import dmg.util.Args;
 
 import org.dcache.auth.SubjectWrapper;
 import org.dcache.auth.Subjects;
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.cells.CellStub;
 import org.dcache.missingfiles.AlwaysFailMissingFileStrategy;
 import org.dcache.missingfiles.MissingFileStrategy;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.util.PingMoversTask;
 import org.dcache.util.RedirectedTransfer;
+import org.dcache.util.Slf4jSTErrorListener;
 import org.dcache.util.Transfer;
 import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.TransferRetryPolicy;
@@ -108,6 +108,11 @@ public class DcacheResourceFactory
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES =
         EnumSet.of(TYPE, PNFSID, CREATION_TIME, MODIFICATION_TIME, SIZE,
                    MODE, OWNER, OWNER_GROUP);
+
+    // Additional attributes needed for PROPFIND requests; e.g., to supply
+    // values for properties.
+    private static final Set<FileAttribute> PROPFIND_ATTRIBUTES =
+        EnumSet.of(CHECKSUM, ACCESS_LATENCY, RETENTION_POLICY);
 
     private static final String PROTOCOL_INFO_NAME = "Http";
     private static final int PROTOCOL_INFO_MAJOR_VERSION = 1;
@@ -453,6 +458,7 @@ public class DcacheResourceFactory
         throws IOException
     {
         _listingGroup = new STGroupFile(resource.getURL(), "UTF-8", '$', '$');
+        _listingGroup.setListener(new Slf4jSTErrorListener(_log));
     }
 
     /**
@@ -540,10 +546,7 @@ public class DcacheResourceFactory
                 try {
                     PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
                     Set<FileAttribute> requestedAttributes =
-                            EnumSet.copyOf(REQUIRED_ATTRIBUTES);
-                    if (isDigestRequested()) {
-                        requestedAttributes.add(CHECKSUM);
-                    }
+                            buildRequestedAttributes();
                     FileAttributes attributes =
                         pnfs.getFileAttributes(path.toString(), requestedAttributes);
                     return getResource(path, attributes);
@@ -707,7 +710,7 @@ public class DcacheResourceFactory
      * a pool.
      */
     public void readFile(FsPath path, PnfsId pnfsid,
-                         OutputStream outputStream, Range range)
+                         OutputStream outputStream, io.milton.http.Range range)
             throws CacheException, InterruptedException, IOException,
                    URISyntaxException
     {
@@ -748,7 +751,7 @@ public class DcacheResourceFactory
                 @Override
                 public Set<FileAttribute> getRequiredAttributes()
                 {
-                    return REQUIRED_ATTRIBUTES;
+                    return buildRequestedAttributes();
                 }
 
                 @Override
@@ -760,7 +763,7 @@ public class DcacheResourceFactory
             };
 
         _list.printDirectory(getSubject(), printer, path, null,
-                             Ranges.<Integer>all());
+                             Range.<Integer>all());
         return result;
     }
 
@@ -808,7 +811,7 @@ public class DcacheResourceFactory
                     }
                 };
         _list.printDirectory(getSubject(), printer, path, null,
-                             Ranges.<Integer>all());
+                             Range.<Integer>all());
 
         t.write(new AutoIndentWriter(out));
         out.flush();
@@ -1066,12 +1069,43 @@ public class DcacheResourceFactory
         transfer.setOverwriteAllowed(_isOverwriteAllowed);
     }
 
+    private Set<FileAttribute> buildRequestedAttributes()
+    {
+        Set<FileAttribute> attributes = EnumSet.copyOf(REQUIRED_ATTRIBUTES);
+
+        if (isDigestRequested()) {
+            attributes.add(CHECKSUM);
+        }
+
+        if (isPropfindRequest()) {
+            // FIXME: Unfortunately, Milton parses the request body after
+            // requesting the Resource, so we cannot know which additional
+            // attributes are being requested; therefore, we must request all
+            // of them.
+            attributes.addAll(PROPFIND_ATTRIBUTES);
+        }
+
+        return attributes;
+    }
+
     private static boolean isDigestRequested()
     {
-        // TODO: parse the Want-Digest to see if the requested digest(s) are
-        //       supported.  If not then we can omit fetching the checksum
-        //       values.
-        return HttpManager.request().getHeaders().containsKey("Want-Digest");
+        switch (HttpManager.request().getMethod()) {
+        case HEAD:
+        case GET:
+            // TODO: parse the Want-Digest to see if the requested digest(s) are
+            //       supported.  If not then we can omit fetching the checksum
+            //       values.
+            return HttpManager.request().getHeaders().containsKey("Want-Digest");
+        default:
+            return false;
+        }
+    }
+
+
+    private boolean isPropfindRequest()
+    {
+        return HttpManager.request().getMethod() == Request.Method.PROPFIND;
     }
 
 
@@ -1155,7 +1189,7 @@ public class DcacheResourceFactory
             }
         }
 
-        public void relayData(OutputStream outputStream, Range range)
+        public void relayData(OutputStream outputStream, io.milton.http.Range range)
             throws IOException, CacheException, InterruptedException
         {
             setStatus("Mover " + getPool() + "/" + getMoverId() +

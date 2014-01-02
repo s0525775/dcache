@@ -2,7 +2,6 @@ package org.dcache.auth;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
-import com.google.common.collect.Ranges;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -101,7 +100,7 @@ import static org.mockito.BDDMockito.*;
  */
 public class RemoteNameSpaceProviderTests
 {
-    private static final Range<Integer> ALL_ENTRIES = Ranges.all();
+    private static final Range<Integer> ALL_ENTRIES = Range.all();
 
     private static final CellPath CELLPATH_PNFSMANAGER =
             new CellPath("PnfsManager");
@@ -200,7 +199,7 @@ public class RemoteNameSpaceProviderTests
     {
         givenSuccessfulResponse();
 
-        _namespace.createEntry(ROOT, "/path/to/file", 100, 200, 0644, false);
+        _namespace.createFile(ROOT, "/path/to/file", 100, 200, 0644);
 
         PnfsCreateEntryMessage sent =
                 getSingleSendAndWaitMessage(PnfsCreateEntryMessage.class);
@@ -218,7 +217,7 @@ public class RemoteNameSpaceProviderTests
     {
         givenFailureResponse(FILE_EXISTS);
 
-        _namespace.createEntry(ROOT, "/path/to/file", 100, 200, 0644, false);
+        _namespace.createFile(ROOT, "/path/to/file", 100, 200, 0644);
     }
 
 
@@ -227,7 +226,7 @@ public class RemoteNameSpaceProviderTests
     {
         givenSuccessfulResponse();
 
-        _namespace.createEntry(ROOT, "/path/to/dir", 100, 200, 0755, true);
+        _namespace.createDirectory(ROOT, "/path/to/dir", 100, 200, 0755);
 
         PnfsCreateDirectoryMessage sent =
                 getSingleSendAndWaitMessage(PnfsCreateDirectoryMessage.class);

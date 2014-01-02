@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +84,18 @@ public class StandardPoolSpaceService implements PoolSpaceService {
             getPoolsDAO().changePoolMode(poolIds, poolMode, userName);
         } catch (DAOException ex) {
             throw new PoolSpaceServiceException(ex);
+        }
+        for (PoolSpaceBean pool: pools) {
+            if (poolIds.contains(pool.getName())) {
+                pool.setPoolMode(poolMode);
+                /*
+                 * deselect the current object for consistency
+                 * (since refreshing of the pool objects is not
+                 * called immediately after this form submission)
+                 */
+                pool.setSelected(false);
+                pool.setStatePending(true);
+            }
         }
     }
 

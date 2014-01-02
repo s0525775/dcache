@@ -110,7 +110,7 @@ public class PinCompanion
     private final String _clientHost;
     private final PinCallbacks _callbacks;
     private final long _pinLifetime;
-    private final long _requestId;
+    private final String _requestToken;
     private final CellStub _pnfsStub;
     private final CellStub _poolManagerStub;
     private final CellStub _pinManagerStub;
@@ -184,7 +184,7 @@ public class PinCompanion
             _attributes = message.getFileAttributes();
 
             if (isDirectory(_attributes)) {
-                _callbacks.FileNotFound("Path is a directory");
+                _callbacks.FileNotFound("Path is a directory.");
                 _state = new FailedState();
             } else if (!isDiskFile(_attributes) || _isOnlinePinningEnabled) {
                 _state = new PinningState();
@@ -197,8 +197,7 @@ public class PinCompanion
                     succeed(DISK_PIN_ID);
                     break;
                 case UNAVAILABLE:
-                    fail(FILE_NOT_IN_REPOSITORY,
-                         "File is currently unavailable");
+                    fail(FILE_NOT_IN_REPOSITORY, "File is not online.");
                     break;
                 case NEARLINE:
                 default:
@@ -247,8 +246,7 @@ public class PinCompanion
         public PinningState() {
             PinManagerPinMessage msg =
                 new PinManagerPinMessage(_attributes, getProtocolInfo(),
-                                         String.valueOf(_requestId),
-                                         _pinLifetime);
+                                         _requestToken, _pinLifetime);
             msg.setSubject(_subject);
             _pinManagerStub.send(msg, PinManagerPinMessage.class,
                                  new ThreadManagerMessageCallback(this));
@@ -274,7 +272,7 @@ public class PinCompanion
                          String clientHost,
                          PinCallbacks callbacks,
                          long pinLifetime,
-                         long requestId,
+                         String requestToken,
                          boolean isOnlinePinningEnabled,
                          PoolMonitor poolMonitor,
                          CellStub pnfsStub,
@@ -286,7 +284,7 @@ public class PinCompanion
         _clientHost = clientHost;
         _callbacks = callbacks;
         _pinLifetime = pinLifetime;
-        _requestId = requestId;
+        _requestToken = requestToken;
         _isOnlinePinningEnabled = isOnlinePinningEnabled;
         _poolMonitor = poolMonitor;
         _pnfsStub = pnfsStub;
@@ -305,28 +303,29 @@ public class PinCompanion
     {
         switch (rc) {
         case FILE_NOT_FOUND:
-            _callbacks.FileNotFound("No such file");
+            _callbacks.FileNotFound("No such file.");
             break;
 
         case FILE_NOT_IN_REPOSITORY:
+            _log.warn("Pinning failed for {} ({})", _path, error);
             _callbacks.Unavailable(error.toString());
             break;
 
         case PERMISSION_DENIED:
-            _callbacks.Error("Permission denied");
+            _log.warn("Pinning failed for {} ({})", _path, error);
+            _callbacks.AuthorizationError(error.toString());
             break;
 
         case TIMEOUT:
-            _log.error("Internal timeout");
+            _log.info("Pinning failed: {}", error);
             _callbacks.Timeout();
             break;
 
         default:
-            _log.error(String.format("Pinning failed for %s [rc=%d,msg=%s]",
-                                     _path, rc, error));
+            _log.error("Pinning failed for {} [rc={},msg={}].", _path, rc, error);
 
             String reason =
-                String.format("Failed to pin file [rc=%d,msg=%s]", rc, error);
+                String.format("Failed to pin file [rc=%d,msg=%s].", rc, error);
             _callbacks.PinningFailed(reason);
             break;
         }
@@ -345,7 +344,7 @@ public class PinCompanion
                                        String clientHost,
                                        PinCallbacks callbacks,
                                        long pinLifetime,
-                                       long requestId,
+                                       String requestToken,
                                        boolean isOnlinePinningEnabled,
                                        PoolMonitor poolMonitor,
                                        CellStub pnfsStub,
@@ -353,7 +352,7 @@ public class PinCompanion
                                        CellStub pinManagerStub)
     {
         return new PinCompanion(subject, path, clientHost, callbacks,
-                                pinLifetime, requestId, isOnlinePinningEnabled,
+                                pinLifetime, requestToken, isOnlinePinningEnabled,
                                 poolMonitor,
                                 pnfsStub, poolManagerStub, pinManagerStub);
     }

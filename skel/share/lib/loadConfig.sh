@@ -74,6 +74,13 @@ bootLoader()
 	org.dcache.boot.BootLoader "$@"
 }
 
+shortHostname()
+{
+    local host
+    host=$(hostname)
+    echo ${host%%.*}
+}
+
 quickJava()
 {
     export CLASSPATH
@@ -84,7 +91,7 @@ isCacheValidForFiles()
 {
     local f
     for f in "$@"; do
-        test "$f" -ot "$DCACHE_CACHED_CONFIG" || return
+        test -f "$f" && test "$f" -ot "$DCACHE_CACHED_CONFIG" || return
     done
 }
 
@@ -92,7 +99,7 @@ isCacheValidForDirs()
 {
     local d
     for d in "$@"; do
-	test ! -e "$d" || test "$d" -ot "$DCACHE_CACHED_CONFIG" || return
+        test ! -e "$d" || test "$d" -ot "$DCACHE_CACHED_CONFIG" || return
     done
 }
 
@@ -116,8 +123,10 @@ fi
 
 if [ -s $DCACHE_CACHED_CONFIG ]; then
     . $DCACHE_CACHED_CONFIG
-   if ! eval isCacheValidForFiles $(getProperty dcache.config.files) /etc/hostname ||
-      ! eval isCacheValidForDirs $(getProperty dcache.config.dirs); then
+   # NB. "hostname -s" does not work on Solaris machines
+   if ! eval isCacheValidForFiles $(getProperty dcache.config.files) ||
+      ! eval isCacheValidForDirs $(getProperty dcache.config.dirs) ||
+      [ "$(getProperty host.name)" != "$(shortHostname)" ]; then
        loadConfig
    fi
 else

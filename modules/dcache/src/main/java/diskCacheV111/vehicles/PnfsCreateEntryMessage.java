@@ -1,15 +1,19 @@
-// $Id: PnfsCreateEntryMessage.java,v 1.4 2004-11-05 12:07:19 tigran Exp $
-
 package diskCacheV111.vehicles;
 
+import com.google.common.collect.Sets;
+
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Set;
 
-import diskCacheV111.namespace.NameSpaceProvider;
-
 import org.dcache.namespace.FileAttribute;
+import org.dcache.vehicles.PnfsGetFileAttributes;
 
-public class PnfsCreateEntryMessage extends PnfsGetStorageInfoMessage {
+import static diskCacheV111.namespace.NameSpaceProvider.DEFAULT;
+import static org.dcache.namespace.FileAttribute.*;
 
+public class PnfsCreateEntryMessage extends PnfsGetFileAttributes
+{
     private final String _path;
     private final int _uid;
     private final int _gid;
@@ -17,32 +21,32 @@ public class PnfsCreateEntryMessage extends PnfsGetStorageInfoMessage {
 
     private static final long serialVersionUID = -8197311585737333341L;
 
-    public PnfsCreateEntryMessage(String path){
-        _path = path;
-        _uid = NameSpaceProvider.DEFAULT;
-        _gid = NameSpaceProvider.DEFAULT;
-        _mode = NameSpaceProvider.DEFAULT;
-        setReplyRequired(true);
+    public PnfsCreateEntryMessage(String path) {
+        this(path, DEFAULT, DEFAULT, DEFAULT);
     }
-    public PnfsCreateEntryMessage(String path, int uid , int gid , int mode ){
-        _path = path;
-        _uid  = uid ;
-        _gid  = gid ;
-        _mode = mode ;
-        setReplyRequired(true);
+
+    public PnfsCreateEntryMessage(String path, Set<FileAttribute> attr)
+    {
+        this(path, DEFAULT, DEFAULT, DEFAULT, attr);
+    }
+
+    public PnfsCreateEntryMessage(String path, int uid, int gid, int mode) {
+        this(path, uid, gid, mode, Collections.<FileAttribute>emptySet());
     }
 
     public PnfsCreateEntryMessage(String path,
-            int uid ,
-            int gid ,
+            int uid,
+            int gid,
             int mode,
-            Set<FileAttribute> attr){
-        super(attr);
+            Set<FileAttribute> attr) {
+        super(path, EnumSet.copyOf(Sets.union(attr,
+                EnumSet.of(OWNER, OWNER_GROUP, MODE, TYPE, SIZE,
+                        CREATION_TIME, ACCESS_TIME, MODIFICATION_TIME, CHANGE_TIME,
+                        PNFSID, STORAGEINFO, ACCESS_LATENCY, RETENTION_POLICY))));
         _path = path;
         _uid  = uid ;
         _gid  = gid ;
         _mode = mode ;
-        setReplyRequired(true);
     }
 
 

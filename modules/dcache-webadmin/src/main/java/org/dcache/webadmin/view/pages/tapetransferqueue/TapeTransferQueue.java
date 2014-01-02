@@ -1,6 +1,7 @@
 package org.dcache.webadmin.view.pages.tapetransferqueue;
 
 import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.list.ListItem;
 import org.apache.wicket.markup.html.list.ListView;
 import org.apache.wicket.markup.html.panel.FeedbackPanel;
@@ -8,11 +9,11 @@ import org.apache.wicket.model.PropertyModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 
-import org.dcache.webadmin.controller.TapeTransfersService;
 import org.dcache.webadmin.controller.exceptions.TapeTransfersServiceException;
-import org.dcache.webadmin.view.pages.basepage.BasePage;
+import org.dcache.webadmin.view.pages.basepage.SortableBasePage;
 import org.dcache.webadmin.view.pages.tapetransferqueue.beans.RestoreBean;
 import org.dcache.webadmin.view.util.EvenOddListView;
 
@@ -20,17 +21,17 @@ import org.dcache.webadmin.view.util.EvenOddListView;
  *
  * @author jans
  */
-public class TapeTransferQueue extends BasePage {
+public class TapeTransferQueue extends SortableBasePage {
 
     private static final long serialVersionUID = 8313857084027604473L;
-    private List<RestoreBean> _restoreBeans;
     private static final Logger _log = LoggerFactory.getLogger(TapeTransferQueue.class);
 
     public TapeTransferQueue() {
-        add(new FeedbackPanel("feedback"));
+        Form<?> form = getAutoRefreshingForm("tapeTransferQueueForm");
+        form.add(new FeedbackPanel("feedback"));
         ListView<RestoreBean> listview =
                 new EvenOddListView<RestoreBean>("TapeTransferQueueListview",
-                new PropertyModel(this, "_restoreBeans")) {
+                new PropertyModel(this, "restoreBeans")) {
 
                     private static final long serialVersionUID = 9166078572922366382L;
 
@@ -53,22 +54,18 @@ public class TapeTransferQueue extends BasePage {
                                 new PropertyModel<RestoreBean>(restore, "_status")));
                     }
                 };
-        add(listview);
-        getRestoresAction();
+        form.add(listview);
+        add(form);
     }
 
-    private TapeTransfersService getTapeTransferService() {
-        return getWebadminApplication().getTapeTransfersService();
-    }
-
-    private void getRestoresAction() {
+    public List<RestoreBean> getRestoreBeans() {
         try {
             _log.debug("getRestoresAction called");
-            _restoreBeans = getTapeTransferService().getRestores();
+            return getWebadminApplication().getTapeTransfersService().getRestores();
         } catch (TapeTransfersServiceException ex) {
             this.error(getStringResource("error.getRestoresFailed") + ex.getMessage());
             _log.debug("getRestoresAction failed {}", ex.getMessage());
-            _restoreBeans = null;
+            return Collections.emptyList();
         }
     }
 }

@@ -34,7 +34,6 @@ import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.vehicles.IpProtocolInfo;
 import diskCacheV111.vehicles.PoolManagerPoolInformation;
 import diskCacheV111.vehicles.ProtocolInfo;
-import diskCacheV111.vehicles.StorageInfo;
 
 import dmg.cells.nucleus.CellMessage;
 
@@ -48,6 +47,7 @@ import org.dcache.poolmanager.PoolSelector;
 import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.base.Predicates.*;
+import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.common.collect.Iterables.*;
 import static org.dcache.namespace.FileAttribute.*;
 
@@ -138,17 +138,12 @@ public class PoolMonitorV5
          */
         private PoolPreferenceLevel[] match(DirectionType direction)
         {
-            String hostName =
-                (_protocolInfo instanceof IpProtocolInfo)
-                ? ((IpProtocolInfo) _protocolInfo).getSocketAddress().getAddress().getHostAddress()
-                : null;
-            String protocol =
-                _protocolInfo.getProtocol() + "/" +
-                _protocolInfo.getMajorVersion() ;
+            String hostName = getHostName();
+            String protocol = getProtocol();
             return _selectionUnit.match(direction,
                                         hostName,
                                         protocol,
-                                        _fileAttributes.getStorageInfo(),
+                                        _fileAttributes,
                                         _linkGroup);
         }
 
@@ -177,14 +172,22 @@ public class PoolMonitorV5
         public PoolInfo selectWritePool(long preallocated)
             throws CacheException
         {
-            PoolPreferenceLevel[] levels = match(DirectionType.WRITE);
+            String hostName = getHostName();
+            String protocol = getProtocol();
+            PoolPreferenceLevel[] levels = _selectionUnit.match(DirectionType.WRITE,
+                    hostName,
+                    protocol,
+                    _fileAttributes,
+                    _linkGroup);
 
             if (levels.length == 0) {
-                throw new CacheException(19,
-                                         "No write pools configured for <" +
-                                         _fileAttributes.getStorageInfo() +
-                                         "> in the linkGroup " +
-                                         (_linkGroup == null ? "[none]" : _linkGroup));
+                throw new CacheException(CacheException.NO_POOL_CONFIGURED,
+                                         "No write links configured for [" +
+                                                 "net=" + hostName +
+                                                 ",protocol=" + protocol +
+                                                 ",store=" + _fileAttributes.getStorageInfo().getStorageClass() + "@" + _fileAttributes.getStorageInfo().getHsm() +
+                                                 ",cache=" + nullToEmpty(_fileAttributes.getStorageInfo().getCacheClass()) +
+                                                 ",linkgroup=" + nullToEmpty(_linkGroup) + "]");
             }
 
             for (PoolPreferenceLevel level: levels) {
@@ -197,10 +200,13 @@ public class PoolMonitorV5
                 }
             }
 
-            throw new CacheException(20,
-                                     "No write pool available for <" +  _fileAttributes.getStorageInfo() +
-                                     "> in the linkGroup " +
-                                     (_linkGroup == null ? "[none]" : _linkGroup));
+            throw new CacheException(CacheException.NO_POOL_ONLINE,
+                                     "No write pools online for [" +
+                                             "net=" + hostName +
+                                             ",protocol=" + protocol +
+                                             ",store=" + _fileAttributes.getStorageInfo().getStorageClass() + "@" + _fileAttributes.getStorageInfo().getHsm() +
+                                             ",cache=" + nullToEmpty(_fileAttributes.getStorageInfo().getCacheClass()) +
+                                             ",linkgroup=" + nullToEmpty(_linkGroup) + "]");
         }
 
         @Override
@@ -223,14 +229,25 @@ public class PoolMonitorV5
             /* Get the prioritized list of allowed pools for this
              * request.
              */
-            PoolPreferenceLevel[] level = match(DirectionType.READ);
+            String hostName = getHostName();
+            String protocol = getProtocol();
+            PoolPreferenceLevel[] level = _selectionUnit.match(DirectionType.READ,
+                    hostName,
+                    protocol,
+                    _fileAttributes,
+                    _linkGroup);
 
             /* An empty array indicates that no links were found that
              * could serve the request. No reason to try any further;
              * not even a stage or P2P would help.
              */
             if (level.length == 0) {
-                throw new CacheException("No links for this request");
+                throw new CacheException(CacheException.NO_POOL_CONFIGURED, "No read links configured [" +
+                        "net=" + hostName +
+                        ",protocol=" + protocol +
+                        ",store=" + _fileAttributes.getStorageInfo().getStorageClass() + "@" + _fileAttributes.getStorageInfo().getHsm() +
+                        ",cache=" + nullToEmpty(_fileAttributes.getStorageInfo().getCacheClass()) +
+                        ",linkgroup=" + nullToEmpty(_linkGroup) + "]");
             }
 
             CostException fallback = null;
@@ -290,6 +307,17 @@ public class PoolMonitorV5
              * online or had the file.
              */
             throw new PermissionDeniedCacheException("File is online, but not in read-allowed pool");
+        }
+
+        private String getHostName() {
+            return (_protocolInfo instanceof IpProtocolInfo)
+            ? ((IpProtocolInfo) _protocolInfo).getSocketAddress().getAddress().getHostAddress()
+            : null;
+        }
+
+        private String getProtocol() {
+            return _protocolInfo.getProtocol() + "/" +
+            _protocolInfo.getMajorVersion();
         }
 
         @Override
@@ -516,24 +544,23 @@ public class PoolMonitorV5
             return FileLocality.NONE;
         }
 
-        StorageInfo storageInfo = attributes.getStorageInfo();
         PoolPreferenceLevel[] levels =
             _selectionUnit.match(DirectionType.READ,
                                  hostName,
                                  "*/*",
-                                 storageInfo,
+                                 attributes,
                                  null);
 
         Collection<String> locations = attributes.getLocations();
         for (PoolPreferenceLevel level: levels) {
             if (!Collections.disjoint(level.getPoolList(), locations)) {
-                return (storageInfo.isStored()
+                return (attributes.getStorageInfo().isStored()
                         ? FileLocality.ONLINE_AND_NEARLINE
                         : FileLocality.ONLINE);
             }
         }
 
-        if (storageInfo.isStored()) {
+        if (attributes.getStorageInfo().isStored()) {
             return FileLocality.NEARLINE;
         }
 

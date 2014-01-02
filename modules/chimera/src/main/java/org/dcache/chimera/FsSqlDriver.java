@@ -254,22 +254,25 @@ class FsSqlDriver {
          */
     }
 
-    boolean remove(Connection dbConnection, FsInode parent, String name) throws ChimeraFsException, SQLException {
+    void remove(Connection dbConnection, FsInode parent, String name) throws ChimeraFsException, SQLException {
 
         FsInode inode = inodeOf(dbConnection, parent, name);
-
-        if (inode.isDirectory()) {
-            return removeDir(dbConnection, parent, inode, name);
+        if (inode == null || inode.type() != FsInodeType.INODE) {
+            throw new FileNotFoundHimeraFsException("Not a file.");
         }
 
-        return removeFile(dbConnection, parent, inode, name);
+        if (inode.isDirectory()) {
+            removeDir(dbConnection, parent, inode, name);
+        } else {
+            removeFile(dbConnection, parent, inode, name);
+        }
     }
 
-    private boolean removeDir(Connection dbConnection, FsInode parent, FsInode inode, String name) throws ChimeraFsException, SQLException {
+    private void removeDir(Connection dbConnection, FsInode parent, FsInode inode, String name) throws ChimeraFsException, SQLException {
 
         Stat dirStat = inode.statCache();
         if (dirStat.getNlink() > 2) {
-            throw new ChimeraFsException("directory is not empty");
+            throw new DirNotEmptyHimeraFsException("directory is not empty");
         }
 
         removeEntryInParent(dbConnection, inode, ".");
@@ -283,21 +286,18 @@ class FsSqlDriver {
         decNlink(dbConnection, parent);
         setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
 
-        return removeInode(dbConnection, inode);
+        removeInode(dbConnection, inode);
     }
 
-    private boolean removeFile(Connection dbConnection, FsInode parent, FsInode inode, String name) throws ChimeraFsException, SQLException {
+    private void removeFile(Connection dbConnection, FsInode parent, FsInode inode, String name) throws ChimeraFsException, SQLException {
 
-        boolean removed;
         boolean isLast = inode.stat().getNlink() == 1;
 
         decNlink(dbConnection, inode);
         removeEntryInParent(dbConnection, parent, name);
 
         if (isLast) {
-            removed = removeInode(dbConnection, inode);
-        } else {
-            removed = true;
+            removeInode(dbConnection, inode);
         }
 
         /* During bulk deletion of files in the same directory,
@@ -307,17 +307,15 @@ class FsSqlDriver {
          */
         decNlink(dbConnection, parent);
         setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
-
-        return removed;
     }
 
-    boolean remove(Connection dbConnection, FsInode parent, FsInode inode) throws ChimeraFsException, SQLException {
+    void remove(Connection dbConnection, FsInode parent, FsInode inode) throws ChimeraFsException, SQLException {
 
         if (inode.isDirectory()) {
 
             Stat dirStat = inode.statCache();
             if (dirStat.getNlink() > 2) {
-                throw new ChimeraFsException("directory is not empty");
+                throw new DirNotEmptyHimeraFsException("directory is not empty");
             }
             removeEntryInParent(dbConnection, inode, ".");
             removeEntryInParent(dbConnection, inode, "..");
@@ -343,13 +341,13 @@ class FsSqlDriver {
         setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
         removeStorageInfo(dbConnection, inode);
 
-        return removeInode(dbConnection, inode);
+        removeInode(dbConnection, inode);
     }
 
     public Stat stat(Connection dbConnection, FsInode inode) throws SQLException {
         return stat(dbConnection, inode, 0);
     }
-    private static final String sqlStat = "SELECT isize,inlink,itype,imode,iuid,igid,iatime,ictime,imtime FROM t_inodes WHERE ipnfsid=?";
+    private static final String sqlStat = "SELECT isize,inlink,itype,imode,iuid,igid,iatime,ictime,imtime,icrtime FROM t_inodes WHERE ipnfsid=?";
 
     public Stat stat(Connection dbConnection, FsInode inode, int level) throws SQLException {
 
@@ -369,15 +367,17 @@ class FsSqlDriver {
             statResult = stStatInode.executeQuery();
 
             if (statResult.next()) {
+                ret = new Stat();
                 int inodeType;
 
                 if (level == 0) {
                     inodeType = statResult.getInt("itype");
+                    ret.setCrTime(statResult.getTimestamp("icrtime").getTime());
                 } else {
                     inodeType = UnixPermission.S_IFREG;
+                    ret.setCrTime(statResult.getTimestamp("imtime").getTime());
                 }
 
-                ret = new Stat();
                 ret.setSize(statResult.getLong("isize"));
                 ret.setATime(statResult.getTimestamp("iatime").getTime());
                 ret.setCTime(statResult.getTimestamp("ictime").getTime());
@@ -616,7 +616,7 @@ class FsSqlDriver {
 
         return path;
     }
-    private static final String sqlCreateInode = "INSERT INTO t_inodes VALUES(?,?,?,?,?,?,?,?,?,?,?)";
+    private static final String sqlCreateInode = "INSERT INTO t_inodes VALUES(?,?,?,?,?,?,?,?,?,?,?,?)";
 
     /**
      *
@@ -655,6 +655,7 @@ class FsSqlDriver {
             stCreateInode.setTimestamp(9, now);
             stCreateInode.setTimestamp(10, now);
             stCreateInode.setTimestamp(11, now);
+            stCreateInode.setTimestamp(12, now);
 
             stCreateInode.executeUpdate();
 

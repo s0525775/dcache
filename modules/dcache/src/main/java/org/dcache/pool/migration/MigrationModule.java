@@ -1,7 +1,6 @@
 package org.dcache.pool.migration;
 
 import com.google.common.collect.Range;
-import com.google.common.collect.Ranges;
 import org.parboiled.Parboiled;
 import org.parboiled.parserunners.ReportingParseRunner;
 import org.parboiled.support.ParsingResult;
@@ -30,16 +29,15 @@ import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.RetentionPolicy;
 import diskCacheV111.vehicles.PoolManagerPoolInformation;
 
-import dmg.cells.nucleus.CellAdapter;
 import dmg.cells.nucleus.CellEndpoint;
-import dmg.cells.nucleus.CellMessage;
 import dmg.util.command.Argument;
 import dmg.util.command.Command;
+import dmg.util.command.CommandLine;
 import dmg.util.command.Option;
 
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.cells.CellStub;
 import org.dcache.pool.repository.CacheEntry;
 import org.dcache.pool.repository.EntryState;
@@ -212,18 +210,18 @@ public class MigrationModule
         String[] bounds = s.split("\\.\\.", 2);
         switch (bounds.length) {
         case 1:
-            return Ranges.singleton(Long.parseLong(bounds[0]));
+            return Range.singleton(Long.parseLong(bounds[0]));
 
         case 2:
             if (bounds[0].length() == 0 && bounds[1].length() == 0) {
-                return Ranges.all();
+                return Range.all();
             } else if (bounds[0].length() == 0) {
-                return Ranges.atMost(Long.parseLong(bounds[1]));
+                return Range.atMost(Long.parseLong(bounds[1]));
             } else if (bounds[1].length() == 0) {
-                return Ranges.atLeast(Long.parseLong(bounds[0]));
+                return Range.atLeast(Long.parseLong(bounds[0]));
             } else {
-                return Ranges.closed(Long.parseLong(bounds[0]),
-                                     Long.parseLong(bounds[1]));
+                return Range.closed(Long.parseLong(bounds[0]),
+                                    Long.parseLong(bounds[1]));
             }
 
         default:
@@ -325,9 +323,9 @@ public class MigrationModule
                 usage="Only copy replicas with the given access latency.")
         String accessLatency;
 
-        @Option(name="pnfsid",
+        @Option(name="pnfsid", separator=",",
                 category="Filter options",
-                usage="Only copy replicas with the given access latency.")
+                usage="Only copy replicas with one of the given PNFS IDs.")
         PnfsId[] pnfsid;
 
         @Option(name="rp", values={"custodial", "replica", "output"},
@@ -537,6 +535,9 @@ public class MigrationModule
 
         @Argument(metaVar="target")
         String[] targets;
+
+        @CommandLine
+        String commandLine;
 
         private RefreshablePoolList createPoolList(String type, List<String> targets)
         {
@@ -837,10 +838,7 @@ public class MigrationModule
             job.setConcurrency(concurrency);
             _jobs.put(id, job);
 
-            CellMessage envelope = CellAdapter.getThisMessage();
-            if (envelope != null) {
-                _commands.put(job, envelope.getMessageObject().toString());
-            }
+            _commands.put(job, commandLine);
             return getJobSummary(id);
         }
     }

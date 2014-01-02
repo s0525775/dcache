@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import diskCacheV111.pools.PoolV2Mode;
 
@@ -21,30 +22,58 @@ import org.dcache.webadmin.controller.exceptions.PoolSpaceServiceException;
 import org.dcache.webadmin.view.beans.PoolSpaceBean;
 import org.dcache.webadmin.view.beans.SelectOption;
 import org.dcache.webadmin.view.pages.basepage.BasePage;
+import org.dcache.webadmin.view.pages.basepage.SortableBasePage;
 import org.dcache.webadmin.view.panels.poollist.PoolListPanel;
+import org.dcache.webadmin.view.panels.selectall.SelectAllPanel;
 import org.dcache.webadmin.view.util.Role;
 
 /**
  * The PoolUsage Webpage
  * @author jans
  */
-public class PoolList extends BasePage {
-
+public class PoolList extends SortableBasePage {
     private static final int DEFAULT_DROP_DOWN_CHOICE = 0;
     private static final long serialVersionUID = -3519762401458479856L;
     private List<PoolSpaceBean> _poolBeans;
     private SelectOption _selectedOption;
     private static final Logger _log = LoggerFactory.getLogger(PoolList.class);
 
+    /*
+     * set to false when using the Junit FormTester; otherwise, the autorefreshing
+     * form produces incorrect results
+     */
+    public static boolean autorefresh = true;
+
+    /*
+     * necessary so that submit uses the current list instance
+     */
+    private boolean submitFormCalled = false;
+
     public PoolList() {
         Form poolUsageForm = new PoolUsageForm("poolUsageForm");
         poolUsageForm.add(createPoolModeDropDown("mode"));
         poolUsageForm.add(new FeedbackPanel("feedback"));
-        getPoolsAction();
+        fetchPoolSpaceBeans();
         PoolListPanel poolListPanel = new PoolListPanel("poolListPanel",
                 new PropertyModel(this, "_poolBeans"), true);
+        poolListPanel.setPoolListPage(this);
         poolUsageForm.add(poolListPanel);
+        if (autorefresh) {
+            addAutoRefreshToForm(poolUsageForm, 1, TimeUnit.MINUTES);
+        }
         add(poolUsageForm);
+    }
+
+    /**
+     * See the {@link PoolListPanel} for why this must be used instead of
+     * {@link BasePage#refresh()} here.
+     */
+    public List<PoolSpaceBean> getListViewList() {
+        if (!submitFormCalled) {
+            fetchPoolSpaceBeans();
+        }
+        submitFormCalled = false;
+        return _poolBeans;
     }
 
     private DropDownChoice<SelectOption> createPoolModeDropDown(String id) {
@@ -77,14 +106,14 @@ public class PoolList extends BasePage {
         return getWebadminApplication().getPoolSpaceService();
     }
 
-    private void getPoolsAction() {
+    private void fetchPoolSpaceBeans() {
         try {
             _log.debug("getPoolListAction called");
-            this._poolBeans = getPoolSpaceService().getPoolBeans();
+            _poolBeans = getPoolSpaceService().getPoolBeans();
         } catch (PoolSpaceServiceException ex) {
             this.error(getStringResource("error.getPoolsFailed") + ex.getMessage());
             _log.debug("getPoolListAction failed {}", ex.getMessage());
-            this._poolBeans = null;
+            _poolBeans = null;
         }
     }
 
@@ -94,14 +123,28 @@ public class PoolList extends BasePage {
 
         public PoolUsageForm(String id) {
             super(id);
-            Button button = new Button("submit");
-            MetaDataRoleAuthorizationStrategy.authorize(button, RENDER, Role.ADMIN);
-            _log.debug("submit isEnabled : {}", String.valueOf(button.isEnabled()));
-            this.add(button);
+            Button submit = new Button("submit");
+            SelectAllPanel selectAllPanel = new SelectAllPanel("selectAllPanel", submit) {
+                private static final long serialVersionUID = -1886067539481596863L;
+
+                @Override
+                protected void setSubmitCalled() {
+                    submitFormCalled = true;
+                }
+
+                @Override
+                protected void setSelectionForAll(Boolean selected) {
+                    for (PoolSpaceBean bean : _poolBeans) {
+                        bean.setSelected(selected);
+                    }
+                }
+            };
+            this.add(selectAllPanel);
         }
 
         @Override
         protected void onSubmit() {
+            submitFormCalled = true;
             _log.debug("button pressed");
             if (_poolBeans != null && _selectedOption != null) {
                 try {
@@ -109,7 +152,6 @@ public class PoolList extends BasePage {
                     PoolV2Mode poolMode = new PoolV2Mode(_selectedOption.getKey());
                     getPoolSpaceService().changePoolMode(_poolBeans, poolMode,
                             getWebadminSession().getUserName());
-                    getPoolsAction();
                 } catch (PoolSpaceServiceException ex) {
                     _log.error("something went wrong with enable/disable");
                     this.error(getStringResource("error.changePoolModeFailed") + ex.getMessage());

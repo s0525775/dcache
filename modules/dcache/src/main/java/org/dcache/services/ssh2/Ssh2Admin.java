@@ -28,14 +28,15 @@ import java.util.List;
 import diskCacheV111.util.AuthorizedKeyParser;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.PermissionDeniedCacheException;
+import java.util.concurrent.TimeUnit;
 
 import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.PasswordCredential;
 import org.dcache.auth.Subjects;
 import org.dcache.auth.UnionLoginStrategy;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellLifeCycleAware;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellLifeCycleAware;
 
 import static org.dcache.util.Files.checkFile;
 
@@ -55,9 +56,12 @@ public class Ssh2Admin implements CellCommandListener, CellLifeCycleAware
     private String _hostKeyPrivate;
     private String _hostKeyPublic;
     private File _authorizedKeyList;
+    private String _host;
     private int _port;
     private int _adminGroupId;
     private LoginStrategy _loginStrategy;
+    private TimeUnit _idleTimeoutUnit;
+    private long _idleTimeout;
 
     public Ssh2Admin() {
         _server = SshServer.setUpDefaultServer();
@@ -78,6 +82,14 @@ public class Ssh2Admin implements CellCommandListener, CellLifeCycleAware
 
     public int getPort() {
         return _port;
+    }
+
+    public void setHost(String host) {
+        _host = host;
+    }
+
+    public String getHost() {
+        return _host;
     }
 
     public void setAdminGroupId(int groupId) {
@@ -124,6 +136,17 @@ public class Ssh2Admin implements CellCommandListener, CellLifeCycleAware
     public void setSubsystemFactories(List<NamedFactory<Command>> subsystemFactories)
     {
         _server.setSubsystemFactories(subsystemFactories);
+    }
+
+    @Required
+    public void setIdleTimeout(long timeout)
+    {
+        _idleTimeout = timeout;
+    }
+
+    @Required
+    public void setIdleTimeoutUnit(TimeUnit unit) {
+        _idleTimeoutUnit = unit;
     }
 
     public void configureAuthentication() {
@@ -197,7 +220,13 @@ public class Ssh2Admin implements CellCommandListener, CellLifeCycleAware
     }
 
     private void startServer() {
+        // MINA SSH uses int to store timeout. Strip the long valued to max int if required.
+        int effectiveTimeout = (int)Math.min((long)Integer.MAX_VALUE,
+                _idleTimeoutUnit.toMillis(_idleTimeout > 0? _idleTimeout : Long.MAX_VALUE));
+
+        _server.getProperties().put(SshServer.IDLE_TIMEOUT, Integer.toString(effectiveTimeout));
         _server.setPort(_port);
+        _server.setHost(_host);
 
         try {
             _server.start();

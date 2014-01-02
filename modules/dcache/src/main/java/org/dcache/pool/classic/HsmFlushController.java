@@ -30,9 +30,9 @@ import dmg.util.command.Argument;
 import dmg.util.command.Command;
 import dmg.util.command.Option;
 
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
 import org.dcache.util.FireAndForgetTask;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -193,8 +193,8 @@ public class HsmFlushController
     {
         pw.println("#\n# Flushing Thread setup\n#");
         pw.println("flush set max active " + _maxActive);
-        pw.println("flush set interval " + _flushingInterval);
-        pw.println("flush set retry delay " + _retryDelayOnError);
+        pw.println("flush set interval " + TimeUnit.MILLISECONDS.toSeconds(_flushingInterval));
+        pw.println("flush set retry delay " + TimeUnit.MILLISECONDS.toSeconds(_retryDelayOnError));
     }
 
     @Override

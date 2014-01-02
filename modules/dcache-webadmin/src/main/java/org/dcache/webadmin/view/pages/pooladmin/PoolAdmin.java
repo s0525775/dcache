@@ -16,7 +16,7 @@ import org.apache.wicket.protocol.https.RequireHttps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.dcache.webadmin.controller.PoolAdminService;
@@ -24,7 +24,7 @@ import org.dcache.webadmin.controller.exceptions.PoolAdminServiceException;
 import org.dcache.webadmin.view.beans.PoolAdminBean;
 import org.dcache.webadmin.view.beans.PoolCommandBean;
 import org.dcache.webadmin.view.pages.AuthenticatedWebPage;
-import org.dcache.webadmin.view.pages.basepage.BasePage;
+import org.dcache.webadmin.view.pages.basepage.SortableBasePage;
 import org.dcache.webadmin.view.util.DefaultFocusBehaviour;
 import org.dcache.webadmin.view.util.EvenOddListView;
 import org.dcache.webadmin.view.util.SelectableWrapper;
@@ -34,24 +34,22 @@ import org.dcache.webadmin.view.util.SelectableWrapper;
  * @author jans
  */
 @RequireHttps
-public class PoolAdmin extends BasePage implements AuthenticatedWebPage {
+public class PoolAdmin extends SortableBasePage implements AuthenticatedWebPage {
 
     private static final String EMPTY_STRING = "";
     public static final int RESPONSE_CUTOFF_INDEX_MULTIPLE_POOLS = 120;
     private static final Logger _log = LoggerFactory.getLogger(PoolAdmin.class);
     private static final long serialVersionUID = -3790266074783564167L;
-    private List<PoolAdminBean> _poolGroups = new ArrayList<>();
     private PoolAdminBean _currentPoolGroup;
     private String _command = "";
     private String _lastCommand = "";
 
     public PoolAdmin() {
-        getPoolGroupsAction();
         addMarkup();
     }
 
     private void addMarkup() {
-        Form<Object> poolAdminForm = new Form<>("poolAdminForm");
+        Form<?> poolAdminForm = getAutoRefreshingForm("poolAdminForm");
         poolAdminForm.add(new FeedbackPanel("feedback"));
         TextField<Object> commandInput = new TextField<>("commandText",
                 new PropertyModel<>(this, "_command"));
@@ -117,12 +115,13 @@ public class PoolAdmin extends BasePage implements AuthenticatedWebPage {
         return oneIsSelected;
     }
 
-    private void getPoolGroupsAction() {
+    public List<PoolAdminBean> getPoolGroups() {
         try {
-            _poolGroups = getPoolAdminService().getPoolGroups();
+            return getPoolAdminService().getPoolGroups();
         } catch (PoolAdminServiceException e) {
             error(getStringResource("error.noPoolGroups"));
             _log.error("could not retrieve Pool Groups: {}", e.getMessage());
+            return Collections.emptyList();
         }
     }
 
@@ -133,7 +132,7 @@ public class PoolAdmin extends BasePage implements AuthenticatedWebPage {
     private ListView<PoolAdminBean> buildPoolGroupView(String id) {
         return new ListView<PoolAdminBean>(
                 id, new PropertyModel<List<PoolAdminBean>>(
-                this, "_poolGroups")) {
+                this, "poolGroups")) {
 
             private static final long serialVersionUID = 6196065833753259467L;
 

@@ -19,7 +19,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import diskCacheV111.util.AccessLatency;
 import diskCacheV111.util.CacheException;
-import diskCacheV111.util.FileMetaData;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.RetentionPolicy;
 import diskCacheV111.vehicles.StorageInfo;
@@ -31,6 +30,8 @@ import org.dcache.namespace.FileAttribute;
 import org.dcache.util.Checksum;
 import org.dcache.util.ChecksumType;
 import org.dcache.vehicles.FileAttributes;
+
+import static org.dcache.namespace.FileAttribute.*;
 
 
 enum Operation {
@@ -203,14 +204,15 @@ public class PerformanceTest extends Thread
             FileAttributes fileAttributes;
             switch (aOp) {
                 case CREATE_ENTRY:
-                    provider.createEntry(Subjects.ROOT, path, UID, GID, PERMISSION, false);
+                    provider.createFile(Subjects.ROOT, path, UID, GID, PERMISSION);
                     break;
                 case PATH_TO_PNFS_ID:
                     getPnfsid(path);
                     break;
                 case FILE_META_DATA:
                     provider.getFileAttributes(Subjects.ROOT, getPnfsid(path),
-                                               FileMetaData.getKnownFileAttributes());
+                            EnumSet.of(OWNER, OWNER_GROUP, MODE, TYPE, SIZE,
+                                    CREATION_TIME, ACCESS_TIME, MODIFICATION_TIME, CHANGE_TIME));
                     break;
                 case DELETE_ENTRY:
                     provider.deleteEntry(Subjects.ROOT, getPnfsid(path));

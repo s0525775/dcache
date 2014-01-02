@@ -41,8 +41,8 @@ import dmg.util.command.Argument;
 import dmg.util.command.Command;
 import dmg.util.command.Option;
 
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
 import org.dcache.pool.repository.ReplicaDescriptor;
 import org.dcache.util.Checksum;
 import org.dcache.util.ChecksumType;
@@ -278,6 +278,12 @@ public class ChecksumModuleV1
         @Option(name = "v",
                 usage = "Verbose.")
         boolean verbose;
+
+        @Option(name = "frequently",
+                metaVar = "IGNORED_VALUE",
+                usage = "This option is accepted but ignored.  It exists only " +
+                "for backwards compatibility with older dCache pool 'setup' files")
+        String ignoredValue;
 
         private void updatePolicy(String value, PolicyFlag flag)
         {

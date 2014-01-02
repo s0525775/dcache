@@ -2,19 +2,25 @@
 
 package diskCacheV111.vehicles;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+
 import java.util.EnumSet;
 
 import diskCacheV111.util.PnfsId;
 
+import org.dcache.namespace.FileAttribute;
 import org.dcache.vehicles.FileAttributes;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.dcache.namespace.FileAttribute.PNFSID;
-import static org.dcache.namespace.FileAttribute.SIZE;
 
 
 public class Pool2PoolTransferMsg extends PoolMessage {
+
+    public static final ImmutableSet<FileAttribute> NEEDED_ATTRIBUTES =
+            Sets.immutableEnumSet(FileAttribute.PNFSID, FileAttribute.STORAGEINFO, FileAttribute.CHECKSUM, FileAttribute.SIZE);
 
     public final static int   UNDETERMINED = 0 ;
     public final static int   PRECIOUS     = 1 ;
@@ -33,7 +39,7 @@ public class Pool2PoolTransferMsg extends PoolMessage {
         super( sourcePoolName ) ;
 
         checkNotNull(fileAttributes);
-        checkArgument(fileAttributes.isDefined(EnumSet.of(PNFSID, SIZE)));
+        checkArgument(fileAttributes.isDefined(EnumSet.of(PNFSID)));
 
         _fileAttributes = fileAttributes;
         _destinationPoolName = destinationPoolName ;

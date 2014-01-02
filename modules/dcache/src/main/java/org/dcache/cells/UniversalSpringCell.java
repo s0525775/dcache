@@ -54,14 +54,19 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import diskCacheV111.util.CacheException;
 
+import dmg.cells.nucleus.CellCommandListener;
 import dmg.cells.nucleus.CellInfo;
 import dmg.cells.nucleus.CellInfoProvider;
+import dmg.cells.nucleus.CellLifeCycleAware;
 import dmg.cells.nucleus.CellMessage;
+import dmg.cells.nucleus.CellMessageReceiver;
+import dmg.cells.nucleus.CellMessageSender;
 import dmg.cells.nucleus.CellPath;
+import dmg.cells.nucleus.CellSetupProvider;
 import dmg.cells.nucleus.DomainContextAware;
 import dmg.cells.nucleus.EnvironmentAware;
 import dmg.cells.nucleus.NoRouteToCellException;
@@ -100,10 +105,9 @@ public class UniversalSpringCell
     implements BeanPostProcessor,
                EnvironmentAware
 {
-    private final static long WAIT_FOR_FILE_SLEEP = 30000;
+    private static final Logger LOGGER = LoggerFactory.getLogger(UniversalSpringCell.class);
 
-    private final static Logger _log = LoggerFactory
-            .getLogger(UniversalSpringCell.class);
+    private static final long WAIT_FOR_FILE_SLEEP = 30000;
 
     /**
      * Environment map this cell was instantiated in.
@@ -186,8 +190,8 @@ public class UniversalSpringCell
         checkArgument(args.argc() > 0, "Configuration location missing");
 
         _setupController = args.getOpt("setupController");
-        info("Setup controller set to "
-             + (_setupController == null ? "none" : _setupController));
+        LOGGER.info("Setup controller set to "
+                + (_setupController == null ? "none" : _setupController));
         _setupFile =
             (!args.hasOption("setupFile"))
             ? null
@@ -282,16 +286,16 @@ public class UniversalSpringCell
     {
         if (callbackExecutor != null) {
             Object executor = getBean(callbackExecutor);
-            checkState(executor instanceof ExecutorService,
+            checkState(executor instanceof ThreadPoolExecutor,
                     "No such bean: " + callbackExecutor);
-            getNucleus().setCallbackExecutor((ExecutorService) executor);
+            getNucleus().setCallbackExecutor((ThreadPoolExecutor) executor);
         }
 
         if (messageExecutor != null) {
             Object executor = getBean(messageExecutor);
-            checkState(executor instanceof ExecutorService,
+            checkState(executor instanceof ThreadPoolExecutor,
                     "No such bean: " + messageExecutor);
-            getNucleus().setMessageExecutor((ExecutorService) executor);
+            getNucleus().setMessageExecutor((ThreadPoolExecutor) executor);
         }
     }
 
@@ -318,7 +322,7 @@ public class UniversalSpringCell
 
             File missing;
             while ((missing = firstMissing(files)) != null) {
-                warn(String.format("File missing: %s; sleeping %d seconds", missing, WAIT_FOR_FILE_SLEEP / 1000));
+                LOGGER.warn("File missing: {}; sleeping {} seconds", missing, WAIT_FOR_FILE_SLEEP / 1000);
                 Thread.sleep(WAIT_FOR_FILE_SLEEP);
             }
         }
@@ -403,7 +407,7 @@ public class UniversalSpringCell
                 provider.getInfo(pw);
                 pw.println();
             } catch (NoSuchBeanDefinitionException e) {
-                error("Failed to query bean definition for " + name);
+                LOGGER.error("Failed to query bean definition for {}", name);
             }
         }
     }
@@ -535,8 +539,8 @@ public class UniversalSpringCell
                 try {
                     command(new Args(line));
                 } catch (CommandException e) {
-                    throw new CommandException("Error at line " + lineCount
-                                               + ": " + e.getMessage());
+                    throw new CommandException("Error at " + setup + ":" +
+                            lineCount + ": " + e.getMessage());
                 }
             }
         } finally {
@@ -870,8 +874,8 @@ public class UniversalSpringCell
                         try {
                             values.put(property, bean.getPropertyValue(property));
                         } catch (InvalidPropertyException | PropertyAccessException e) {
-                            _log.debug("Failed to read {} of object of class {}: {}",
-                                    new Object[] { property, o.getClass(), e.getMessage() });
+                            LOGGER.debug("Failed to read {} of object of class {}: {}",
+                                    property, o.getClass(), e.getMessage());
                         }
                     }
                 }
@@ -952,17 +956,6 @@ public class UniversalSpringCell
     }
 
     /**
-     * Registers a thread factory aware bean. Thread factory aware
-     * bean provide hooks for registering thread factories. This
-     * method registers the Cell nulceus thread factory on the bean.
-     */
-    public void addThreadFactoryAwareBean(ThreadFactoryAware bean)
-    {
-        bean.setThreadFactory(getNucleus());
-    }
-
-
-    /**
      * Part of the BeanPostProcessor implementation. Recognizes beans
      * implementing CellCommandListener, CellInfoProvider,
      * CellCommunicationAware, CellSetupProvider and
@@ -995,10 +988,6 @@ public class UniversalSpringCell
 
         if (bean instanceof CellLifeCycleAware) {
             addLifeCycleAwareBean((CellLifeCycleAware) bean);
-        }
-
-        if (bean instanceof ThreadFactoryAware) {
-            addThreadFactoryAwareBean((ThreadFactoryAware) bean);
         }
 
         if (bean instanceof EnvironmentAware) {

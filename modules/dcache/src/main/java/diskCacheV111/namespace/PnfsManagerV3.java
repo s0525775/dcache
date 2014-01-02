@@ -12,6 +12,7 @@ import javax.security.auth.Subject;
 import java.io.File;
 import java.io.PrintWriter;
 import java.security.NoSuchAlgorithmException;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -25,12 +26,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.ChecksumFactory;
-import diskCacheV111.util.FileMetaData;
 import diskCacheV111.util.FileNotFoundCacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.InvalidMessageCacheException;
 import diskCacheV111.util.MissingResourceCacheException;
 import diskCacheV111.util.NotDirCacheException;
+import diskCacheV111.util.NotFileCacheException;
 import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.vehicles.Message;
@@ -42,14 +43,11 @@ import diskCacheV111.vehicles.PnfsDeleteEntryMessage;
 import diskCacheV111.vehicles.PnfsDeleteEntryNotificationMessage;
 import diskCacheV111.vehicles.PnfsFlagMessage;
 import diskCacheV111.vehicles.PnfsGetCacheLocationsMessage;
-import diskCacheV111.vehicles.PnfsGetFileMetaDataMessage;
 import diskCacheV111.vehicles.PnfsGetParentMessage;
-import diskCacheV111.vehicles.PnfsGetStorageInfoMessage;
 import diskCacheV111.vehicles.PnfsMapPathMessage;
 import diskCacheV111.vehicles.PnfsMessage;
 import diskCacheV111.vehicles.PnfsRenameMessage;
 import diskCacheV111.vehicles.PnfsSetChecksumMessage;
-import diskCacheV111.vehicles.PnfsSetFileMetaDataMessage;
 import diskCacheV111.vehicles.PoolFileFlushedMessage;
 import diskCacheV111.vehicles.StorageInfo;
 import diskCacheV111.vehicles.StorageInfos;
@@ -64,9 +62,10 @@ import dmg.util.Args;
 import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AccessType;
 import org.dcache.auth.Subjects;
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
-import org.dcache.cells.CellMessageReceiver;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
+import dmg.cells.nucleus.CellMessageReceiver;
+import org.dcache.chimera.UnixPermission;
 import org.dcache.commons.stats.RequestCounters;
 import org.dcache.commons.stats.RequestExecutionTimeGauges;
 import org.dcache.namespace.FileAttribute;
@@ -82,9 +81,11 @@ import org.dcache.vehicles.PnfsGetFileAttributes;
 import org.dcache.vehicles.PnfsListDirectoryMessage;
 import org.dcache.vehicles.PnfsRemoveChecksumMessage;
 import org.dcache.vehicles.PnfsSetFileAttributes;
+import org.dcache.vehicles.PnfsCreateSymLinkMessage;
 
 import static org.dcache.acl.enums.AccessType.*;
 import static org.dcache.auth.Subjects.ROOT;
+import static org.dcache.namespace.FileAttribute.*;
 
 public class PnfsManagerV3
     extends AbstractCellComponent
@@ -115,9 +116,7 @@ public class PnfsManagerV3
      */
     private final Class<?>[] DISCARD_EARLY = {
         PnfsGetCacheLocationsMessage.class,
-        PnfsGetStorageInfoMessage.class,
         PnfsMapPathMessage.class,
-        PnfsGetFileMetaDataMessage.class,
         PnfsGetParentMessage.class,
         PnfsCreateEntryMessage.class,
         PnfsCreateDirectoryMessage.class,
@@ -172,9 +171,6 @@ public class PnfsManagerV3
         _gauges.addGauge(PnfsCreateDirectoryMessage.class);
         _gauges.addGauge(PnfsCreateEntryMessage.class);
         _gauges.addGauge(PnfsDeleteEntryMessage.class);
-        _gauges.addGauge(PnfsGetStorageInfoMessage.class);
-        _gauges.addGauge(PnfsGetFileMetaDataMessage.class);
-        _gauges.addGauge(PnfsSetFileMetaDataMessage.class);
         _gauges.addGauge(PnfsMapPathMessage.class);
         _gauges.addGauge(PnfsRenameMessage.class);
         _gauges.addGauge(PnfsFlagMessage.class);
@@ -185,6 +181,7 @@ public class PnfsManagerV3
         _gauges.addGauge(PnfsGetFileAttributes.class);
         _gauges.addGauge(PnfsListDirectoryMessage.class);
         _gauges.addGauge(PnfsRemoveChecksumMessage.class);
+        _gauges.addGauge(PnfsCreateSymLinkMessage.class);
     }
 
     public PnfsManagerV3()
@@ -543,12 +540,37 @@ public class PnfsManagerV3
                 }
             }
 
-            FileMetaData info =
-                new FileMetaData(_nameSpaceProvider.getFileAttributes(ROOT,  pnfsId, FileMetaData.getKnownFileAttributes()));
+            FileAttributes fileAttributes = _nameSpaceProvider
+                    .getFileAttributes(ROOT, pnfsId, EnumSet.of(OWNER, OWNER_GROUP, MODE, TYPE,
+                            CREATION_TIME, ACCESS_TIME, MODIFICATION_TIME));
+
+            SimpleDateFormat formatter = new SimpleDateFormat("MM.dd-HH:mm:ss");
+            StringBuilder info = new StringBuilder();
+            switch (fileAttributes.getFileType()) {
+            case DIR:
+                info.append("d");
+                break;
+            case LINK:
+                info.append("l");
+                break;
+            case REGULAR:
+                info.append("-");
+                break;
+            default:
+                info.append("x");
+                break;
+            }
+            info.append(new UnixPermission(fileAttributes.getMode()).toString().substring(1));
+            info.append(";").append(fileAttributes.getOwner());
+            info.append(";").append(fileAttributes.getGroup());
+            info.append("[c=").append(formatter.format(fileAttributes.getCreationTime()));
+            info.append(";m=").append(formatter.format(fileAttributes.getModificationTime()));
+            info.append(";a=").append(formatter.format(fileAttributes.getAccessTime())).append("]");
+
             if(v){
-                sb.append("    Meta Data : ").append(info ).append("\n") ;
+                sb.append("    Meta Data : ").append(info).append("\n") ;
             }else{
-                sb.append(info.toString()).append("\n");
+                sb.append(info).append("\n");
             }
         }catch(Exception ee ){
             sb.append("matadataof failed : ").append(ee.getMessage());
@@ -970,6 +992,33 @@ public class PnfsManagerV3
 
     }
 
+    public void createLink(PnfsCreateSymLinkMessage pnfsMessage) {
+        PnfsId pnfsId;
+        _log.info("create symlink {} to {}", pnfsMessage.getPath(), pnfsMessage.getDestination() );
+        try {
+            File file = new File(pnfsMessage.getPath());
+            checkMask(pnfsMessage.getSubject(), file.getParent(),
+                    pnfsMessage.getAccessMask());
+
+            pnfsId = _nameSpaceProvider.createSymLink(pnfsMessage.getSubject(),
+                    pnfsMessage.getPath(),
+                    pnfsMessage.getDestination(),
+                    pnfsMessage.getUid(),
+                    pnfsMessage.getGid());
+
+            pnfsMessage.setPnfsId(pnfsId);
+            pnfsMessage.setSucceeded();
+
+        } catch (CacheException e) {
+            pnfsMessage.setFailed(e.getRc(), e.getMessage());
+        } catch (RuntimeException e) {
+            _log.error("Failed to create a symlink " +
+                    pnfsMessage.getPath() + " to " + pnfsMessage.getDestination(), e);
+            pnfsMessage.setFailed(CacheException.UNEXPECTED_SYSTEM_EXCEPTION, e);
+        }
+
+    }
+
     public void createDirectory(PnfsCreateDirectoryMessage pnfsMessage){
         PnfsId pnfsId;
         _log.info("create directory "+pnfsMessage.getPath());
@@ -978,7 +1027,10 @@ public class PnfsManagerV3
             checkMask(pnfsMessage.getSubject(), file.getParent(),
                       pnfsMessage.getAccessMask());
 
-            pnfsId = _nameSpaceProvider.createEntry(pnfsMessage.getSubject(), pnfsMessage.getPath(), pnfsMessage.getUid(), pnfsMessage.getGid(), pnfsMessage.getMode(), true);
+            pnfsId = _nameSpaceProvider.createDirectory(pnfsMessage.getSubject(),
+                    pnfsMessage.getPath(),
+                    pnfsMessage.getUid(), pnfsMessage.getGid(),
+                    pnfsMessage.getMode());
 
             pnfsMessage.setPnfsId(pnfsId);
             pnfsMessage.setSucceeded();
@@ -1026,7 +1078,10 @@ public class PnfsManagerV3
             checkMask(pnfsMessage.getSubject(), file.getParent(),
                       pnfsMessage.getAccessMask());
 
-            pnfsId = _nameSpaceProvider.createEntry(pnfsMessage.getSubject(), pnfsMessage.getPath(), pnfsMessage.getUid(), pnfsMessage.getGid(), pnfsMessage.getMode(), false);
+            pnfsId = _nameSpaceProvider.createFile(pnfsMessage.getSubject(),
+                    pnfsMessage.getPath(),
+                    pnfsMessage.getUid(),pnfsMessage.getGid(),
+                    pnfsMessage.getMode());
 
             pnfsMessage.setPnfsId(pnfsId);
             pnfsMessage.setSucceeded();
@@ -1070,26 +1125,6 @@ public class PnfsManagerV3
         } catch (RuntimeException e) {
             _log.error("Create entry failed", e);
             pnfsMessage.setFailed(CacheException.UNEXPECTED_SYSTEM_EXCEPTION, e);
-        }
-    }
-
-    public void setFileMetaData(PnfsSetFileMetaDataMessage message)
-    {
-        try {
-            PnfsId pnfsId = populatePnfsId(message);
-            FileMetaData meta = message.getMetaData();
-            _log.info("setFileMetaData=" + meta + " for " + pnfsId);
-
-            checkMask(message);
-
-            _nameSpaceProvider.setFileAttributes(message.getSubject(), pnfsId,
-                                                 meta.toFileAttributes());
-        } catch (CacheException e) {
-            _log.warn("Failed to set meta data: " + e);
-            message.setFailed(e.getRc(), e.getMessage());
-        } catch (RuntimeException e) {
-            _log.warn("Failed to set meta data", e);
-            message.setFailed(CacheException.UNEXPECTED_SYSTEM_EXCEPTION, e);
         }
     }
 
@@ -1151,16 +1186,22 @@ public class PnfsManagerV3
                 }
 
                 if (!isOfType(pnfsId, allowed)) {
-                    throw new CacheException(CacheException.INVALID_ARGS,
-                                             "Path exists but is not of the expected type");
+                    if (allowed.contains(FileType.DIR)) {
+                        throw new NotDirCacheException("Path exists but is not of the expected type");
+                    } else {
+                        throw new NotFileCacheException("Path exists but is not of the expected type");
+                    }
                 }
 
                 _log.info("delete PNFS entry for "+ path );
                 _nameSpaceProvider.deleteEntry(subject, path);
             } else {
                 if (!isOfType(pnfsId, allowed)) {
-                    throw new CacheException(CacheException.INVALID_ARGS,
-                                             "Path exists but is not of the expected type");
+                    if (allowed.contains(FileType.DIR)) {
+                        throw new NotDirCacheException("Path exists but is not of the expected type");
+                    } else {
+                        throw new NotFileCacheException("Path exists but is not of the expected type");
+                    }
                 }
 
                 checkMask(pnfsMessage);
@@ -1573,6 +1614,9 @@ public class PnfsManagerV3
         else if (pnfsMessage instanceof PnfsGetCacheLocationsMessage){
             getCacheLocations((PnfsGetCacheLocationsMessage)pnfsMessage);
         }
+        else if (pnfsMessage instanceof PnfsCreateSymLinkMessage) {
+            createLink((PnfsCreateSymLinkMessage) pnfsMessage);
+        }
         else if (pnfsMessage instanceof PnfsCreateDirectoryMessage){
             createDirectory((PnfsCreateDirectoryMessage)pnfsMessage);
         }
@@ -1581,9 +1625,6 @@ public class PnfsManagerV3
         }
         else if (pnfsMessage instanceof PnfsDeleteEntryMessage){
             deleteEntry((PnfsDeleteEntryMessage)pnfsMessage);
-        }
-        else if (pnfsMessage instanceof PnfsSetFileMetaDataMessage){
-            setFileMetaData((PnfsSetFileMetaDataMessage)pnfsMessage);
         }
         else if (pnfsMessage instanceof PnfsMapPathMessage){
             mapPath((PnfsMapPathMessage)pnfsMessage);

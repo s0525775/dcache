@@ -12,38 +12,36 @@ import java.security.Principal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.dcache.auth.Subjects;
-import org.dcache.chimera.FileSystemProvider;
-import org.dcache.chimera.nfs.v4.AbstractNFSv4Operation;
-import org.dcache.chimera.nfs.v4.HimeraNFS4Utils;
-import org.dcache.chimera.nfs.v4.NFSServerV41;
-import org.dcache.chimera.nfs.v4.NFSv4OperationFactory;
-import org.dcache.chimera.nfs.v4.OperationBIND_CONN_TO_SESSION;
-import org.dcache.chimera.nfs.v4.OperationCOMMIT;
-import org.dcache.chimera.nfs.v4.OperationCREATE_SESSION;
-import org.dcache.chimera.nfs.v4.OperationDESTROY_CLIENTID;
-import org.dcache.chimera.nfs.v4.OperationDESTROY_SESSION;
-import org.dcache.chimera.nfs.v4.OperationEXCHANGE_ID;
-import org.dcache.chimera.nfs.v4.OperationGETATTR;
-import org.dcache.chimera.nfs.v4.OperationILLEGAL;
-import org.dcache.chimera.nfs.v4.OperationPUTFH;
-import org.dcache.chimera.nfs.v4.OperationPUTROOTFH;
-import org.dcache.chimera.nfs.v4.OperationRECLAIM_COMPLETE;
-import org.dcache.chimera.nfs.v4.OperationSEQUENCE;
-import org.dcache.chimera.nfs.v4.ServerIdProvider;
-import org.dcache.chimera.nfs.v4.SimpleIdMap;
-import org.dcache.chimera.nfs.v4.xdr.nfs4_prot;
-import org.dcache.chimera.nfs.v4.xdr.nfs_argop4;
-import org.dcache.chimera.nfs.v4.xdr.nfs_opnum4;
-import org.dcache.chimera.nfs.v4.xdr.nfsace4;
-import org.dcache.chimera.nfs.v4.xdr.stateid4;
-import org.dcache.chimera.nfs.vfs.DirectoryEntry;
-import org.dcache.chimera.nfs.vfs.FsStat;
-import org.dcache.chimera.nfs.vfs.Inode;
-import org.dcache.chimera.nfs.vfs.Stat;
-import org.dcache.chimera.nfs.vfs.Stat.Type;
-import org.dcache.chimera.nfs.vfs.VirtualFileSystem;
+import org.dcache.nfs.v4.AbstractNFSv4Operation;
+import org.dcache.nfs.v4.NFSServerV41;
+import org.dcache.nfs.v4.NFSv4OperationFactory;
+import org.dcache.nfs.v4.OperationBIND_CONN_TO_SESSION;
+import org.dcache.nfs.v4.OperationCOMMIT;
+import org.dcache.nfs.v4.OperationCREATE_SESSION;
+import org.dcache.nfs.v4.OperationDESTROY_CLIENTID;
+import org.dcache.nfs.v4.OperationDESTROY_SESSION;
+import org.dcache.nfs.v4.OperationEXCHANGE_ID;
+import org.dcache.nfs.v4.OperationGETATTR;
+import org.dcache.nfs.v4.OperationILLEGAL;
+import org.dcache.nfs.v4.OperationPUTFH;
+import org.dcache.nfs.v4.OperationPUTROOTFH;
+import org.dcache.nfs.v4.OperationRECLAIM_COMPLETE;
+import org.dcache.nfs.v4.OperationSEQUENCE;
+import org.dcache.nfs.v4.SimpleIdMap;
+import org.dcache.nfs.v4.xdr.nfs4_prot;
+import org.dcache.nfs.v4.xdr.nfs_argop4;
+import org.dcache.nfs.v4.xdr.nfs_opnum4;
+import org.dcache.nfs.v4.xdr.nfsace4;
+import org.dcache.nfs.v4.xdr.stateid4;
+import org.dcache.nfs.vfs.DirectoryEntry;
+import org.dcache.nfs.vfs.FsStat;
+import org.dcache.nfs.vfs.Inode;
+import org.dcache.nfs.vfs.Stat;
+import org.dcache.nfs.vfs.Stat.Type;
+import org.dcache.nfs.vfs.VirtualFileSystem;
 import org.dcache.util.PortRange;
 import org.dcache.xdr.IpProtocolType;
 import org.dcache.xdr.OncRpcProgram;
@@ -52,7 +50,6 @@ import org.dcache.xdr.OncRpcSvcBuilder;
 import org.dcache.xdr.RpcDispatchable;
 import org.dcache.xdr.RpcLoginService;
 import org.dcache.xdr.gss.GssSessionManager;
-import org.dcache.commons.stats.RequestExecutionTimeGauges;
 import org.dcache.xdr.OncRpcException;
 
 /**
@@ -127,7 +124,7 @@ public class NFSv4MoverHandler {
         }
 
         @Override
-        public boolean remove(Inode parent, String path) throws IOException {
+        public void remove(Inode parent, String path) throws IOException {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
@@ -172,7 +169,7 @@ public class NFSv4MoverHandler {
      */
     private final OncRpcSvc _rpcService;
 
-    private final Map<stateid4, MoverBridge> _activeIO = new HashMap<>();
+    private final Map<stateid4, NfsMover> _activeIO = new ConcurrentHashMap<>();
     private final NFSv4OperationFactory _operationFactory =
             new EDSNFSv4OperationFactory(_activeIO);
     private final NFSServerV41 _embededDS;
@@ -208,30 +205,30 @@ public class NFSv4MoverHandler {
     }
 
     /**
-     * Add specified mover into list of allowed transfers.
+     * Add mover into list of allowed transfers.
      *
-     * @param moverBridge
+     * @param mover
      */
-    public void addHandler(MoverBridge moverBridge) {
-        _log.debug("added io handler: {}", moverBridge);
-        _activeIO.put( moverBridge.getStateid() , moverBridge );
+    public void add(NfsMover mover) {
+        _log.debug("registering new mover {}", mover);
+        _activeIO.put(mover.getStateId(), mover );
     }
 
     /**
-     * Removes specified mover into list of allowed transfers.
+     * Removes mover from the list of allowed transfers.
      *
-     * @param moverBridge
+     * @param mover
      */
-    public void removeHandler(MoverBridge moverBridge) {
-        _log.debug("removing io handler: {}", moverBridge);
-        _activeIO.remove(moverBridge.getStateid());
+    public void remove(NfsMover mover) {
+        _log.debug("un-removing io handler for stateid {}", mover);
+        _activeIO.remove(mover.getStateId());
     }
 
     private static class EDSNFSv4OperationFactory implements NFSv4OperationFactory {
 
-        private final Map<stateid4, MoverBridge> _activeIO;
+        private final Map<stateid4, NfsMover> _activeIO;
 
-        EDSNFSv4OperationFactory(Map<stateid4, MoverBridge> activeIO) {
+        EDSNFSv4OperationFactory(Map<stateid4, NfsMover> activeIO) {
             _activeIO = activeIO;
         }
 

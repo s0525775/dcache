@@ -31,7 +31,6 @@ import diskCacheV111.util.Base64;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.CheckStagePermission;
 import diskCacheV111.util.DCapUrl;
-import diskCacheV111.util.FileMetaData;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.RetentionPolicy;
@@ -79,6 +78,7 @@ import org.dcache.auth.UnionLoginStrategy;
 import org.dcache.auth.attributes.LoginAttribute;
 import org.dcache.auth.attributes.ReadOnly;
 import org.dcache.cells.CellStub;
+import org.dcache.chimera.UnixPermission;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.pinmanager.PinManagerPinMessage;
 import org.dcache.services.login.RemoteLoginStrategy;
@@ -1070,9 +1070,8 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         {
             super(sessionId, commandId, args);
 
-            _attributes = FileMetaData.getKnownFileAttributes();
-            _attributes.add(PNFSID);
-            _attributes.add(TYPE);
+            _attributes = EnumSet.of(OWNER, OWNER_GROUP, MODE, TYPE, SIZE,
+                    CREATION_TIME, ACCESS_TIME, MODIFICATION_TIME, CHANGE_TIME, PNFSID);
             if (!metaDataOnly) {
                 _attributes.add(STORAGEINFO);
             }
@@ -1297,7 +1296,6 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         public void fileAttributesAvailable()
         {
             try {
-                FileMetaData meta = new FileMetaData(_fileAttributes);
                 StringBuilder sb = new StringBuilder() ;
                 sb.append(_sessionId).append(" ").
                     append(_commandId).append(" ").
@@ -1305,32 +1303,31 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
                     // append(_vargs.getName()).append(_followLinks?" stat ":" stat ");
                     append(_vargs.getName()).append(" stat ");
 
-                sb.append("-st_size=").append(meta.getFileSize()).append(" ");
-                sb.append("-st_uid=").append(meta.getUid()).append(" ");
-                sb.append("-st_gid=").append(meta.getGid()).append(" ");
-                sb.append("-st_atime=").append(meta.getLastAccessedTime()/1000).append(" ");
-                sb.append("-st_mtime=").append(meta.getLastModifiedTime()/1000).append(" ");
-                sb.append("-st_ctime=").append(meta.getCreationTime()/1000).append(" ");
+                sb.append("-st_size=").append(_fileAttributes.getSize()).append(" ");
+                sb.append("-st_uid=").append(_fileAttributes.getOwner()).append(" ");
+                sb.append("-st_gid=").append(_fileAttributes.getGroup()).append(" ");
+                sb.append("-st_atime=").append(_fileAttributes.getAccessTime()/1000).append(" ");
+                sb.append("-st_mtime=").append(_fileAttributes.getModificationTime()/1000).append(" ");
+                sb.append("-st_ctime=").append(_fileAttributes.getChangeTime()/1000).append(" ");
 
-                FileMetaData.Permissions user  = meta.getUserPermissions() ;
-                FileMetaData.Permissions group = meta.getGroupPermissions();
-                FileMetaData.Permissions world = meta.getWorldPermissions() ;
+                String mode = new UnixPermission(_fileAttributes.getMode()).toString().substring(1);
+                switch (_fileAttributes.getFileType()) {
+                case DIR:
+                    mode = "d" + mode;
+                    break;
+                case REGULAR:
+                    mode = "-" + mode;
+                    break;
+                case LINK:
+                    mode = "l" + mode;
+                    break;
+                case SPECIAL:
+                    mode = "x" + mode;
+                    break;
+                }
 
-                sb.append("-st_mode=").
-                    append(meta.isRegularFile()?"-":
-                           meta.isDirectory()?"d":
-                           meta.isSymbolicLink()?"l":"x").
-                    append(user.canRead()?"r":"-").
-                    append(user.canWrite()?"w":"-").
-                    append(user.canExecute()?"x":"-").
-                    append(group.canRead()?"r":"-").
-                    append(group.canWrite()?"w":"-").
-                    append(group.canExecute()?"x":"-").
-                    append(world.canRead()?"r":"-").
-                    append(world.canWrite()?"w":"-").
-                    append(world.canExecute()?"x":"-").
-                    append(" ") ;
-
+                sb.append("-st_mode=").append(mode);
+                sb.append(" ") ;
                 sb.append("-st_ino=").append(_fileAttributes.getPnfsId().toString().hashCode()&0xfffffff) ;
 
                 println( sb.toString() ) ;
@@ -1431,9 +1428,9 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         public void fileAttributesAvailable()
         {
             try {
-                FileMetaData meta = new FileMetaData(_fileAttributes);
-                meta.setMode(_permission);
-                _pnfs.pnfsSetFileMetaData(_fileAttributes.getPnfsId(), meta);
+                FileAttributes attributes = new FileAttributes();
+                attributes.setMode(_permission);
+                _pnfs.setFileAttributes(_fileAttributes.getPnfsId(), attributes);
                 sendReply("fileAttributesAvailable", 0, "");
             } catch (CacheException e) {
                 sendReply("fileAttributesAvailable", 19, e.getMessage(), "EACCES");
@@ -1476,18 +1473,17 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         @Override
         public void fileAttributesAvailable(){
 
-            FileMetaData meta = new FileMetaData(_fileAttributes);
-
             try {
+                FileAttributes attributes = new FileAttributes();
                 if (_owner >= 0) {
-                    meta.setUid(_owner);
+                    attributes.setOwner(_owner);
                 }
 
                 if (_group >= 0) {
-                    meta.setGid(_group);
+                    attributes.setGroup(_group);
                 }
 
-                _pnfs.pnfsSetFileMetaData(_fileAttributes.getPnfsId(), meta);
+                _pnfs.setFileAttributes(_fileAttributes.getPnfsId(), attributes);
 
                 sendReply("fileAttributesAvailable", 0, "");
             } catch (CacheException e) {
@@ -1526,15 +1522,12 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         @Override
         public void fileAttributesAvailable(){
 
-            FileMetaData meta = new FileMetaData(_fileAttributes);
-
             try {
                 if (_group >= 0) {
-                    meta.setGid(_group);
+                    FileAttributes attributes = new FileAttributes();
+                    attributes.setGroup(_group);
+                    _pnfs.setFileAttributes(_fileAttributes.getPnfsId(), attributes);
                 }
-
-                _pnfs.pnfsSetFileMetaData(_fileAttributes.getPnfsId(), meta);
-
                 sendReply("fileAttributesAvailable", 0, "");
             } catch (CacheException e) {
                 sendReply("fileAttributesAvailable", 19, e.getMessage(), "EACCES");
@@ -1683,7 +1676,8 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
         {
             super( sessionId , commandId , args, false, true ) ;
 
-            _info.setMessageType("check") ;
+            _info = new DoorRequestInfoMessage(
+                    _cell.getCellInfo().getCellName()+"@"+_cell.getCellInfo().getDomainName(), "check");
             _destination      = args.getOpt( "location" ) ;
             String protocolName = args.getOpt( "protocol" ) ;
             if( protocolName == null) {
@@ -1740,7 +1734,7 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
                   new PoolMgrQueryPoolsMsg(DirectionType.READ,
                                            _protocolName ,
                                            _destination ,
-                                           _fileAttributes.getStorageInfo());
+                                           _fileAttributes);
 
                 CellMessage checkMessage = new CellMessage( _poolMgrPath , query ) ;
                 setStatus("Waiting for reply from PoolManager");
@@ -2088,11 +2082,7 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
                             _pnfs.deletePnfsEntry( path );
                             _message = _pnfs.createPnfsEntry(path , getUid(), getGid(), getMode(NameSpaceProvider.DEFAULT));
                             _fileAttributes = _message.getFileAttributes();
-                        }else{
-                            _message = _pnfs.getStorageInfoByPnfsId(_fileAttributes.getPnfsId()) ;
-                            _fileAttributes = _message.getFileAttributes();
                         }
-
                     }catch(CacheException ce ) {
                         _log.error(ce.toString());
                         sendReply( "fileAttributesAvailable", 1,
@@ -2256,8 +2246,8 @@ public class DCapDoorInterpreterV3 implements KeepAliveListener,
                 return ;
             }
 
-            // use the updated StorageInfo from PoolManager/SpaceManager
-            _fileAttributes.setStorageInfo(reply.getStorageInfo());
+            // use the updated file attributes from PoolManager/SpaceManager
+            _fileAttributes = reply.getFileAttributes();
 
             _pool = pool ;
             PoolIoFileMessage poolMessage;

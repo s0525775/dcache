@@ -7,6 +7,7 @@
 ####################################################################
 
 onerror shutdown
+check -strong httpd.net.listen
 check -strong httpd.net.port
 check -strong dcache.paths.config
 check -strong dcache.paths.etc
@@ -66,7 +67,7 @@ check -strong httpd.service.restorehandler-collector.period.unit
 define env checkSecurityProperties end
      check -strong httpd.net.https-port
      check -strong httpd.authz.admin-gid
-     check -strong httpd.security.ciphers
+     check -strong httpd.authn.ciphers
 end
 
 define env checkAlarmCleanerProperites end

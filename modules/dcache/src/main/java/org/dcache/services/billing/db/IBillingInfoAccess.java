@@ -61,8 +61,7 @@ package org.dcache.services.billing.db;
 
 import java.util.Collection;
 
-import org.dcache.services.billing.db.exceptions.BillingInitializationException;
-import org.dcache.services.billing.db.exceptions.BillingQueryException;
+import org.dcache.services.billing.histograms.data.IHistogramData;
 
 /**
  * Defines DAO API for interacting with billing information.
@@ -78,7 +77,7 @@ public interface IBillingInfoAccess {
      *            class of object to be retrieved
      * @return all existing objects of this type
      */
-    <T> Collection<T> get(Class<T> type) throws BillingQueryException;
+    <T> Collection<T> get(Class<T> type);
 
     /**
      * @param type
@@ -89,8 +88,7 @@ public interface IBillingInfoAccess {
      *            to bind to filter
      * @return all matching objects of this type
      */
-    <T> Collection<T> get(Class<T> type, String filter, Object... values)
-                    throws BillingQueryException;
+    <T> Collection<T> get(Class<T> type, String filter, Object... values);
 
     /**
      * @param type
@@ -104,22 +102,28 @@ public interface IBillingInfoAccess {
      * @return all matching objects of this type
      */
     <T> Collection<T> get(Class<T> type, String filter, String parameters,
-                    Object... values) throws BillingQueryException;
+                    Object... values);
 
-    void initialize() throws BillingInitializationException;
+    void initialize();
+
+    long getInsertQueueSize();
+
+    long getCommittedMessages();
+
+    long getDroppedMessages();
 
     /**
      * @param data
      *            mapped type to be stored
      */
-    <T> void put(T data) throws BillingQueryException;
+    void put(IHistogramData data);
 
     /**
      * @param type
      *            class of object to be deleted
      * @return number of objects deleted
      */
-    <T> long remove(Class<T> type) throws BillingQueryException;
+    <T> long remove(Class<T> type);
 
     /**
      * @param type
@@ -130,8 +134,7 @@ public interface IBillingInfoAccess {
      *            to bind to parameters
       * @return number of objects deleted
      */
-    <T> long remove(Class<T> type, String filter, Object... values)
-                    throws BillingQueryException;
+    <T> long remove(Class<T> type, String filter, Object... values);
 
     /**
      * @param type
@@ -145,5 +148,5 @@ public interface IBillingInfoAccess {
       * @return number of objects deleted
      */
     <T> long remove(Class<T> type, String filter, String parameters,
-                    Object... values) throws BillingQueryException;
+                    Object... values);
 }

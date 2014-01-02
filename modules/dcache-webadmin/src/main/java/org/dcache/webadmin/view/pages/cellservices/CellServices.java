@@ -1,5 +1,6 @@
 package org.dcache.webadmin.view.pages.cellservices;
 
+import org.apache.wicket.markup.html.form.Form;
 import org.apache.wicket.markup.html.panel.FeedbackPanel;
 import org.apache.wicket.model.PropertyModel;
 import org.slf4j.Logger;
@@ -10,23 +11,25 @@ import java.util.List;
 import org.dcache.webadmin.controller.CellsService;
 import org.dcache.webadmin.controller.exceptions.CellsServiceException;
 import org.dcache.webadmin.view.beans.CellServicesBean;
-import org.dcache.webadmin.view.pages.basepage.BasePage;
+import org.dcache.webadmin.view.pages.basepage.SortableBasePage;
 import org.dcache.webadmin.view.panels.cellservices.CellServicesPanel;
 
 /**
  * The CellServices Webpage
  * @author jans
  */
-public class CellServices extends BasePage {
+public class CellServices extends SortableBasePage {
 
     private static final long serialVersionUID = -1276186550495981006L;
     private static final Logger _log = LoggerFactory.getLogger(CellServices.class);
 
     public CellServices() {
-        add(new FeedbackPanel("feedback"));
+        Form<?> form = getAutoRefreshingForm("cellServicesForm");
+        form.add(new FeedbackPanel("feedback"));
         CellServicesPanel cellServicesPanel = new CellServicesPanel("cellServicesPanel",
                 new PropertyModel(this, "cellBeans"));
-        add(cellServicesPanel);
+        form.add(cellServicesPanel);
+        add(form);
     }
 
     private CellsService getCellsService() {

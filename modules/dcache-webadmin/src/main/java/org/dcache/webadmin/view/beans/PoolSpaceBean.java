@@ -1,5 +1,8 @@
 package org.dcache.webadmin.view.beans;
 
+import com.google.common.collect.ComparisonChain;
+import com.google.common.collect.Ordering;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +37,7 @@ public class PoolSpaceBean implements Comparable<PoolSpaceBean>, Serializable {
     private float _percentagePinned;
     private float _percentageRemovable;
     private DiskSpaceUnit _displayUnit = DiskSpaceUnit.MIBIBYTES;
+    private boolean pending = false;
 
     public PoolSpaceBean() {
         calculatePercentages();
@@ -97,6 +101,14 @@ public class PoolSpaceBean implements Comparable<PoolSpaceBean>, Serializable {
 
     public boolean isEnabled() {
         return _enabled;
+    }
+
+    public boolean isStatePending() {
+        return pending;
+    }
+
+    public void setStatePending(boolean pending) {
+        this.pending = pending;
     }
 
     public float getPercentageFree() {
@@ -186,7 +198,10 @@ public class PoolSpaceBean implements Comparable<PoolSpaceBean>, Serializable {
 
     @Override
     public int compareTo(PoolSpaceBean other) {
-        return this.getName().compareTo(other.getName());
+        return ComparisonChain.start()
+               .compare(getName(), other.getName(),
+                                   Ordering.natural().nullsLast())
+               .result();
     }
 
     @Override

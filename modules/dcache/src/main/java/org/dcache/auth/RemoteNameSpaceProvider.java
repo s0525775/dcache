@@ -26,6 +26,7 @@ import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
 
 import static diskCacheV111.vehicles.PnfsFlagMessage.FlagOperation.REMOVE;
+import org.dcache.namespace.FileType;
 
 /**
  * The RemoteNameSpaceProvider uses the PnfsManager client stub to provide
@@ -51,18 +52,32 @@ public class RemoteNameSpaceProvider implements NameSpaceProvider
     }
 
     @Override
-    public PnfsId createEntry(Subject subject, String path, int uid, int gid,
-            int mode, boolean isDirectory) throws CacheException
+    public PnfsId createFile(Subject subject, String path, int uid, int gid, int mode)
+            throws CacheException {
+        PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
+
+        PnfsCreateEntryMessage returnMsg = pnfs.createPnfsEntry(path, uid, gid, mode);
+
+        return returnMsg.getPnfsId();
+    }
+
+    @Override
+    public PnfsId createDirectory(Subject subject, String path, int uid, int gid, int mode)
+            throws CacheException {
+        PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
+
+        PnfsCreateEntryMessage returnMsg = pnfs.createPnfsDirectory(path, uid, gid, mode);
+
+        return returnMsg.getPnfsId();
+    }
+
+    @Override
+    public PnfsId createSymLink(Subject subject, String path, String dest,
+            int uid, int gid) throws CacheException
     {
         PnfsHandler pnfs = new PnfsHandler(_pnfs, subject);
 
-        PnfsCreateEntryMessage returnMsg;
-
-        if(isDirectory) {
-            returnMsg = pnfs.createPnfsDirectory(path, uid, gid, mode);
-        } else {
-            returnMsg = pnfs.createPnfsEntry(path, uid, gid, mode);
-        }
+        PnfsCreateEntryMessage returnMsg = pnfs.createSymLink(path, dest, uid, gid);
 
         return returnMsg.getPnfsId();
     }
@@ -173,16 +188,12 @@ public class RemoteNameSpaceProvider implements NameSpaceProvider
             Range<Integer> range, Set<FileAttribute> attrs, ListHandler handler)
             throws CacheException
     {
-        DirectoryStream stream;
-        try {
-            stream = _handler.list(subject, new FsPath(path), glob, range,
-                    attrs);
+        try (DirectoryStream stream = _handler.list(subject, new FsPath(path), glob, range, attrs)) {
+            for (DirectoryEntry entry : stream) {
+                handler.addEntry(entry.getName(), entry.getFileAttributes());
+            }
         } catch (InterruptedException e) {
             throw new TimeoutCacheException(e.getMessage());
-        }
-
-        for(DirectoryEntry entry : stream) {
-            handler.addEntry(entry.getName(), entry.getFileAttributes());
         }
     }
 }

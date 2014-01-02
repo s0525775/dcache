@@ -12,28 +12,31 @@ import java.nio.channels.CompletionHandler;
 import java.util.List;
 
 import diskCacheV111.util.CacheException;
+import diskCacheV111.util.DiskErrorCacheException;
 import diskCacheV111.vehicles.PoolIoFileMessage;
 import diskCacheV111.vehicles.PoolPassiveIoFileMessage;
 
 import dmg.cells.nucleus.CellPath;
+import dmg.cells.nucleus.NoRouteToCellException;
 import dmg.util.Args;
 
-import org.dcache.cells.AbstractCellComponent;
-import org.dcache.cells.CellCommandListener;
+import dmg.cells.nucleus.AbstractCellComponent;
+import dmg.cells.nucleus.CellCommandListener;
 import org.dcache.cells.CellStub;
 import org.dcache.chimera.ChimeraFsException;
-import org.dcache.chimera.nfs.v4.NFS4Client;
-import org.dcache.chimera.nfs.v4.NFSv41Session;
-import org.dcache.chimera.nfs.v4.xdr.stateid4;
+import org.dcache.nfs.v4.NFS4Client;
+import org.dcache.nfs.v4.NFSv41Session;
+import org.dcache.nfs.v4.xdr.stateid4;
+import org.dcache.commons.stats.RequestExecutionTimeGauges;
+import org.dcache.pool.FaultAction;
+import org.dcache.pool.FaultEvent;
+import org.dcache.pool.FaultListener;
 import org.dcache.pool.classic.Cancellable;
 import org.dcache.pool.classic.PostTransferService;
 import org.dcache.pool.classic.TransferService;
-import org.dcache.pool.movers.ManualMover;
 import org.dcache.pool.movers.Mover;
 import org.dcache.pool.movers.MoverFactory;
-import org.dcache.pool.movers.MoverProtocolMover;
 import org.dcache.pool.repository.ReplicaDescriptor;
-import org.dcache.pool.repository.RepositoryChannel;
 import org.dcache.util.NetworkUtils;
 import org.dcache.util.PortRange;
 import org.dcache.xdr.OncRpcException;
@@ -44,7 +47,7 @@ import org.dcache.xdr.OncRpcException;
  * @since 1.9.11
  */
 public class NfsTransferService extends AbstractCellComponent
-        implements MoverFactory, TransferService<MoverProtocolMover>, CellCommandListener
+        implements MoverFactory, TransferService<NfsMover>, CellCommandListener
 {
     private static final Logger _log = LoggerFactory.getLogger(NfsTransferService.class);
     private NFSv4MoverHandler _nfsIO;
@@ -52,6 +55,8 @@ public class NfsTransferService extends AbstractCellComponent
     private InetSocketAddress[] _localSocketAddresses;
     private CellStub _door;
     private PostTransferService _postTransferService;
+
+    private FaultListener _faultListener;
 
     public void init() throws ChimeraFsException, IOException, GSSException, OncRpcException {
 
@@ -71,6 +76,11 @@ public class NfsTransferService extends AbstractCellComponent
     }
 
     @Required
+    public void setFaultListener(FaultListener faultListener) {
+        _faultListener = faultListener;
+    }
+
+    @Required
     public void setPostTransferService(PostTransferService postTransferService) {
         _postTransferService = postTransferService;
     }
@@ -82,43 +92,34 @@ public class NfsTransferService extends AbstractCellComponent
     @Override
     public Mover<?> createMover(ReplicaDescriptor handle, PoolIoFileMessage message, CellPath pathToDoor) throws CacheException
     {
-        return new MoverProtocolMover(handle, message, pathToDoor, this, _postTransferService,
-                new NFSv41ProtocolMover(getCellEndpoint()));
+        return new NfsMover(handle, message, pathToDoor, this, _postTransferService);
     }
 
     @Override
-    public Cancellable execute(MoverProtocolMover transfer, final CompletionHandler<Void,Void> completionHandler) {
+    public Cancellable execute(final NfsMover mover, final CompletionHandler<Void,Void> completionHandler) {
         try {
-            NFS4ProtocolInfo nfs4ProtocolInfo = (NFS4ProtocolInfo) transfer.getProtocolInfo();
 
-            stateid4 stateid = nfs4ProtocolInfo.stateId();
-            final RepositoryChannel repositoryChannel = transfer.openChannel();
-            final MoverBridge moverBridge = new MoverBridge((ManualMover) transfer.getMover(),
-                    transfer.getFileAttributes().getPnfsId(), stateid, repositoryChannel, transfer.getIoMode(), transfer.getIoHandle());
-            _nfsIO.addHandler(moverBridge);
+            final Cancellable cancellableMover = mover.enable(completionHandler);
 
-            CellPath directDoorPath = new CellPath(transfer.getPathToDoor().getDestinationAddress());
-            _door.send(directDoorPath, new PoolPassiveIoFileMessage<>(getCellName(), _localSocketAddresses, stateid));
+            CellPath directDoorPath = new CellPath(mover.getPathToDoor().getDestinationAddress());
+            _door.send(directDoorPath, new PoolPassiveIoFileMessage<>(getCellName(), _localSocketAddresses, mover.getStateId()));
 
             /* An NFS mover doesn't complete until it is cancelled (the door sends a mover kill
              * message when the file is closed).
              */
-            return new Cancellable() {
-                @Override
-                public void cancel() {
-                    _nfsIO.removeHandler(moverBridge);
-                    try {
-                        repositoryChannel.close();
-                    } catch (IOException e) {
-                        _log.error("failed to close RAF", e);
-                    }
-                    completionHandler.completed(null, null);
-                }
-            };
-        } catch (Throwable e) {
+            return cancellableMover;
+        } catch (DiskErrorCacheException e) {
+            _faultListener.faultOccurred(new FaultEvent("repository", FaultAction.DISABLED,
+                    e.getMessage(), e));
+            completionHandler.failed(e, null);
+        } catch (NoRouteToCellException e) {
             completionHandler.failed(e, null);
         }
         return null;
+    }
+
+    public NFSv4MoverHandler getNfsMoverHandler() {
+        return _nfsIO;
     }
 
     public void setEnableGss(boolean withGss) {
@@ -135,10 +136,20 @@ public class NfsTransferService extends AbstractCellComponent
         return socketAddresses;
     }
 
-    public final static String hh_nfs_stats = " # show nfs mover statstics";
+    public final static String fh_nfs_stats =
+            "nfs stats [-c] # show nfs requests statstics\n\n" +
+            "  Print nfs operation statistics.\n" +
+            "    -c clear current statistics values";
+    public final static String hh_nfs_stats = " [-c] # show nfs mover statstics";
     public String ac_nfs_stats(Args args) {
+
+        RequestExecutionTimeGauges<String> gauges = _nfsIO.getNFSServer().getStatistics();
         StringBuilder sb = new StringBuilder();
-        sb.append("Stats:").append("\n").append(_nfsIO.getNFSServer().getStatistics());
+        sb.append("Stats:").append("\n").append(gauges);
+
+        if (args.hasOption("c")) {
+            gauges.reset();
+        }
 
         return sb.toString();
     }

@@ -8,6 +8,7 @@ import diskCacheV111.util.FileInCacheException;
 import diskCacheV111.util.FileNotFoundCacheException;
 import diskCacheV111.util.FileNotInCacheException;
 import diskCacheV111.util.FileNotOnlineCacheException;
+import diskCacheV111.util.InvalidMessageCacheException;
 import diskCacheV111.util.LockedCacheException;
 import diskCacheV111.util.MissingResourceCacheException;
 import diskCacheV111.util.NotDirCacheException;
@@ -72,19 +73,22 @@ public class CacheExceptionFactory {
                 return new FileCorruptedCacheException(message, cause);
             case SERVICE_UNAVAILABLE:
                  return new ServiceUnavailableException(message, cause);
+            case INVALID_ARGS:
+                 return new InvalidMessageCacheException(message, cause);
 
             /*
              * these do not have exception classes
              */
             case PANIC:
             case FILE_PRECIOUS:
-            case INVALID_ARGS:
             case FILESIZE_UNKNOWN:
             case UNEXPECTED_SYSTEM_EXCEPTION:
             case ATTRIBUTE_FORMAT_ERROR:
             case HSM_DELAY_ERROR:
             case FILE_NOT_STORED:
             case POOL_DISABLED:
+            case NO_POOL_CONFIGURED:
+            case NO_POOL_ONLINE:
             default:
                 return new CacheException(errorCode, message, cause);
         }

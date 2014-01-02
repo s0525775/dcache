@@ -8,8 +8,8 @@ Prefix: /
 Packager: dCache.org <support@dcache.org>.
 
 Obsoletes: dCacheConfigure
+Obsoletes: dcache-server
 Provides: dCachePostInstallConfigurationScripts
-Provides: dcache-server
 AutoReqProv: no
 Requires(pre): shadow-utils
 Requires(post): chkconfig
@@ -86,27 +86,33 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 /usr/sbin/dcache-pool-meta-preupgrade
+/usr/sbin/dcache-info-provider
+/usr/sbin/dcache-billing-indexer
 /usr/bin/chimera-cli
 /usr/bin/dcache
 /usr/bin/dcache-star
-/usr/sbin/dcache-info-provider
 /usr/share/doc/dcache
 /usr/share/dcache
 /usr/share/man/man8/dcache-bootloader.8
+/usr/share/man/man8/dcache-billing-indexer.8
 /usr/share/man/man8/dcache.8
 /var/log/dcache
 
 %attr(-,dcache,dcache) /var/lib/dcache/alarms
 %attr(-,dcache,dcache) /var/lib/dcache/config
 %attr(-,dcache,dcache) /var/lib/dcache/billing
+%attr(-,dcache,dcache) /var/lib/dcache/httpd
 %attr(-,dcache,dcache) /var/lib/dcache/plots
 %attr(-,dcache,dcache) /var/lib/dcache/statistics
 %attr(-,dcache,dcache) /var/lib/dcache/star
+%attr(-,dcache,dcache) /var/log/dcache
 %attr(-,dcache,dcache) /var/spool/dcache/star
 %attr(700,dcache,dcache) /var/lib/dcache/credentials
 
 %attr(0755,root,root) /etc/rc.d/init.d/dcache-server
 %attr(0755,root,root) /etc/bash_completion.d/dcache
+%config(noreplace) %attr(0644,root,root) /etc/security/limits.d/92-dcache.conf
+
 %docdir /usr/share/doc/dcache
 %config(noreplace) /etc/dcache
 %config(noreplace) /var/lib/dcache

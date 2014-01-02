@@ -20,9 +20,21 @@ public class AbstractNameSpaceProvider
     implements NameSpaceProvider
 {
     @Override
-    public PnfsId createEntry(Subject subject, String path, int uid, int gid, int mode, boolean isDirectory)
+    public PnfsId createFile(Subject subject, String path, int uid, int gid, int mode)
         throws CacheException
     {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public PnfsId createDirectory(Subject subject, String path, int uid, int gid, int mode)
+            throws CacheException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public PnfsId createSymLink(Subject subject, String path, String dest, int uid, int gid)
+            throws CacheException {
         throw new UnsupportedOperationException();
     }
 
