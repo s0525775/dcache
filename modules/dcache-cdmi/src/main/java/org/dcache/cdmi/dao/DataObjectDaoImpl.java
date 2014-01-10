@@ -107,7 +107,9 @@ public class DataObjectDaoImpl extends AbstractCellComponent
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
         this.baseDirectoryName = baseDirectoryName;
-        System.out.println("******* Base Directory = " + baseDirectoryName);
+        System.out.println("******* Base Directory (O) = " + baseDirectoryName);
+        //Temp Helper Part
+        if (this.baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName2(this.baseDirectoryName);
     }
 
     /**
@@ -138,7 +140,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         // check for file name
         // path should be <container name>/<file name>
         // Split path into path and filename
-        String[] tokens = path.split("/");  // << ERROR HERE, PATH IS NULL!
+        String[] tokens = path.split("/");
         if (tokens.length < 1) {
             throw new BadRequestException("No object name in path <" + path + ">");
         }
@@ -283,54 +285,76 @@ public class DataObjectDaoImpl extends AbstractCellComponent
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
 
+        Test.write("/tmp/testd001.log", "Test001");
         //temp
         if (listDirectoryHandler == null) {
+            Test.write("/tmp/testd001.log", "Test002");
             init();
         }
 
+        Test.write("/tmp/testd001.log", "Test003");
         if (!checkIfDirectoryFileExists(metadataFile.getAbsolutePath())) {
+            Test.write("/tmp/testd001.log", "Test004: " + metadataFile.getAbsolutePath());
             return null;
         }
+        Test.write("/tmp/testd001.log", "Test005");
         // Check for object file
         try {
+            Test.write("/tmp/testd001.log", "Test006");
             System.out.println("baseDirectory = " + baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
             objFile = new File(baseDirectory, path);
             System.out.println("Object Absolute Path = " + objFile.getAbsolutePath());
         } catch (Exception ex) {
+            Test.write("/tmp/testd001.log", "Test007");
             ex.printStackTrace();
             System.out.println("Exception in findByPath : " + ex);
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
         if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
+            Test.write("/tmp/testd001.log", "Test008");
             throw new ConflictException("Object File <"
                                         + objFile.getAbsolutePath()
                                         + "> doesn't exist");
         }
+        Test.write("/tmp/testd001.log", "Test009");
         //
         // Both Files are there. So open, read, create object and send out
         //
         DataObject dObj = new DataObject();
+        Test.write("/tmp/testd001.log", "Test010");
         try {
+            Test.write("/tmp/testd001.log", "Test011: " + metadataFile.getAbsolutePath());
             // Read metadata
             byte[] inBytes = readFile(metadataFile.getAbsolutePath());
+            Test.write("/tmp/testd001.log", "Test012");
             dObj.fromJson(inBytes, true);
+            Test.write("/tmp/testd001.log", "Test013");
             // Read object from file
             inBytes = readFile(objFile.getAbsolutePath());
+            Test.write("/tmp/testd001.log", "Test014");
             dObj.setValue(new String(inBytes));
+            Test.write("/tmp/testd001.log", "Test015");
         } catch (Exception ex) {
+            Test.write("/tmp/testd001.log", "Test016");
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
             throw new IllegalArgumentException("Cannot read Object @" + path + " error : " + ex);
         }
 
+        Test.write("/tmp/testd001.log", "Test017");
         if (dObj != null) {
+            Test.write("/tmp/testd001.log", "Test018");
             // change access time
             Date now = new Date();
+            Test.write("/tmp/testd001.log", "Test019");
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+            Test.write("/tmp/testd001.log", "Test020");
             dObj.setMetadata("cdmi_atime", sdf.format(now));
+            Test.write("/tmp/testd001.log", "Test021");
             // need to increment acount dObj.setMetadata("cdmi_acount", "0");
         }
+        Test.write("/tmp/testd001.log", "Test022");
         return dObj;
         // throw new UnsupportedOperationException("DataObjectDaoImpl.findByPath()");
     }
@@ -345,6 +369,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
      * DCache related stuff.
      */
 
+    // Temp Helper Function
     private void init() {
         pnfsStub = CDMIDataTransfer.getPnfsStub2();
         pnfsHandler = CDMIDataTransfer.getPnfsHandler2();
@@ -352,6 +377,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         poolStub = CDMIDataTransfer.getPoolStub2();
         poolMgrStub = CDMIDataTransfer.getPoolMgrStub2();
         billingStub = CDMIDataTransfer.getBillingStub2();
+        baseDirectoryName = CDMIDataTransfer.getBaseDirectoryName2();
     }
 
     //This function is necessary, otherwise the attributes and servletContext are not set.
@@ -368,6 +394,8 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         this.poolStub = getPoolAttribute();
         this.poolMgrStub = getPoolMgrAttribute();
         this.billingStub = getBillingAttribute();
+        //Temp Helper Part
+        if (baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName2(baseDirectoryName);
         CDMIDataTransfer.setPnfsStub2(pnfsStub);
         CDMIDataTransfer.setPnfsHandler2(pnfsHandler);
         CDMIDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
@@ -528,6 +556,8 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         String tmpPath = addPrefixSlashToPath(path);
         FsPath fsPath = new FsPath(tmpPath);
         Map<String, FileType> result = new HashMap<>();
+        Test.write("/tmp/listing.log", path);
+        Test.write("/tmp/listing.log", listDirectoryHandler.toString());
         try {
             listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
@@ -539,7 +569,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
     private String addPrefixSlashToPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (!path.startsWith("/")) {
                 result = "/" + path;
             } else {
@@ -552,7 +582,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
     private String addSuffixSlashToPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (!path.endsWith("/")) {
                 result = path + "/";
             } else {
@@ -565,7 +595,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
     private String removeSlashesFromPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (path.startsWith("/")) {
                 result = path.substring(1, path.length() - 1);
             } else {
@@ -587,6 +617,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         private ListPrinter(Map<String, FileType> list)
         {
             this.list = list;
+            Test.write("/tmp/listing.log", "Listing_2:"); //temporary
         }
 
         @Override

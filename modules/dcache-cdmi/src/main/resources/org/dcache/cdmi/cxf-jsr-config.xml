@@ -84,11 +84,11 @@
         <property name="dataObjectDao" ref="dataObjectDao"/>
     </bean>
 
-    <bean id="capabilityResource"              class="org.snia.cdmiserver.resource.CapabilityResource"
+    <bean id="capabilityResource"            class="org.snia.cdmiserver.resource.CapabilityResource"
                                              scope="prototype">
          <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
-    <bean id="pathResource"                  class="org.snia.cdmiserver.resource.PathResource"
+    <bean id="pathResource"                  class="org.dcache.cdmi.resource.PathResource"
                                              scope="prototype">
         <property name="containerDao" ref="containerDao"/>
         <property name="dataObjectDao" ref="dataObjectDao"/>

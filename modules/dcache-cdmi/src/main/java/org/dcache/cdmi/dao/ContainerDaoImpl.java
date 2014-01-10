@@ -118,6 +118,9 @@ public class ContainerDaoImpl extends AbstractCellComponent
      */
     public void setBaseDirectoryName(String baseDirectoryName) {
         this.baseDirectoryName = baseDirectoryName;
+        System.out.println("******* Base Directory (C) = " + baseDirectoryName);
+        //Temp Helper Part
+        if (this.baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName(this.baseDirectoryName);
     }
 
     private boolean recreate = true;
@@ -528,8 +531,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
      */
     public File absoluteFile(String path) {
         if (path == null) {
+            Test.write("/tmp/testd002.log", "Test033: " + baseDirectory().getAbsolutePath());
             return baseDirectory();
         } else {
+            Test.write("/tmp/testd002.log", "Test034: " + new File(baseDirectory(), path).getAbsolutePath());
             return new File(baseDirectory(), path);
         }
     }
@@ -669,8 +674,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             init();
         }
 
-        File directoryOrFile = absoluteFile(path);
-        if (directoryOrFile.isDirectory()) {
+        if (path == null || isDirectory(path)) {
             return true;
         } else {
             return false;
@@ -681,6 +685,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
      * DCache related stuff.
      */
 
+    // Temp Helper Function
     private void init() {
         pnfsStub = CDMIDataTransfer.getPnfsStub();
         pnfsHandler = CDMIDataTransfer.getPnfsHandler();
@@ -688,6 +693,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         poolStub = CDMIDataTransfer.getPoolStub();
         poolMgrStub = CDMIDataTransfer.getPoolMgrStub();
         billingStub = CDMIDataTransfer.getBillingStub();
+        baseDirectoryName = CDMIDataTransfer.getBaseDirectoryName();
     }
 
     //This function is necessary, otherwise the attributes and servletContext are not set.
@@ -704,6 +710,8 @@ public class ContainerDaoImpl extends AbstractCellComponent
         this.poolStub = getPoolAttribute();
         this.poolMgrStub = getPoolMgrAttribute();
         this.billingStub = getBillingAttribute();
+        //Temp Helper Part
+        if (baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName(baseDirectoryName);
         CDMIDataTransfer.setPnfsStub(pnfsStub);
         CDMIDataTransfer.setPnfsHandler(pnfsHandler);
         CDMIDataTransfer.setListDirectoryHandler(listDirectoryHandler);
@@ -998,7 +1006,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String addPrefixSlashToPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (!path.startsWith("/")) {
                 result = "/" + path;
             } else {
@@ -1011,7 +1019,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String addSuffixSlashToPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (!path.endsWith("/")) {
                 result = path + "/";
             } else {
@@ -1024,7 +1032,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
     private String removeSlashesFromPath(String path)
     {
         String result = "";
-        if (path != null) {
+        if (path != null && path.length() > 0) {
             if (path.startsWith("/")) {
                 result = path.substring(1, path.length() - 1);
             } else {
@@ -1045,6 +1053,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
         private ListPrinter(Map<String, FileType> list)
         {
+            Test.write("/tmp/listing.log", "Listing:"); //temporary
             this.list = list;
         }
 

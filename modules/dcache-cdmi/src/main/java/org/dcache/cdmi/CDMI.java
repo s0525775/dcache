@@ -50,6 +50,7 @@ import org.dcache.auth.Subjects;
 import dmg.cells.nucleus.AbstractCellComponent;
 import org.dcache.cells.AbstractMessageCallback;                        //added
 import dmg.cells.nucleus.CellMessageReceiver;
+import org.dcache.cdmi.dao.mongodb.MongoDB;
 import org.dcache.util.Transfer;
 import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
@@ -78,6 +79,13 @@ public class CDMI extends AbstractCellComponent
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
+
+    public CDMI() {
+        MongoDB mdb = new MongoDB();
+        mdb.connectWithoutDb();
+        mdb.printMongoInformation();
+        mdb.disconnect();
+    }
 
     public boolean isDefaultFormal()
     {
@@ -310,6 +318,7 @@ public class CDMI extends AbstractCellComponent
         private ListPrinter(PrintWriter writer)
         {
             this.writer = writer;
+            Test.write("/tmp/test006.log", "Writer:");
         }
 
         @Override
@@ -353,15 +362,15 @@ public class CDMI extends AbstractCellComponent
     @Override
     public void run()
     {
-        /*
         while (true) {
             try {
                 try (SocketChannel connection = channel.accept()) {
-                    //PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
+                    PrintWriter out = new PrintWriter(new OutputStreamWriter(connection.socket().getOutputStream()));
                     try {
-                        //lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
-                        //                      null, Range.<Integer>all());
+                        lister.printDirectory(Subjects.ROOT, new ListPrinter(out), new FsPath("/"),
+                                              null, Range.<Integer>all());
 
+                        /*
                         BufferedReader reader = new BufferedReader(new InputStreamReader(connection.socket().getInputStream()));
                         int port = Integer.parseInt(reader.readLine());
 
@@ -378,9 +387,11 @@ public class CDMI extends AbstractCellComponent
                         transfer.createNameSpaceEntry();
                         transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(1000));
                     } catch (IOException | CacheException e) {
-                        //out.println(e.toString());
+                        */
+                    } catch (CacheException e) {
+                        out.println(e.toString());
                     }
-                    //out.flush();
+                    out.flush();
                 }
             } catch (NotYetBoundException e) {
                 // log error
@@ -391,7 +402,6 @@ public class CDMI extends AbstractCellComponent
                 // log error
             }
         }
-        */
     }
 
     @Command(name = "pools", hint = "show pools in pool group",
@@ -512,6 +522,7 @@ public class CDMI extends AbstractCellComponent
         public DirectoryPrinter(StringBuilder out)
         {
             this.out = out;
+            Test.write("/tmp/test006.log", "Writer2:");
         }
 
         @Override

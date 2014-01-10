@@ -14,14 +14,21 @@ public class CDMIDataTransfer
     private static CellStub poolStub;
     private static CellStub poolMgrStub;
     private static CellStub billingStub;
+    private static String baseDirectoryName;
     private static CellStub pnfsStub2;
     private static PnfsHandler pnfsHandler2;
     private static ListDirectoryHandler listDirectoryHandler2;
     private static CellStub poolStub2;
     private static CellStub poolMgrStub2;
     private static CellStub billingStub2;
+    private static String baseDirectoryName2;
     private static byte[] bytData;
     private static String strData;
+
+    public static void setBaseDirectoryName(String directoryName)
+    {
+        baseDirectoryName = directoryName;
+    }
 
     public static void setPnfsStub(CellStub stub)
     {
@@ -51,6 +58,11 @@ public class CDMIDataTransfer
     public static void setBillingStub(CellStub stub)
     {
         billingStub = stub;
+    }
+
+    public static void setBaseDirectoryName2(String directoryName)
+    {
+        baseDirectoryName2 = directoryName;
     }
 
     public static void setPnfsStub2(CellStub stub)
@@ -93,6 +105,11 @@ public class CDMIDataTransfer
         bytData = data;
     }
 
+    public static String getBaseDirectoryName()
+    {
+        return baseDirectoryName;
+    }
+
     public static CellStub getPnfsStub()
     {
         return pnfsStub;
@@ -121,6 +138,11 @@ public class CDMIDataTransfer
     public static CellStub getBillingStub()
     {
         return billingStub;
+    }
+
+    public static String getBaseDirectoryName2()
+    {
+        return baseDirectoryName2;
     }
 
     public static CellStub getPnfsStub2()
