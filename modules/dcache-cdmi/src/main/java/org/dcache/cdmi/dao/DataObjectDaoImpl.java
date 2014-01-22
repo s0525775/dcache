@@ -32,6 +32,8 @@ package org.dcache.cdmi.dao;
 
 import static org.dcache.namespace.FileAttribute.*;
 import com.google.common.collect.Range;
+import com.mongodb.DBObject;
+import com.mongodb.WriteResult;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
@@ -55,6 +57,9 @@ import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import org.dcache.cdmi.temp.Test;
 import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
+import org.dcache.cdmi.dao.mongodb.ContainerMetadata;
+import org.dcache.cdmi.dao.mongodb.DataObjectMetadata;
+import org.dcache.cdmi.dao.mongodb.MongoDB;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.FileType;
@@ -103,6 +108,10 @@ public class DataObjectDaoImpl extends AbstractCellComponent
     public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
     public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
     public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
+    public static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
+    public static final String DB_MONGO_TABLE_STORAGE_SYS_METADATA = "storage_metadata";
+    public static final String DB_MONGO_TABLE_DATA_SYS_METADATA = "data_metadata";
+    public static final String DB_MONGO_TABLE_USER_METADATA = "user_metadata";
 
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
@@ -173,6 +182,7 @@ public class DataObjectDaoImpl extends AbstractCellComponent
         //
         String metadataFileName = getmetadataFileName(path);
         String containerName = getcontainerName(path);
+
         //
         File objFile, baseDirectory, containerDirectory, metadataFile;
         try {
@@ -214,36 +224,51 @@ public class DataObjectDaoImpl extends AbstractCellComponent
             // dObj.setObjectURI(directory.getAbsolutePath()+"/"+objectID);
             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
             // Add metadata
+            DataObjectMetadata doMd = new DataObjectMetadata();
+            doMd.setObjectID(objectID);
             String val = "" + dObj.getValue();
-            dObj.setMetadata("cdmi_size", val.length() + "");
+            //dObj.setMetadata("cdmi_size", val.length() + "");
+            doMd.setMetadata("cdmi_size", val.length() + "");
             // ISO-8601 Date
             Date now = new Date();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            dObj.setMetadata("cdmi_ctime", sdf.format(now));
-            dObj.setMetadata("cdmi_atime", "never");
+            //OLD: dObj.setMetadata("cdmi_ctime", sdf.format(now));
+            doMd.setMetadata("cdmi_ctime", sdf.format(now));
+            //OLD: dObj.setMetadata("cdmi_atime", "never");
+            doMd.setMetadata("cdmi_atime", "never");
             // dObj.setMetadata("cdmi_acount", "0");
             // dObj.setMetadata("cdmi_mcount", "0");
             // Create file
-            dObj.setMetadata("fileName", objFile.getAbsolutePath());
-            dObj.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
+            //OLD: dObj.setMetadata("fileName", objFile.getAbsolutePath());
+            doMd.setMetadata("fileName", objFile.getAbsolutePath());
+            //OLD: dObj.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
+            doMd.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
                 mimeType = "text/plain";
                 dObj.setMimetype(mimeType);
             }
-            dObj.setMetadata("mimetype", mimeType);
+            //OLD: dObj.setMetadata("mimetype", mimeType);
+            doMd.setMetadata("mimetype", mimeType);
             //
             if (!writeFile(objFile.getAbsolutePath(), dObj.getValue())) {
                 System.out.println("Exception while writing.");
                 throw new IllegalArgumentException("Cannot write Object file @"
                                                    + path);
             }
-            // write metadata file
+            // write pseudo metadata file
             System.out.println("metadataFile : " + metadataFileName);
             if (!writeFile(metadataFile.getAbsolutePath(), dObj.metadataToJson())) {
                 System.out.println("Exception while writing.");
                 throw new IllegalArgumentException("Cannot write Object file @"
                                                    + path);
+            }
+            // write real metadata to DB
+            if (!writeMetadata(dObj.getObjectID(), doMd.metadataToJson())) {
+                System.out.println("Exception while writing to Mongo DB.");
+                throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                   + DB_MONGO_DATABASE_NAME);
             }
             //
         } catch (Exception ex) {
@@ -252,6 +277,54 @@ public class DataObjectDaoImpl extends AbstractCellComponent
             throw new IllegalArgumentException("Cannot write Object @" + path + " error : " + ex);
         }
         return dObj;
+    }
+
+    public boolean writeMetadata(String objectID, String jsonObject) {
+        boolean result = false;
+        DBObject dbObject;
+        WriteResult writeResult;
+        MongoDB mdb = new MongoDB();
+        mdb.connect(DB_MONGO_DATABASE_NAME);
+        dbObject = mdb.convertJsonToDbObject(jsonObject);
+        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+            // update
+            writeResult = mdb.updateById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID, dbObject);
+        } else {
+            // create
+            writeResult = mdb.saveToDB(DB_MONGO_TABLE_STORAGE_SYS_METADATA, dbObject);
+        }
+        mdb.disconnect();
+        if (writeResult.getError() != null) {
+            System.out.println("Exception while writing to Mongo database.");
+            throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                               + DB_MONGO_DATABASE_NAME + "', internal error message: "
+                                               + writeResult.getError());
+        } else {
+            result = true;
+        }
+        return result;
+    }
+
+    public String readMetadata(String objectID) {
+        String result = "";
+        DBObject dbObject = null;
+        MongoDB mdb = new MongoDB();
+        mdb.connect(DB_MONGO_DATABASE_NAME);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+            dbObject = mdb.fetchById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+            if (dbObject != null)
+                result = mdb.convertDbObjectToJson(dbObject);
+        }
+        mdb.disconnect();
+        if (dbObject == null) {
+            System.out.println("Exception while reading from Mongo database.");
+            throw new IllegalArgumentException("Cannot read storage system metadata from table '"
+                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                               + DB_MONGO_DATABASE_NAME + "', internal error message: "
+                                               + "no JSON object for objectID '" + objectID + "' found");
+        }
+        return result;
     }
 
     @Override
@@ -285,76 +358,60 @@ public class DataObjectDaoImpl extends AbstractCellComponent
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
 
-        Test.write("/tmp/testd001.log", "Test001");
         //temp
         if (listDirectoryHandler == null) {
-            Test.write("/tmp/testd001.log", "Test002");
             init();
         }
 
-        Test.write("/tmp/testd001.log", "Test003");
         if (!checkIfDirectoryFileExists(metadataFile.getAbsolutePath())) {
-            Test.write("/tmp/testd001.log", "Test004: " + metadataFile.getAbsolutePath());
             return null;
         }
-        Test.write("/tmp/testd001.log", "Test005");
         // Check for object file
         try {
-            Test.write("/tmp/testd001.log", "Test006");
             System.out.println("baseDirectory = " + baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
             objFile = new File(baseDirectory, path);
             System.out.println("Object Absolute Path = " + objFile.getAbsolutePath());
         } catch (Exception ex) {
-            Test.write("/tmp/testd001.log", "Test007");
             ex.printStackTrace();
             System.out.println("Exception in findByPath : " + ex);
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
         if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
-            Test.write("/tmp/testd001.log", "Test008");
             throw new ConflictException("Object File <"
                                         + objFile.getAbsolutePath()
                                         + "> doesn't exist");
         }
-        Test.write("/tmp/testd001.log", "Test009");
         //
         // Both Files are there. So open, read, create object and send out
         //
         DataObject dObj = new DataObject();
-        Test.write("/tmp/testd001.log", "Test010");
         try {
-            Test.write("/tmp/testd001.log", "Test011: " + metadataFile.getAbsolutePath());
-            // Read metadata
+            // Read pseudo metadata
             byte[] inBytes = readFile(metadataFile.getAbsolutePath());
-            Test.write("/tmp/testd001.log", "Test012");
             dObj.fromJson(inBytes, true);
-            Test.write("/tmp/testd001.log", "Test013");
             // Read object from file
             inBytes = readFile(objFile.getAbsolutePath());
-            Test.write("/tmp/testd001.log", "Test014");
             dObj.setValue(new String(inBytes));
-            Test.write("/tmp/testd001.log", "Test015");
+            // Read real metadata from DB
+            DataObjectMetadata doMd = new DataObjectMetadata();
+            doMd.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
+            for (Map.Entry<String, String> entry : doMd.getMetadata().entrySet()) {
+                dObj.setMetadata(entry.getKey(), entry.getValue());
+            }
         } catch (Exception ex) {
-            Test.write("/tmp/testd001.log", "Test016");
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
             throw new IllegalArgumentException("Cannot read Object @" + path + " error : " + ex);
         }
 
-        Test.write("/tmp/testd001.log", "Test017");
         if (dObj != null) {
-            Test.write("/tmp/testd001.log", "Test018");
             // change access time
             Date now = new Date();
-            Test.write("/tmp/testd001.log", "Test019");
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            Test.write("/tmp/testd001.log", "Test020");
-            dObj.setMetadata("cdmi_atime", sdf.format(now));
-            Test.write("/tmp/testd001.log", "Test021");
+            dObj.setMetadata("cdmi_atime", sdf.format(now));  //TODO???
             // need to increment acount dObj.setMetadata("cdmi_acount", "0");
         }
-        Test.write("/tmp/testd001.log", "Test022");
         return dObj;
         // throw new UnsupportedOperationException("DataObjectDaoImpl.findByPath()");
     }
@@ -680,7 +737,6 @@ public class DataObjectDaoImpl extends AbstractCellComponent
             transfer.readNameSpaceEntry();
             transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
             result = CDMIDataTransfer.getDataAsBytes();
-            _log.error("CDMIDataObjectDaoImpl received data: " + result.toString());
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("File could not become read, exception is: " + ex.getMessage());
         }

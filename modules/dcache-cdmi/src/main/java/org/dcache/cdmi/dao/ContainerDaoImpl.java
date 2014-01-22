@@ -31,6 +31,7 @@
 package org.dcache.cdmi.dao;
 
 import com.google.common.collect.Range;
+import com.mongodb.DBObject;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
@@ -56,6 +57,8 @@ import org.dcache.cdmi.temp.Test;
 import dmg.cells.nucleus.CellLifeCycleAware;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import dmg.cells.nucleus.AbstractCellComponent;
+import java.util.concurrent.TimeUnit;
+import org.dcache.cdmi.dao.mongodb.MongoDB;
 import static org.dcache.namespace.FileAttribute.*;
 import static org.dcache.namespace.FileType.*;
 import org.dcache.cells.CellStub;
@@ -73,6 +76,8 @@ import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.NotFoundException;
 import org.snia.cdmiserver.model.Container;
 import org.snia.cdmiserver.util.ObjectID;
+import com.mongodb.WriteResult;
+import org.dcache.cdmi.dao.mongodb.ContainerMetadata;
 
 /**
  * <p>
@@ -107,6 +112,10 @@ public class ContainerDaoImpl extends AbstractCellComponent
     public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
     public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
     public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
+    public static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
+    public static final String DB_MONGO_TABLE_STORAGE_SYS_METADATA = "storage_metadata";
+    public static final String DB_MONGO_TABLE_DATA_SYS_METADATA = "data_metadata";
+    public static final String DB_MONGO_TABLE_USER_METADATA = "user_metadata";
 
     /**
      * <p>
@@ -163,7 +172,12 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
         File containerFieldsFile = getContainerFieldsFile(path);
 
+        ContainerMetadata cMd = new ContainerMetadata();
+        cMd.setMetadata(containerRequest.getMetadata());
+
         if (containerRequest.getMove() == null) { // This is a normal Create or Update
+
+            System.out.println("<Container Create>");
 
             //
             // Setup ISO-8601 Date
@@ -181,6 +195,8 @@ public class ContainerDaoImpl extends AbstractCellComponent
                 if (!createDirectory(directory.getAbsolutePath())) {
                     throw new IllegalArgumentException("Cannot create container '" + path + "'");
                 }
+
+                System.out.println("<Container Create>");
 
                 String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
                 containerRequest.setObjectID(objectID);
@@ -207,19 +223,30 @@ public class ContainerDaoImpl extends AbstractCellComponent
                     // runtime.exec(exported);
                 }
 
-                containerRequest.getMetadata().put("cdmi_ctime", sdf.format(now));
-                containerRequest.getMetadata().put("cdmi_mtime", "never");
-                containerRequest.getMetadata().put("cdmi_atime", "never");
-                containerRequest.getMetadata().put("cdmi_acount", "0");
-                containerRequest.getMetadata().put("cdmi_mcount", "0");
+                cMd.setObjectID(objectID);
+                //OLD: containerRequest.getMetadata().put("cdmi_ctime", sdf.format(now));
+                cMd.setMetadata("cdmi_ctime", sdf.format(now));
+                //OLD: containerRequest.getMetadata().put("cdmi_mtime", "never");
+                cMd.setMetadata("cdmi_mtime", "never");
+                //OLD: containerRequest.getMetadata().put("cdmi_atime", "never");
+                cMd.setMetadata("cdmi_atime", "never");
+                //OLD: containerRequest.getMetadata().put("cdmi_acount", "0");
+                cMd.setMetadata("cdmi_acount", "0");
+                //OLD: containerRequest.getMetadata().put("cdmi_mcount", "0");
+                cMd.setMetadata("cdmi_mcount", "0");
 
             } else { // Updating Container
 
+                System.out.println("<Container Update>");
+
                 //
-                // Read the persistent metatdata from the "." file
+                // Read the persistent metadata from the "." file
                 //
                 //TODO:
                 Container currentContainer = getPersistedContainerFields(containerFieldsFile);
+
+                ContainerMetadata currCMd = new ContainerMetadata();
+                currCMd.setObjectID(currentContainer.getObjectID());
 
                 containerRequest.setObjectID(currentContainer.getObjectID());
 
@@ -241,23 +268,41 @@ public class ContainerDaoImpl extends AbstractCellComponent
                     }
                 }
 
-                containerRequest.getMetadata().put(
-                        "cdmi_ctime",
-                        currentContainer.getMetadata().get("cdmi_ctime"));
-                containerRequest.getMetadata().put(
-                        "cdmi_atime",
-                        currentContainer.getMetadata().get("cdmi_atime"));
-                containerRequest.getMetadata().put("cdmi_mtime", sdf.format(now));
+                try {
+                    currCMd.fromJson(readMetadata(currentContainer.getObjectID()).getBytes(), true);
+
+                    //OLD: containerRequest.getMetadata().put("cdmi_ctime", currentContainer.getMetadata().get("cdmi_ctime"));
+                    cMd.setMetadata("cdmi_ctime", currCMd.getMetadata().get("cdmi_ctime"));
+                    //OLD: containerRequest.getMetadata().put("cdmi_atime", currentContainer.getMetadata().get("cdmi_atime"));
+                    cMd.setMetadata("cdmi_atime", currCMd.getMetadata().get("cdmi_atime"));
+                    //OLD: containerRequest.getMetadata().put("cdmi_mtime", sdf.format(now));
+                    cMd.setMetadata("cdmi_mtime", sdf.format(now));
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.out.println("Exception while reading storage meta data: " + ex);
+                    throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                }
             }
 
             //
             // Write created or updated persisted fields out to the "." file
             //
 
+            //containerRequest.getMetadata().clear();
+            //System.out.println("TEST900: " + cMd.getMetadata().size());
+            // write pseudo metadata file
             if (!writeFile(containerFieldsFile.getAbsolutePath(), containerRequest.toJson(true))) {
                 System.out.println("Exception while writing.");
                 throw new IllegalArgumentException("Cannot write container fields file @"
                                                    + path);
+            }
+            //containerRequest.setMetaData(cMd.getMetadata());
+            // write real metadata to DB
+            if (!writeMetadata(containerRequest.getObjectID(), cMd.toJson(true))) {
+                System.out.println("Exception while writing to Mongo DB.");
+                throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                   + DB_MONGO_DATABASE_NAME);
             }
 
             //
@@ -318,29 +363,59 @@ public class ContainerDaoImpl extends AbstractCellComponent
             // Container
             //
 
+            //OLD: if (!containerRequest.getMetadata().isEmpty()) {
             if (!containerRequest.getMetadata().isEmpty()) {
-                String cdmi_ctime = movedContainer.getMetadata().get("cdmi_ctime");
-                String cdmi_mtime = movedContainer.getMetadata().get("cdmi_mtime");
-                String cdmi_atime = movedContainer.getMetadata().get("cdmi_atime");
-                String cdmi_acount = movedContainer.getMetadata().get("cdmi_acount");
-                String cdmi_mcount = movedContainer.getMetadata().get("cdmi_mcount");
 
-                movedContainer.setMetaData(containerRequest.getMetadata());
+                try {
+                    ContainerMetadata movdCMd = new ContainerMetadata();
+                    movdCMd.fromJson(readMetadata(movedContainer.getObjectID()).getBytes(), true);
+                    //OLD: String cdmi_ctime = movedContainer.getMetadata().get("cdmi_ctime");
+                    String cdmi_ctime = movdCMd.getMetadata().get("cdmi_ctime");
+                    //OLD: String cdmi_mtime = movedContainer.getMetadata().get("cdmi_mtime");
+                    String cdmi_mtime = movdCMd.getMetadata().get("cdmi_mtime");
+                    //OLD: String cdmi_atime = movedContainer.getMetadata().get("cdmi_atime");
+                    String cdmi_atime = movdCMd.getMetadata().get("cdmi_atime");
+                    //OLD: String cdmi_acount = movedContainer.getMetadata().get("cdmi_acount");
+                    String cdmi_acount = movdCMd.getMetadata().get("cdmi_acount");
+                    //OLD: String cdmi_mcount = movedContainer.getMetadata().get("cdmi_mcount");
+                    String cdmi_mcount = movdCMd.getMetadata().get("cdmi_mcount");
 
-                movedContainer.getMetadata().put("cdmi_ctime", cdmi_ctime);
-                movedContainer.getMetadata().put("cdmi_mtime", cdmi_mtime);
-                movedContainer.getMetadata().put("cdmi_atime", cdmi_atime);
-                movedContainer.getMetadata().put("cdmi_acount", cdmi_acount);
-                movedContainer.getMetadata().put("cdmi_mcount", cdmi_mcount);
+                    //OLD: movedContainer.setMetaData(containerRequest.getMetadata());
+                    movdCMd.setMetadata(containerRequest.getMetadata());
+
+                    //OLD: movedContainer.getMetadata().put("cdmi_ctime", cdmi_ctime);
+                    movdCMd.setMetadata("cdmi_ctime", cdmi_ctime);
+                    //OLD: movedContainer.getMetadata().put("cdmi_mtime", cdmi_mtime);
+                    movdCMd.setMetadata("cdmi_mtime", cdmi_mtime);
+                    //OLD: movedContainer.getMetadata().put("cdmi_atime", cdmi_atime);
+                    movdCMd.setMetadata("cdmi_atime", cdmi_atime);
+                    //OLD: movedContainer.getMetadata().put("cdmi_acount", cdmi_acount);
+                    movdCMd.setMetadata("cdmi_acount", cdmi_acount);
+                    //OLD: movedContainer.getMetadata().put("cdmi_mcount", cdmi_mcount);
+                    movdCMd.setMetadata("cdmi_mcount", cdmi_mcount);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.out.println("Exception while reading storage meta data: " + ex);
+                    throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                }
 
                 //
                 // Write created or updated persisted fields out to the "." file
                 //
+                containerRequest.getMetadata().clear();
 
+                // write pseudo metadata file
                 if (!writeFile(containerFieldsFile.getAbsolutePath(), containerRequest.toJson(true))) {
                     System.out.println("Exception while writing.");
                     throw new IllegalArgumentException("Cannot write container fields file @"
                                                        + path);
+                }
+                // write real metadata to DB
+                if (!writeMetadata(containerRequest.getObjectID(), cMd.toJson(true))) {
+                    System.out.println("Exception while writing to Mongo DB.");
+                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                       + DB_MONGO_DATABASE_NAME);
                 }
 
             }
@@ -360,6 +435,76 @@ public class ContainerDaoImpl extends AbstractCellComponent
 
     }
 
+    public boolean writeMetadata(String objectID, String jsonObject) {
+        boolean result = false;
+        DBObject dbObject;
+        WriteResult writeResult;
+        MongoDB mdb = new MongoDB();
+        mdb.connect(DB_MONGO_DATABASE_NAME);
+        dbObject = mdb.convertJsonToDbObject(jsonObject);
+        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+            // update
+            writeResult = mdb.updateById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID, dbObject);
+        } else {
+            // create
+            writeResult = mdb.saveToDB(DB_MONGO_TABLE_STORAGE_SYS_METADATA, dbObject);
+        }
+        mdb.disconnect();
+        if (writeResult.getError() != null) {
+            System.out.println("Exception while writing to Mongo database.");
+            throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                               + DB_MONGO_DATABASE_NAME + "', internal error message: "
+                                               + writeResult.getError());
+        } else {
+            result = true;
+        }
+        return result;
+    }
+
+    public String readMetadata(String objectID) {
+        String result = "";
+        DBObject dbObject = null;
+        MongoDB mdb = new MongoDB();
+        mdb.connect(DB_MONGO_DATABASE_NAME);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+            dbObject = mdb.fetchById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+            if (dbObject != null)
+                result = mdb.convertDbObjectToJson(dbObject);
+        }
+        mdb.disconnect();
+        if (dbObject == null) {
+            System.out.println("Exception while reading from Mongo database.");
+            throw new IllegalArgumentException("Cannot read storage system metadata from table '"
+                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                               + DB_MONGO_DATABASE_NAME + "', internal error message: "
+                                               + "no JSON object for objectID '" + objectID + "' found");
+        }
+        return result;
+    }
+
+    public boolean deleteMetadata(String objectID) {
+        boolean result = false;
+        DBObject dbObject;
+        WriteResult writeResult;
+        MongoDB mdb = new MongoDB();
+        mdb.connect(DB_MONGO_DATABASE_NAME);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+            writeResult = mdb.deleteById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+            if (writeResult.getError() != null) {
+                System.out.println("Exception while deleting from Mongo database.");
+                throw new IllegalArgumentException("Cannot delete storage system metadata from table '"
+                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                   + DB_MONGO_DATABASE_NAME + "', internal error message: "
+                                                   + writeResult.getError());
+            } else {
+                result = true;
+            }
+        }
+        mdb.disconnect();
+        return result;
+    }
+
     //
     // For now this method supports both Container and Object delete.
     //
@@ -368,7 +513,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
     //
     @Override
     public void deleteByPath(String path) {
-        File directoryOrFile = absoluteFile(path);;
+        File directoryOrFile = absoluteFile(path);
 
         _log.error("DELETE: " + directoryOrFile.getAbsolutePath());
 
@@ -384,6 +529,17 @@ public class ContainerDaoImpl extends AbstractCellComponent
         // remove the "." file that contains the Container or Object's JSON-encoded
         // metadata
         //
+        Container requestedContainer = new Container();
+        requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
+
+        try {
+            deleteMetadata(requestedContainer.getObjectID());
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Exception while reading storage meta data: " + ex);
+            throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+        }
+
         deleteFile(getContainerFieldsFile(path).getAbsolutePath());
     }
 
@@ -414,7 +570,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
                                         + directory.getAbsolutePath()
                                         + "' does not identify an existing container");
         }
-        if (!isDirectory(directory.getAbsolutePath())) {
+        if (!checkIfDirectoryExists(directory.getAbsolutePath())) {
             throw new IllegalArgumentException("Path '"
                                                + directory.getAbsolutePath()
                                                + "' does not identify a container");
@@ -428,6 +584,17 @@ public class ContainerDaoImpl extends AbstractCellComponent
             // Read the persisted container fields from the "." file
             //
             requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
+
+            try {
+                ContainerMetadata cMd = new ContainerMetadata();
+                cMd.setObjectID(requestedContainer.getObjectID());
+                cMd.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
+                requestedContainer.setMetaData(cMd.getMetadata());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                System.out.println("Exception while reading storage meta data: " + ex);
+                throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+            }
 
         } else {
 
@@ -515,7 +682,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
-            throw new IllegalArgumentException("Cannot read container fields file error : " + ex);
+            throw new IllegalArgumentException("Cannot read container fields file error: " + ex);
         }
         return containerFields;
     }
@@ -811,24 +978,6 @@ public class ContainerDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private boolean isDirectory(String dirPath)
-    {
-        return checkIfDirectoryExists(dirPath);
-    }
-
-    private boolean checkIfDirectoryExists(String dirPath)
-    {
-        boolean result = false;
-        String searchedItem = getItem(dirPath);
-        List<String> listing = listDirectoriesByPath(getParentDirectory(dirPath));
-        for (String dir : listing) {
-            if (dir.compareTo(searchedItem) == 0) {
-                result = true;
-            }
-        }
-        return result;
-    }
-
     private String getParentDirectory(String path)
     {
         String result = "/";
@@ -848,6 +997,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
                 result = "/";
             }
         }
+        System.out.println("TEST004: " + result);
         return result;
     }
 
@@ -867,6 +1017,28 @@ public class ContainerDaoImpl extends AbstractCellComponent
                 result = item;
             }
         }
+        System.out.println("TEST005: " + result);
+        return result;
+    }
+
+    private boolean isDirectory(String dirPath)
+    {
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        System.out.println("TEST001:" + baseDirectoryName + tmpDirPath);
+        return checkIfDirectoryExists(baseDirectoryName + tmpDirPath);
+    }
+
+    private boolean checkIfDirectoryExists(String dirPath)
+    {
+        boolean result = false;
+        String searchedItem = getItem(dirPath);
+        System.out.println("TEST002:" + dirPath);
+        List<String> listing = listDirectoriesByPath(getParentDirectory(dirPath));
+        for (String dir : listing) {
+            if (dir.compareTo(searchedItem) == 0) {
+                result = true;
+            }
+        }
         return result;
     }
 
@@ -875,6 +1047,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
         boolean result = false;
         String searchedItem = getItem(dirPath);
         String tmpDirPath = addPrefixSlashToPath(dirPath);
+        System.out.println("TEST003:" + tmpDirPath);
         Map<String, FileType> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
         for (Map.Entry<String, FileType> entry : listing.entrySet()) {
             if (entry.getKey().compareTo(searchedItem) == 0) {
@@ -1090,9 +1263,22 @@ public class ContainerDaoImpl extends AbstractCellComponent
             transfer.setDomainName(getCellDomainName());
             transfer.setProtocolInfo(cdmiProtocolInfo);
             transfer.setOverwriteAllowed(true);
-            transfer.createNameSpaceEntryWithParents();
-            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-            result = true;
+            try {
+                transfer.createNameSpaceEntryWithParents();
+                try {
+                    transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+                }
+                finally {
+                    //transfer.killMover(2000, TimeUnit.MILLISECONDS);
+                }
+                System.out.println("TEST:" + transfer.isWrite());
+                System.out.println("TEST:" + data);
+                result = true;
+            } finally {
+                if (result == false) {
+                    //transfer.deleteNameSpaceEntry();
+                }
+            }
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("File could not become written, exception is: " + ex.getMessage());
         }
@@ -1118,6 +1304,7 @@ public class ContainerDaoImpl extends AbstractCellComponent
             transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
             result = CDMIDataTransfer.getDataAsBytes();
             _log.error("CDMIContainerDaoImpl received data: " + result.toString());
+            System.out.println("TEST:" + result.toString());
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("File could not become read, exception is: " + ex.getMessage());
         }

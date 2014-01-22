@@ -88,7 +88,7 @@
                                              scope="prototype">
          <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
-    <bean id="pathResource"                  class="org.dcache.cdmi.resource.PathResource"
+    <bean id="pathResource"                  class="org.snia.cdmiserver.resource.PathResource"
                                              scope="prototype">
         <property name="containerDao" ref="containerDao"/>
         <property name="dataObjectDao" ref="dataObjectDao"/>

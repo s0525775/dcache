@@ -49,7 +49,7 @@ public class CDMIMover implements MoverProtocol
         } else if (access == IoMode.READ) {
             readFileAsBytes();
         }
-        closeChannel();
+        //closeChannel();  //causes sync fail
     }
 
     @Override
@@ -76,7 +76,7 @@ public class CDMIMover implements MoverProtocol
                 strData = CDMIDataTransfer.getDataAsString();
                 ByteBuffer data = Test.stringToByteBuffer(strData);
                 channel.write(data);
-                channel.sync();
+                _log.error("CDMIMover data written:|" + strData + "|[" + strData.length() + " bytes]");
             } catch (IOException ex) {
                 _log.error("Data could not be written into CDMI channel, exception is: " + ex.getMessage());
             }
@@ -92,7 +92,8 @@ public class CDMIMover implements MoverProtocol
                     ByteBuffer data = ByteBuffer.allocate(dataSize);
                     channel.read(data);
                     CDMIDataTransfer.setData(data.array());
-                    _log.error("CDMIMover data read:|" + data.array().toString() + "|[" + dataSize + " bytes]");
+                    strData = Test.byteBufferToString(data);
+                    _log.error("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
                 }
             } catch (IOException ex) {
                 _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
