@@ -1,0 +1,3 @@
+REVIEWBOARD_URL = "http://rb.dcache.org"
+REPOSITORY = "https://github.com/s0525775/dcache.git"
+BRANCH = "tutorial/test3"

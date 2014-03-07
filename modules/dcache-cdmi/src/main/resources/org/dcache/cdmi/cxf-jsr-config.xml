@@ -88,7 +88,7 @@
                                              scope="prototype">
          <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
-    <bean id="pathResource"                  class="org.snia.cdmiserver.resource.PathResource"
+    <bean id="pathResource"                  class="org.dcache.cdmi.resource.CDMIPathResource"
                                              scope="prototype">
         <property name="containerDao" ref="containerDao"/>
         <property name="dataObjectDao" ref="dataObjectDao"/>
@@ -122,16 +122,16 @@
     <bean id="capabilityDao" class="org.snia.cdmiserver.dao.filesystem.CapabilityDaoImpl"/>
     -->
 
-    <bean id="containerDao" class="org.dcache.cdmi.dao.ContainerDaoImpl">
+    <bean id="containerDao" class="org.dcache.cdmi.dao.impl.CDMIContainerDaoImpl">
         <property name="baseDirectoryName" value="/disk"/>
         <property name="recreate" value="false"/>
     </bean>
 
-    <bean id="dataObjectDao" class="org.dcache.cdmi.dao.DataObjectDaoImpl">
+    <bean id="dataObjectDao" class="org.dcache.cdmi.dao.impl.CDMIDataObjectDaoImpl">
         <property name="baseDirectoryName" value="/disk"/>
         <property name="containerDao" ref="containerDao"/>
     </bean>
 
-    <bean id="capabilityDao" class="org.dcache.cdmi.dao.CapabilityDaoImpl"/>
+    <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.CapabilityDaoImpl"/>
 
 </beans>
