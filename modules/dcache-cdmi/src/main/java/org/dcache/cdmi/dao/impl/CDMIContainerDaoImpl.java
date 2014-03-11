@@ -83,6 +83,7 @@ import java.util.logging.Logger;
 import org.dcache.acl.ACLException;
 import org.dcache.cdmi.dao.CDMIContainerDao;
 import org.dcache.cdmi.model.CDMIContainer;
+import org.dcache.cdmi.tool.IDConverter;
 
 /**
  * <p>
@@ -185,7 +186,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         File containerFieldsFile = getContainerFieldsFile(path);
 
         CDMIContainer cMd = new CDMIContainer();
-        cMd.setMetadata(containerRequest.getMetadata());
 
         //
         // Setup ISO-8601 Date
@@ -213,6 +213,15 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
                 containerRequest.setObjectID(objectID);
 
+                FileAttributes fAttr = getAttributesByPath(directory.getAbsolutePath());
+                pnfsId = fAttr.getPnfsId();
+                if (pnfsId != null) {
+                    // update ObjectID with real info
+                    System.out.println("CDMIContainerDao, setPnfsID: " + pnfsId.toIdString());
+                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    System.out.println("CDMIContainerDao, setObjectID: " + objectID);
+                }
+
                 //
                 // TODO: Use Parent capabiltiesURI if not specified in create body
                 //
@@ -235,6 +244,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     // runtime.exec(exported);
                 }
 
+                cMd = containerRequest;
+                cMd.setPnfsID(pnfsId.toIdString());
                 cMd.setObjectID(objectID);
                 FileAttributes attr = getAttributesByPath(path);
                 if (attr != null) {
@@ -661,10 +672,12 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
 
             try {
+                if (path != null) System.out.println("HEEEEREEEEEE!!!! 001: " + path);
                 requestedContainer.setObjectID(requestedContainer.getObjectID());
                 requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
                 FileAttributes attr = getAttributesByPath(path);
                 if (attr != null) {
+                    System.out.println("HEEEEREEEEEE!!!! 002");
                     // ISO-8601 Date
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                     requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
@@ -1344,15 +1357,16 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             FileAttributes attr = entry.getFileAttributes();
             list.put(entry.getName(), attr);
             try {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 String str = "";
                 str += "Out: DirName:" + dir.getName();
                 str += "|EntryName:" + entry.getName();
                 if (attr.getPnfsId() != null) str += "|PnfsId:" + attr.getPnfsId().toIdString();
                 if (attr.getPnfsId() != null) str += "|ShortPnfsId:" + attr.getPnfsId().toShortString();
-                str += "|CreationTime:" + String.valueOf(attr.getCreationTime());
-                str += "|AccessTime:" + String.valueOf(attr.getAccessTime());
-                str += "|ChangeTime:" + String.valueOf(attr.getChangeTime());
-                str += "|ModificationTime:" + String.valueOf(attr.getModificationTime());
+                str += "|CreationTime:" + sdf.format(attr.getCreationTime());
+                str += "|AccessTime:" + sdf.format(attr.getAccessTime());
+                str += "|ChangeTime:" + sdf.format(attr.getChangeTime());
+                str += "|ModificationTime:" + sdf.format(attr.getModificationTime());
                 if (attr.getAcl() != null) str += "|ACL:" + attr.getAcl().toString();
                 if (attr.getAcl() != null) str += "|ACLExtraFormat:" + attr.getAcl().toExtraFormat(); //ACLException
                 if (attr.getAcl() != null) str += "|ACLNFS4:" + attr.getAcl().toNFSv4String();

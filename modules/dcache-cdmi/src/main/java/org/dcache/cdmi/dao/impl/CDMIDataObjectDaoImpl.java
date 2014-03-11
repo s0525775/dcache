@@ -64,6 +64,7 @@ import java.util.logging.Logger;
 import org.dcache.cdmi.dao.CDMIDataObjectDao;
 import org.dcache.cdmi.dao.mongodb.MongoDB;
 import org.dcache.cdmi.model.CDMIDataObject;
+import org.dcache.cdmi.tool.IDConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.FileType;
@@ -123,6 +124,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private long modificationTime;
     private long size;
     private FileType fileType;
+    private boolean setObjectID = false;
 
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
@@ -229,8 +231,11 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             // Make object ID
             String objectID = dObj.getObjectID();
             if (objectID == null) {
+                setObjectID = false;
                 objectID = ObjectID.getObjectID(8);//System.nanoTime()+"";
                 dObj.setObjectID(objectID);
+            } else {
+                setObjectID = true;
             }
             // dObj.setObjectURI(directory.getAbsolutePath()+"/"+objectID);
             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
@@ -263,7 +268,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             //OLD: dObj.setMetadata("fileName", objFile.getAbsolutePath());
             doMd.setMetadata("fileName", objFile.getAbsolutePath());
             //OLD: dObj.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
-            doMd.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
                 mimeType = "text/plain";
@@ -277,6 +281,15 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 throw new IllegalArgumentException("Cannot write Object file @"
                                                    + path);
             }
+            if (setObjectID == false) {
+                //update ObjectID with correct ObjectID if necessary
+                objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                System.out.println("CDMIDataObjectDao, setObjectID: " + objectID);
+                dObj.setObjectID(objectID);
+                doMd.setPnfsID(pnfsId.toIdString());
+                doMd.setObjectID(objectID);
+                setObjectID = true;
+            }
             // write pseudo metadata file
             System.out.println("metadataFile : " + metadataFileName);
             if (!writeFile(metadataFile.getAbsolutePath(), dObj.toJson())) {
@@ -285,7 +298,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                                                    + path);
             }
             // write real metadata to DB
-            doMd.setPnfsID(pnfsId.toIdString());
             if (!writeMetadata(dObj.getObjectID(), doMd.metadataToJson())) {
                 System.out.println("Exception while writing to Mongo DB.");
                 throw new IllegalArgumentException("Cannot write storage system metadata to table '"
