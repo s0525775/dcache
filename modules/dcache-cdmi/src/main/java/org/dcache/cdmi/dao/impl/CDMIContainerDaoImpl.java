@@ -664,7 +664,9 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
         CDMIContainer requestedContainer = new CDMIContainer();
 
+        System.out.println("HEEEEREEEEEE!!!! 000: " + path);
         if (path != null) {
+            System.out.println("HEEEEREEEEEE!!!! 001: " + path);
 
             //
             // Read the persisted container fields from the "." file
@@ -672,18 +674,23 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
 
             try {
-                if (path != null) System.out.println("HEEEEREEEEEE!!!! 001: " + path);
                 requestedContainer.setObjectID(requestedContainer.getObjectID());
                 requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
                 FileAttributes attr = getAttributesByPath(path);
+                // ISO-8601 Date
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 if (attr != null) {
                     System.out.println("HEEEEREEEEEE!!!! 002");
-                    // ISO-8601 Date
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                     requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                     requestedContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
                     requestedContainer.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
                     requestedContainer.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                } else {
+                    // Temp:
+                    requestedContainer.setMetadata("cdmi_ctime", sdf.format(creationTime));
+                    requestedContainer.setMetadata("cdmi_atime", sdf.format(accessTime));
+                    requestedContainer.setMetadata("cdmi_mtime", sdf.format(modificationTime));
+                    requestedContainer.setMetadata("cdmi_size", String.valueOf(size));
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
