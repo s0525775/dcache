@@ -116,7 +116,7 @@ public class CDMIPathResource {
 
         try {
             containerDao.deleteByPath(path);
-            return Response.ok().header(
+            return Response.noContent().header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
         } catch (Exception ex) {
             System.out.println(ex);
@@ -303,8 +303,8 @@ public class CDMIPathResource {
                 } else {
                     // make http response
                     // build a JSON representation
-                    String respStr = dObj.toJsonWithMetadata();
-                    //String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
+                    //String respStr = dObj.toJsonWithMetadata();
+                    String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
                     System.out.println("MimeType = " + dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
@@ -360,7 +360,7 @@ public class CDMIPathResource {
                 // make http response
                 // build a JSON representation
                 String respStr = container.toJsonWithMetadata(false);
-                ResponseBuilder builder = Response.ok(new URI(path));
+                ResponseBuilder builder = Response.created(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 //ResponseBuilder builder = Response.status(Response.Status.CREATED);
                 return builder.entity(respStr).build();
@@ -418,8 +418,13 @@ public class CDMIPathResource {
                 dObj = dataObjectDao.createByPath(path, dObj);
                 // return representation
                 String respStr = dObj.toJsonWithMetadata();
-                return Response.ok(respStr).header(
-                        "X-CDMI-Specification-Version", "1.0.2").build();
+                // make http response
+                // build a JSON representation
+                ResponseBuilder builder = Response.created(new URI(path));
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity(respStr).build();
+                //return Response.ok(respStr).header(
+                //        "X-CDMI-Specification-Version", "1.0.2").build();
             }
             dObj.fromJson(bytes,false);
             return Response.ok().build();

@@ -78,6 +78,7 @@ import org.snia.cdmiserver.model.Container;
 import org.snia.cdmiserver.util.ObjectID;
 import com.mongodb.WriteResult;
 import diskCacheV111.util.PnfsId;
+import java.text.ParseException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.dcache.acl.ACLException;
@@ -129,6 +130,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     private long modificationTime;
     private long size;
     private FileType fileType;
+    private boolean useDB = false;
 
     /**
      * <p>
@@ -152,6 +154,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         if (listDirectoryHandler == null) {
             init();
         }
+        useDB = false;
     }
 
     /**
@@ -181,11 +184,9 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
         File directory = absoluteFile(path);
 
-        _log.error("Create container <path>: " + directory.getAbsolutePath());
+        System.out.println("Create container <path>: " + directory.getAbsolutePath());
 
-        File containerFieldsFile = getContainerFieldsFile(path);
-
-        CDMIContainer cMd = new CDMIContainer();
+        //File containerFieldsFile = getContainerFieldsFile(path);
 
         //
         // Setup ISO-8601 Date
@@ -195,8 +196,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
         if (containerRequest.getMove() == null) { // This is a normal Create or Update
 
-            System.out.println("<Container Create>");
-
             //
             // Underlying Directory existence determines whether this is a Create or
             // Update.
@@ -204,22 +203,35 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
             if (!checkIfDirectoryFileExists(directory.getAbsolutePath())) { // Creating Container
 
+                System.out.println("<Container Create>");
+
+                // OLD:
+                // String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
+                String objectID = "";
+
                 if (!createDirectory(directory.getAbsolutePath())) {
                     throw new IllegalArgumentException("Cannot create container '" + path + "'");
                 }
 
-                System.out.println("<Container Create>");
-
-                String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
-                containerRequest.setObjectID(objectID);
-
-                FileAttributes fAttr = getAttributesByPath(directory.getAbsolutePath());
-                pnfsId = fAttr.getPnfsId();
-                if (pnfsId != null) {
-                    // update ObjectID with real info
-                    System.out.println("CDMIContainerDao, setPnfsID: " + pnfsId.toIdString());
-                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
-                    System.out.println("CDMIContainerDao, setObjectID: " + objectID);
+                FileAttributes attr = getAttributesByPath(directory.getAbsolutePath());
+                if (attr != null) {
+                    pnfsId = attr.getPnfsId();
+                    if (pnfsId != null) {
+                        // update with real info
+                        System.out.println("CDMIContainerDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                        containerRequest.setPnfsID(pnfsId.toIdString());
+                        containerRequest.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
+                        containerRequest.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
+                        containerRequest.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
+                        containerRequest.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                        objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                        containerRequest.setObjectID(objectID);
+                        System.out.println("CDMIContainerDao<Create>, setObjectID: " + objectID);
+                    } else {
+                        _log.error("CDMIContainerDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    }
+                } else {
+                    _log.error("CDMIContainerDao<Create>, Cannot read meta information from directory: " + directory.getAbsolutePath());
                 }
 
                 //
@@ -231,9 +243,11 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 //
                 // TODO: Use Parent Domain if not specified in create body
                 //
-                if (containerRequest.getDomainURI() == null)
+                if (containerRequest.getDomainURI() == null) {
                     containerRequest.setDomainURI("/cdmi_domains/default_domain");
+                }
 
+                // NOT SUPPORTED YET:
                 Map<String, Object> exports = containerRequest.getExports();
                 if (exports.containsKey("OCCI/NFS")) {
                     // Export this directory (OpenSolaris only so far)
@@ -244,32 +258,18 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     // runtime.exec(exported);
                 }
 
-                cMd = containerRequest;
-                cMd.setPnfsID(pnfsId.toIdString());
-                cMd.setObjectID(objectID);
-                FileAttributes attr = getAttributesByPath(path);
-                if (attr != null) {
-                    cMd.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
-                    cMd.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
-                    cMd.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
-                    cMd.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
-                }
-                //OLD: containerRequest.getMetadata().put("cdmi_ctime", sdf.format(now));
-                //OLD: containerRequest.getMetadata().put("cdmi_mtime", "never");
-                //OLD: containerRequest.getMetadata().put("cdmi_atime", "never");
-                //OLD: containerRequest.getMetadata().put("cdmi_acount", "0");
-                cMd.setMetadata("cdmi_acount", "0");
-                //OLD: containerRequest.getMetadata().put("cdmi_mcount", "0");
-                cMd.setMetadata("cdmi_mcount", "0");
-                //NEW:
-                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                containerRequest.setMetadata("cdmi_ctime", sdf.format(now));
+                containerRequest.setMetadata("cdmi_acount", "0");
+                containerRequest.setMetadata("cdmi_mcount", "0");
+                // set default ACL
+                List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
                 subMetadataEntry_ACL.put("acetype", "ALLOW");
                 subMetadataEntry_ACL.put("identifier", "OWNER@");
                 subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
                 subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
                 subMetadata_ACL.add(subMetadataEntry_ACL);
-                cMd.setSubMetadata_ACL(subMetadata_ACL);
+                containerRequest.setSubMetadata_ACL(subMetadata_ACL);
 
             } else { // Updating Container
 
@@ -279,17 +279,69 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 // Read the persistent metadata from the "." file
                 //
                 //TODO:
-                CDMIContainer currentContainer = getPersistedContainerFields(containerFieldsFile);
+                //CDMIContainer currentContainer = getPersistedContainerFields(containerFieldsFile);
+                String objectID = "";
+                CDMIContainer currentContainer = new CDMIContainer();
 
-                CDMIContainer currCMd = new CDMIContainer();
-                currCMd.setObjectID(currentContainer.getObjectID());
+                FileAttributes attr = getAttributesByPath(directory.getAbsolutePath());
+                if (attr != null) {
+                    pnfsId = attr.getPnfsId();
+                    if (pnfsId != null) {
+                        // update with real info
+                        System.out.println("CDMIContainerDao<Update>, setPnfsID: " + pnfsId.toIdString());
+                        currentContainer.setPnfsID(pnfsId.toIdString());
+                        containerRequest.setPnfsID(pnfsId.toIdString());
+                        currentContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
+                        currentContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
+                        currentContainer.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
+                        currentContainer.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                        objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                        currentContainer.setObjectID(objectID);
+                        System.out.println("CDMIContainerDao<Update>, setObjectID: " + objectID);
+                    } else {
+                        _log.error("CDMIContainerDao<Update>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    }
+                } else {
+                    _log.error("CDMIContainerDao<Update>, Cannot read meta information from directory: " + directory.getAbsolutePath());
+                }
 
-                containerRequest.setObjectID(currentContainer.getObjectID());
+                currentContainer.setMetadata("cdmi_acount", "0");
+                currentContainer.setMetadata("cdmi_mcount", "0");
+                // set default ACL
+                List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                subMetadataEntry_ACL.put("acetype", "ALLOW");
+                subMetadataEntry_ACL.put("identifier", "OWNER@");
+                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                subMetadata_ACL.add(subMetadataEntry_ACL);
+                containerRequest.setSubMetadata_ACL(subMetadata_ACL);
+
+                containerRequest.setObjectID(objectID);
+
+                if (useDB) {
+                    try {
+                        currentContainer.fromJson(readMetadata(currentContainer.getObjectID()).getBytes(), true);
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        System.out.println("Exception while reading storage meta data: " + ex);
+                        throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                    }
+                }
+
+                //
+                // TODO: Need to handle update of Capabilities URI
+                //
+                containerRequest.setCapabilitiesURI("/cdmi_capabilities/container/default");
 
                 //
                 // TODO: Need to handle update of Domain
                 //
+                if (containerRequest.getDomainURI() == null) {
+                    containerRequest.setDomainURI("/cdmi_domains/default_domain");
+                }
 
+                // NOT SUPPORTED YET:
                 Map<String, Object> exports = containerRequest.getExports();
                 if (exports.containsKey("OCCI/NFS")) {
                     if (currentContainer.getExports().containsKey("OCCI/NFS")) {
@@ -304,63 +356,50 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     }
                 }
 
-                try {
-                    currCMd.fromJson(readMetadata(currentContainer.getObjectID()).getBytes(), true);
+                containerRequest.setMetadata("cdmi_ctime", currentContainer.getMetadata().get("cdmi_ctime"));
+                containerRequest.setMetadata("cdmi_atime", currentContainer.getMetadata().get("cdmi_atime"));
+                containerRequest.setMetadata("cdmi_mtime", sdf.format(now));
+                containerRequest.setMetadata("cdmi_acount", currentContainer.getMetadata().get("cdmi_acount"));
+                containerRequest.setMetadata("cdmi_mcount", currentContainer.getMetadata().get("cdmi_mcount"));
 
-                    FileAttributes attr = getAttributesByPath(path);
-                    if (attr != null) {
-                        currCMd.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
-                        currCMd.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
-                        currCMd.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
-                        currCMd.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
-                    }
-                    try {
-                        FileAttributes attr2 = new FileAttributes();
-                        Date ctime = sdf.parse(currCMd.getMetadata().get("cdmi_ctime"));
-                        Date atime = sdf.parse(currCMd.getMetadata().get("cdmi_atime"));
-                        long ctimeAsLong = ctime.getTime();
-                        long atimeAsLong = atime.getTime();
-                        long nowAsLong = now.getTime();
-                        attr2.setCreationTime(ctimeAsLong);
-                        attr2.setAccessTime(atimeAsLong);
-                        attr2.setModificationTime(nowAsLong);
-                        PnfsId id = new PnfsId(cMd.getPnfsID());
-                        pnfsHandler.setFileAttributes(id, attr2);
-                        cMd.setMetadata("cdmi_ctime", currCMd.getMetadata().get("cdmi_ctime"));
-                        cMd.setMetadata("cdmi_atime", currCMd.getMetadata().get("cdmi_atime"));
-                        cMd.setMetadata("cdmi_mtime", sdf.format(now));
-                    } catch (CacheException ex) {
-                        Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                    //OLD: containerRequest.getMetadata().put("cdmi_ctime", currentContainer.getMetadata().get("cdmi_ctime"));
-                    //OLD: containerRequest.getMetadata().put("cdmi_atime", currentContainer.getMetadata().get("cdmi_atime"));
-                    //OLD: containerRequest.getMetadata().put("cdmi_mtime", sdf.format(now));
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    System.out.println("Exception while reading storage meta data: " + ex);
-                    throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                if (useDB) {
+                    int mcount = Integer.parseInt(currentContainer.getMetadata().get("cdmi_mcount"));
+                    containerRequest.setMetadata("cdmi_mcount", String.valueOf(mcount + 1));
                 }
+
+                //
+                // TODO: Need to handle update of ACL info
+                //
+                containerRequest.setSubMetadata_ACL(currentContainer.getSubMetadata_ACL());
+
             }
 
             //
             // Write created or updated persisted fields out to the "." file
             //
 
-            //containerRequest.getMetadata().clear();
-            //System.out.println("TEST900: " + cMd.getMetadata().size());
-            // write pseudo metadata file
-            if (!writeFile(containerFieldsFile.getAbsolutePath(), containerRequest.toJson(true))) {
-                System.out.println("Exception while writing.");
-                throw new IllegalArgumentException("Cannot write container fields file @"
-                                                   + path);
+            // update meta information
+            try {
+                FileAttributes attr = new FileAttributes();
+                Date ctime = sdf.parse(containerRequest.getMetadata().get("cdmi_ctime"));
+                Date mtime = sdf.parse(containerRequest.getMetadata().get("cdmi_mtime"));
+                long ctimeAsLong = ctime.getTime();
+                long mtimeAsLong = mtime.getTime();
+                attr.setCreationTime(ctimeAsLong);
+                attr.setModificationTime(mtimeAsLong);
+                PnfsId id = new PnfsId(containerRequest.getPnfsID());
+                pnfsHandler.setFileAttributes(id, attr);
+            } catch (CacheException | ParseException ex) {
+                _log.error("CDMIContainerDao<Update>, Cannot update meta information for object with objectID " + containerRequest.getObjectID());
             }
-            //containerRequest.setMetaData(cMd.getMetadata());
-            // write real metadata to DB
-            if (!writeMetadata(containerRequest.getObjectID(), cMd.metadataToJson(true))) {
-                System.out.println("Exception while writing to Mongo DB.");
-                throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
-                                                   + DB_MONGO_DATABASE_NAME);
+
+            if (useDB) {
+                if (!writeMetadata(containerRequest.getObjectID(), containerRequest.metadataToJson(true))) {
+                    System.out.println("Exception while writing to Mongo DB.");
+                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                       + DB_MONGO_DATABASE_NAME);
+                }
             }
 
             //
@@ -375,6 +414,10 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             return completeContainer(containerRequest, directory, path);
 
         } else { // Moving a Container
+
+            //TODO:
+
+            /*
 
             if (checkIfDirectoryFileExists(directory.getAbsolutePath())) {
                 throw new IllegalArgumentException("Cannot move container '"
@@ -402,30 +445,35 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             //
 
             renameDirectory(sourceContainerFile.getAbsolutePath(), directory.getAbsolutePath());
+            */
 
             //
             // Move Container's Metadata .file
             //
-            File sourceContainerFieldsFile = getContainerFieldsFile(containerRequest.getMove());
+            //File sourceContainerFieldsFile = getContainerFieldsFile(containerRequest.getMove());
 
-            renameFile(sourceContainerFieldsFile.getAbsolutePath(), containerFieldsFile.getAbsolutePath());
+            //renameFile(sourceContainerFieldsFile.getAbsolutePath(), containerFieldsFile.getAbsolutePath());
 
             //
             // Get the containers field's to return in response
             //
 
-            CDMIContainer movedContainer = getPersistedContainerFields(containerFieldsFile);
+            //CDMIContainer movedContainer = getPersistedContainerFields(containerFieldsFile);
+            CDMIContainer movedContainer = new CDMIContainer();
 
             //
             // If the request has a metadata field, replace any metadata filed in the source
             // Container
             //
 
+            /*
             if (!containerRequest.getMetadata().isEmpty()) {
 
                 try {
                     CDMIContainer movdCMd = new CDMIContainer();
-                    movdCMd.fromJson(readMetadata(movedContainer.getObjectID()).getBytes(), true);
+                    if (useDB) {
+                        movdCMd.fromJson(readMetadata(movedContainer.getObjectID()).getBytes(), true);
+                    }
                     String cdmi_ctime = "never";
                     String cdmi_atime = "never";
                     String cdmi_mtime = "never";
@@ -491,17 +539,20 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 //containerRequest.getMetadata().clear();
 
                 // write pseudo metadata file
-                if (!writeFile(containerFieldsFile.getAbsolutePath(), containerRequest.toJson(true))) {
-                    System.out.println("Exception while writing.");
-                    throw new IllegalArgumentException("Cannot write container fields file @"
-                                                       + path);
-                }
+                //if (!writeFile(containerFieldsFile.getAbsolutePath(), containerRequest.toJson(true))) {
+                //    System.out.println("Exception while writing.");
+                //    throw new IllegalArgumentException("Cannot write container fields file @"
+                //                                       + path);
+                //}
+
                 // write real metadata to DB
-                if (!writeMetadata(containerRequest.getObjectID(), cMd.metadataToJson(true))) {
-                    System.out.println("Exception while writing to Mongo DB.");
-                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
-                                                       + DB_MONGO_DATABASE_NAME);
+                if (useDB) {
+                    if (!writeMetadata(containerRequest.getObjectID(), cMd.metadataToJson(true))) {
+                        System.out.println("Exception while writing to Mongo DB.");
+                        throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                           + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                           + DB_MONGO_DATABASE_NAME);
+                    }
                 }
 
             }
@@ -509,8 +560,10 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             //
             // Transient fields
             //
+            */
 
-            movedContainer.setCompletionStatus("Complete");
+            //movedContainer.setCompletionStatus("Complete");
+            movedContainer.setCompletionStatus("Incomplete");
 
             //
             // Complete response with fields dynamically generated from directory info.
@@ -601,32 +654,75 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     public void deleteByPath(String path) {
         File directoryOrFile = absoluteFile(path);
 
-        _log.error("DELETE: " + directoryOrFile.getAbsolutePath());
+        System.out.println("Delete container/object <path>: " + directoryOrFile.getAbsolutePath());
 
         //
+        // Setup ISO-8601 Date
+        //
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-        if (isDirectory(directoryOrFile.getAbsolutePath())) {
+        //
+        String objectID = "";
+        CDMIContainer requestedContainer = new CDMIContainer();
+        FileAttributes attr = getAttributesByPath(directoryOrFile.getAbsolutePath());
+        if (attr != null) {
+            pnfsId = attr.getPnfsId();
+            if (pnfsId != null) {
+                // update with real info
+                System.out.println("CDMIContainerDao<Delete>, setPnfsID: " + pnfsId.toIdString());
+                requestedContainer.setPnfsID(pnfsId.toIdString());
+                requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
+                requestedContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
+                requestedContainer.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
+                requestedContainer.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                requestedContainer.setObjectID(objectID);
+                System.out.println("CDMIContainerDao<Delete>, setObjectID: " + objectID);
+            } else {
+                _log.error("CDMIContainerDao<Delete>, Cannot read PnfsId from meta information, ObjectID will be empty");
+            }
+        } else {
+            _log.error("CDMIContainerDao<Delete>, Cannot read meta information from directory or object: " + directoryOrFile.getAbsolutePath());
+        }
+
+        requestedContainer.setMetadata("cdmi_acount", "0");
+        requestedContainer.setMetadata("cdmi_mcount", "0");
+        // set default ACL
+        List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+        HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+        subMetadataEntry_ACL.put("acetype", "ALLOW");
+        subMetadataEntry_ACL.put("identifier", "OWNER@");
+        subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+        subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+        subMetadata_ACL.add(subMetadataEntry_ACL);
+        requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
+
+        if (useDB) {
+            try {
+                requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                System.out.println("Exception while reading storage meta data: " + ex);
+                throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+            }
+        }
+
+        if (isExistingDirectory(directoryOrFile.getAbsolutePath())) {
             deleteRecursively(directoryOrFile.getAbsolutePath());
         } else {
             deleteFile(directoryOrFile.getAbsolutePath());
         }
 
-        //
-        // remove the "." file that contains the Container or Object's JSON-encoded
-        // metadata
-        //
-        CDMIContainer requestedContainer = new CDMIContainer();
-        requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
-
-        try {
-            deleteMetadata(requestedContainer.getObjectID());
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            System.out.println("Exception while reading storage meta data: " + ex);
-            throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+        if (useDB) {
+            try {
+                deleteMetadata(requestedContainer.getObjectID());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                System.out.println("Exception while deleting storage meta data: " + ex);
+                throw new IllegalArgumentException("Cannot delete storage meta data, internal error : " + ex);
+            }
         }
 
-        deleteFile(getContainerFieldsFile(path).getAbsolutePath());
     }
 
     //
@@ -662,41 +758,69 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                                                + "' does not identify a container");
         }
 
+        //
+        // Setup ISO-8601 Date
+        //
+        Date now = new Date();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+        String objectID = "";
         CDMIContainer requestedContainer = new CDMIContainer();
 
-        System.out.println("HEEEEREEEEEE!!!! 000: " + path);
         if (path != null) {
-            System.out.println("HEEEEREEEEEE!!!! 001: " + path);
 
             //
             // Read the persisted container fields from the "." file
             //
-            requestedContainer = getPersistedContainerFields(getContainerFieldsFile(path));
 
-            try {
-                requestedContainer.setObjectID(requestedContainer.getObjectID());
-                requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
-                FileAttributes attr = getAttributesByPath(path);
-                // ISO-8601 Date
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                if (attr != null) {
-                    System.out.println("HEEEEREEEEEE!!!! 002");
+            FileAttributes attr = getAttributesByPath(directory.getAbsolutePath());
+            if (attr != null) {
+                pnfsId = attr.getPnfsId();
+                if (pnfsId != null) {
+                    // update with real info
+                    System.out.println("CDMIContainerDao<Update>, setPnfsID: " + pnfsId.toIdString());
+                    requestedContainer.setPnfsID(pnfsId.toIdString());
                     requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                     requestedContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
                     requestedContainer.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
                     requestedContainer.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    requestedContainer.setObjectID(objectID);
+                    System.out.println("CDMIContainerDao<Update>, setObjectID: " + objectID);
                 } else {
-                    // Temp:
-                    requestedContainer.setMetadata("cdmi_ctime", sdf.format(creationTime));
-                    requestedContainer.setMetadata("cdmi_atime", sdf.format(accessTime));
-                    requestedContainer.setMetadata("cdmi_mtime", sdf.format(modificationTime));
-                    requestedContainer.setMetadata("cdmi_size", String.valueOf(size));
+                    _log.error("CDMIContainerDao<Update>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                System.out.println("Exception while reading storage meta data: " + ex);
-                throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+            } else {
+                _log.error("CDMIContainerDao<Update>, Cannot read meta information from directory: " + directory.getAbsolutePath());
             }
+
+            requestedContainer.setMetadata("cdmi_acount", "0");
+            requestedContainer.setMetadata("cdmi_mcount", "0");
+            // set default ACL
+            List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+            subMetadataEntry_ACL.put("acetype", "ALLOW");
+            subMetadataEntry_ACL.put("identifier", "OWNER@");
+            subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+            subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+            subMetadata_ACL.add(subMetadataEntry_ACL);
+            requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
+
+            if (useDB) {
+                try {
+                    requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    System.out.println("Exception while reading storage meta data: " + ex);
+                    throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                }
+            }
+
+            //
+            // Dynamically generate the default values
+            //
+            requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
+            requestedContainer.setDomainURI("/cdmi_domains/default_domain");
 
         } else {
 
@@ -1128,6 +1252,13 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         return checkIfDirectoryExists(baseDirectoryName + tmpDirPath);
     }
 
+    private boolean isExistingDirectory(String dirPath)
+    {
+        String tmpDirPath = addPrefixSlashToPath(dirPath);
+        System.out.println("TEST001_2:" + tmpDirPath);
+        return checkIfDirectoryExists(tmpDirPath);
+    }
+
     private boolean checkIfDirectoryExists(String dirPath)
     {
         boolean result = false;
@@ -1417,6 +1548,13 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     fileType = CDMIDataTransfer.getFileType();
                 }
                 finally {
+                    pnfsId = CDMIDataTransfer.getPnfsId();
+                    creationTime = CDMIDataTransfer.getCreationTime();
+                    accessTime = CDMIDataTransfer.getAccessTime();
+                    changeTime = CDMIDataTransfer.getChangeTime();
+                    modificationTime = CDMIDataTransfer.getModificationTime();
+                    size = CDMIDataTransfer.getSize();
+                    fileType = CDMIDataTransfer.getFileType();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");

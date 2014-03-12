@@ -76,15 +76,19 @@ public class CDMI extends AbstractCellComponent
     private CellStub pool;
     private DirectoryListSource list;
     private String result = "";
+    private boolean useDB = false;
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
 
     public CDMI() {
-        MongoDB mdb = new MongoDB();
-        mdb.connectWithoutDb();
-        mdb.printMongoInformation();
-        mdb.disconnect();
+        useDB = false;
+        if (useDB) {
+            MongoDB mdb = new MongoDB();
+            mdb.connectWithoutDb();
+            mdb.printMongoInformation();
+            mdb.disconnect();
+        }
     }
 
     public boolean isDefaultFormal()

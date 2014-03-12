@@ -125,6 +125,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private long size;
     private FileType fileType;
     private boolean setObjectID = false;
+    private boolean useDB = false;
 
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
@@ -152,6 +153,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         if (listDirectoryHandler == null) {
             init();
         }
+        useDB = false;
     }
 
     // ---------------------------------------------------- ContainerDao Methods
@@ -193,11 +195,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     @Override
     public CDMIDataObject createByPath(String path, CDMIDataObject dObj) throws Exception {
         //
-        String metadataFileName = getmetadataFileName(path);
+        //String metadataFileName = getmetadataFileName(path);
         String containerName = getcontainerName(path);
 
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
         //
-        File objFile, baseDirectory, containerDirectory, metadataFile;
+        File objFile, baseDirectory, containerDirectory;
         try {
             System.out.println("baseDirectory = " + baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
@@ -206,8 +210,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             // File directory = absoluteFile(path);
             System.out.println("Container Absolute Path = " + containerDirectory.getAbsolutePath());
             //
-            metadataFile = new File(containerDirectory, metadataFileName);
-            System.out.println("Metadada File Path = " + metadataFile.getAbsolutePath());
+            //metadataFile = new File(containerDirectory, metadataFileName);
+            //System.out.println("Metadada File Path = " + metadataFile.getAbsolutePath());
             objFile = new File(baseDirectory, path);
             // File directory = absoluteFile(path);
             System.out.println("Object Absolute Path = " + objFile.getAbsolutePath());
@@ -229,33 +233,36 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         try {
             // dObj.setObjectURI(path); // TBD Correct
             // Make object ID
-            String objectID = dObj.getObjectID();
-            if (objectID == null) {
-                setObjectID = false;
-                objectID = ObjectID.getObjectID(8);//System.nanoTime()+"";
+            // dObj.setObjectURI(directory.getAbsolutePath()+"/"+objectID);
+            dObj.setObjectType("application/cdmi-object");
+            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+            if (!writeFile(objFile.getAbsolutePath(), dObj.getValue())) {
+                System.out.println("Exception while writing.");
+                throw new IllegalArgumentException("Cannot write Object file @"
+                                                   + path);
+            }
+
+            //update ObjectID with correct ObjectID
+            String objectID = "";
+            if (pnfsId != null) {
+                objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                System.out.println("CDMIDataObjectDao, setObjectID: " + objectID);
+                dObj.setPnfsID(pnfsId.toIdString());
                 dObj.setObjectID(objectID);
             } else {
-                setObjectID = true;
+                if (pnfsId != null) {
+                    _log.error("CDMIDataObjectDao<Create>, PnfsID is null, therefore ObjectID is not set");
+                }
             }
-            // dObj.setObjectURI(directory.getAbsolutePath()+"/"+objectID);
-            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+
             // Add metadata
-            CDMIDataObject doMd = new CDMIDataObject();
-            doMd.setObjectID(objectID);
-            String val = "" + dObj.getValue();
-            //dObj.setMetadata("cdmi_size", val.length() + "");
-            doMd.setMetadata("cdmi_size", String.valueOf(size));
-            // ISO-8601 Date
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            //OLD: dObj.setMetadata("cdmi_ctime", sdf.format(now));
-            doMd.setMetadata("cdmi_ctime", sdf.format(creationTime));
-            //OLD: dObj.setMetadata("cdmi_atime", "never");
-            doMd.setMetadata("cdmi_atime", sdf.format(accessTime));
-            doMd.setMetadata("cdmi_mtime", sdf.format(modificationTime));
-            // dObj.setMetadata("cdmi_acount", "0");
-            // dObj.setMetadata("cdmi_mcount", "0");
-            doMd.setMetadata("cdmi_acount", "0");
-            doMd.setMetadata("cdmi_mcount", "0");
+            dObj.setMetadata("fileName", objFile.getAbsolutePath());
+            dObj.setMetadata("cdmi_ctime", sdf.format(creationTime));
+            dObj.setMetadata("cdmi_atime", sdf.format(accessTime));
+            dObj.setMetadata("cdmi_mtime", sdf.format(modificationTime));
+            dObj.setMetadata("cdmi_size", String.valueOf(size));
+            dObj.setMetadata("cdmi_acount", "0");
+            dObj.setMetadata("cdmi_mcount", "0");
             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
             subMetadataEntry_ACL.put("acetype", "ALLOW");
@@ -263,46 +270,25 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
             subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
             subMetadata_ACL.add(subMetadataEntry_ACL);
-            doMd.setSubMetadata_ACL(subMetadata_ACL);
-            // Create file
-            //OLD: dObj.setMetadata("fileName", objFile.getAbsolutePath());
-            doMd.setMetadata("fileName", objFile.getAbsolutePath());
-            //OLD: dObj.setMetadata("metadataFileName", metadataFile.getAbsolutePath());
+            dObj.setSubMetadata_ACL(subMetadata_ACL);
+
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
                 mimeType = "text/plain";
-                dObj.setMimetype(mimeType);
             }
-            //OLD: dObj.setMetadata("mimetype", mimeType);
-            doMd.setMetadata("mimetype", mimeType);
+            dObj.setMimetype(mimeType);
+            dObj.setMetadata("mimetype", mimeType);
+            dObj.setMetadata("fileName", objFile.getAbsolutePath());
             //
-            if (!writeFile(objFile.getAbsolutePath(), dObj.getValue())) {
-                System.out.println("Exception while writing.");
-                throw new IllegalArgumentException("Cannot write Object file @"
-                                                   + path);
-            }
-            if (setObjectID == false) {
-                //update ObjectID with correct ObjectID if necessary
-                objectID = new IDConverter().toObjectID(pnfsId.toIdString());
-                System.out.println("CDMIDataObjectDao, setObjectID: " + objectID);
-                dObj.setObjectID(objectID);
-                doMd.setPnfsID(pnfsId.toIdString());
-                doMd.setObjectID(objectID);
-                setObjectID = true;
-            }
-            // write pseudo metadata file
-            System.out.println("metadataFile : " + metadataFileName);
-            if (!writeFile(metadataFile.getAbsolutePath(), dObj.toJson())) {
-                System.out.println("Exception while writing.");
-                throw new IllegalArgumentException("Cannot write Object file @"
-                                                   + path);
-            }
+
             // write real metadata to DB
-            if (!writeMetadata(dObj.getObjectID(), doMd.metadataToJson())) {
-                System.out.println("Exception while writing to Mongo DB.");
-                throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
-                                                   + DB_MONGO_DATABASE_NAME);
+            if (useDB) {
+                if (!writeMetadata(dObj.getObjectID(), dObj.metadataToJson())) {
+                    System.out.println("Exception while writing to Mongo DB.");
+                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                                                       + DB_MONGO_DATABASE_NAME);
+                }
             }
             //
         } catch (Exception ex) {
@@ -374,18 +360,20 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     @Override
     public CDMIDataObject findByPath(String path) {
 
+        // ISO-8601 Date
+        Date now = new Date();
+        long nowAsLong = now.getTime();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
         System.out.println("In CDMIDataObjectDao.findByPath : " + path);
         //
-        String metadataFileName = getmetadataFileName(path);
         String containerName = getcontainerName(path);
         //
         // Check for metadata file
-        File objFile, metadataFile, baseDirectory;
+        File objFile, baseDirectory;
         try {
             System.out.println("baseDirectory = " + baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/" + containerName);
-            metadataFile = new File(baseDirectory, metadataFileName);
-            System.out.println("Metadata Absolute Path = " + metadataFile.getAbsolutePath());
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception in findByPath : " + ex);
@@ -397,9 +385,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             init();
         }
 
-        if (!checkIfDirectoryFileExists(metadataFile.getAbsolutePath())) {
-            return null;
-        }
         // Check for object file
         try {
             System.out.println("baseDirectory = " + baseDirectoryName);
@@ -411,33 +396,34 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             System.out.println("Exception in findByPath : " + ex);
             throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
         }
+
         if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
-            throw new ConflictException("Object File <"
-                                        + objFile.getAbsolutePath()
-                                        + "> doesn't exist");
+            return null;
+            //throw new ConflictException("Object File <"
+            //                            + objFile.getAbsolutePath()
+            //                            + "> doesn't exist");
         }
         //
         // Both Files are there. So open, read, create object and send out
         //
         CDMIDataObject dObj = new CDMIDataObject();
         try {
-            // Read pseudo metadata
-            byte[] inBytes = readFile(metadataFile.getAbsolutePath());
-            dObj.fromJson(inBytes, true);
             // Read object from file
-            inBytes = readFile(objFile.getAbsolutePath());
+            byte[] inBytes = readFile(objFile.getAbsolutePath());
             dObj.setValue(new String(inBytes));
+
+            dObj.setObjectType("application/cdmi-object");
+            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+
             // Read real metadata from DB
-            dObj.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
-            // ISO-8601 Date
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            //OLD: dObj.setMetadata("cdmi_ctime", sdf.format(now));
+            if (useDB) {
+                dObj.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
+            }
+
             dObj.setMetadata("cdmi_ctime", sdf.format(creationTime));
-            //OLD: dObj.setMetadata("cdmi_atime", "never");
             dObj.setMetadata("cdmi_atime", sdf.format(accessTime));
             dObj.setMetadata("cdmi_mtime", sdf.format(modificationTime));
-            // dObj.setMetadata("cdmi_acount", "0");
-            // dObj.setMetadata("cdmi_mcount", "0");
+            dObj.setMetadata("cdmi_size", String.valueOf(size));
             dObj.setMetadata("cdmi_acount", "0");  //TODO
             dObj.setMetadata("cdmi_mcount", "0");  //TODO
             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -448,30 +434,37 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
             subMetadata_ACL.add(subMetadataEntry_ACL);
             dObj.setSubMetadata_ACL(subMetadata_ACL);
+
+            String mimeType = dObj.getMimetype();
+            if (mimeType == null) {
+                mimeType = "text/plain";
+            }
+            dObj.setMimetype(mimeType);
+            dObj.setMetadata("mimetype", mimeType);
+            dObj.setMetadata("fileName", objFile.getAbsolutePath());
+
         } catch (Exception ex) {
             ex.printStackTrace();
             System.out.println("Exception while reading: " + ex);
             throw new IllegalArgumentException("Cannot read Object @" + path + " error : " + ex);
         }
 
-        if (dObj != null) {
-            // change access time
-            Date now = new Date();
-            long nowAsLong = now.getTime();
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-            //dObj.setMetadata("cdmi_atime", sdf.format(now));  //TODO???
-            // need to increment acount dObj.setMetadata("cdmi_acount", "0");
-            try {
-                FileAttributes attr = new FileAttributes();
-                attr.setAccessTime(nowAsLong);
-                pnfsHandler.setFileAttributes(pnfsId, attr);
-                dObj.setMetadata("cdmi_atime", sdf.format(now));
-            } catch (CacheException ex) {
-                Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
-            }
+        // change access time
+        try {
+            FileAttributes attr = new FileAttributes();
+            attr.setAccessTime(nowAsLong);
+            pnfsHandler.setFileAttributes(pnfsId, attr);
+            dObj.setMetadata("cdmi_atime", sdf.format(now));
+        } catch (CacheException ex) {
+            Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
         }
+        // need to increment acount dObj.setMetadata("cdmi_acount", "0");
+        if (useDB) {
+            int acount = Integer.parseInt(dObj.getMetadata().get("cdmi_acount"));
+            dObj.setMetadata("cdmi_acount", String.valueOf(acount + 1));
+        }
+
         return dObj;
-        // throw new UnsupportedOperationException("DataObjectDaoImpl.findByPath()");
     }
 
     @Override
@@ -792,6 +785,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     fileType = CDMIDataTransfer.getFileType();
                 }
                 finally {
+                    pnfsId = CDMIDataTransfer.getPnfsId();
+                    creationTime = CDMIDataTransfer.getCreationTime();
+                    accessTime = CDMIDataTransfer.getAccessTime();
+                    changeTime = CDMIDataTransfer.getChangeTime();
+                    modificationTime = CDMIDataTransfer.getModificationTime();
+                    size = CDMIDataTransfer.getSize();
+                    fileType = CDMIDataTransfer.getFileType();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
