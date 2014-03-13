@@ -129,7 +129,7 @@
         <property name="connectors">
             <list>
                 <bean id="Connector" class="org.eclipse.jetty.server.nio.SelectChannelConnector">
-                    <property name="port" value="8542" />
+                    <property name="port" value="${cdmi.net.port}" />
                     <property name="host" value="#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }"/>
                 </bean>
             </list>
