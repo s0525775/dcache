@@ -61,6 +61,7 @@ import dmg.cells.nucleus.CellLifeCycleAware;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.dcache.acl.ACLException;
 import org.dcache.cdmi.dao.CDMIDataObjectDao;
 import org.dcache.cdmi.dao.mongodb.MongoDB;
 import org.dcache.cdmi.model.CDMIDataObject;
@@ -244,23 +245,28 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
             //update ObjectID with correct ObjectID
             String objectID = "";
-            if (pnfsId != null) {
-                objectID = new IDConverter().toObjectID(pnfsId.toIdString());
-                System.out.println("CDMIDataObjectDao, setObjectID: " + objectID);
-                dObj.setPnfsID(pnfsId.toIdString());
-                dObj.setObjectID(objectID);
-            } else {
+            FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
+            if (attr != null) {
+                pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
-                    _log.error("CDMIDataObjectDao<Create>, PnfsID is null, therefore ObjectID is not set");
+                    // update with real info
+                    System.out.println("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                    dObj.setPnfsID(pnfsId.toIdString());
+                    dObj.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
+                    dObj.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
+                    dObj.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
+                    dObj.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    dObj.setObjectID(objectID);
+                    System.out.println("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
+                } else {
+                    _log.error("CDMIDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
+            } else {
+                _log.error("CDMIDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
             }
 
             // Add metadata
-            dObj.setMetadata("fileName", objFile.getAbsolutePath());
-            dObj.setMetadata("cdmi_ctime", sdf.format(creationTime));
-            dObj.setMetadata("cdmi_atime", sdf.format(accessTime));
-            dObj.setMetadata("cdmi_mtime", sdf.format(modificationTime));
-            dObj.setMetadata("cdmi_size", String.valueOf(size));
             dObj.setMetadata("cdmi_acount", "0");
             dObj.setMetadata("cdmi_mcount", "0");
             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -415,15 +421,34 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             dObj.setObjectType("application/cdmi-object");
             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
 
+            //update ObjectID with correct ObjectID
+            String objectID = "";
+            FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
+            if (attr != null) {
+                pnfsId = attr.getPnfsId();
+                if (pnfsId != null) {
+                    // update with real info
+                    System.out.println("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                    dObj.setPnfsID(pnfsId.toIdString());
+                    dObj.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
+                    dObj.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
+                    dObj.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
+                    dObj.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    dObj.setObjectID(objectID);
+                    System.out.println("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
+                } else {
+                    _log.error("CDMIDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                }
+            } else {
+                _log.error("CDMIDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
+            }
+
             // Read real metadata from DB
             if (useDB) {
                 dObj.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
             }
 
-            dObj.setMetadata("cdmi_ctime", sdf.format(creationTime));
-            dObj.setMetadata("cdmi_atime", sdf.format(accessTime));
-            dObj.setMetadata("cdmi_mtime", sdf.format(modificationTime));
-            dObj.setMetadata("cdmi_size", String.valueOf(size));
             dObj.setMetadata("cdmi_acount", "0");  //TODO
             dObj.setMetadata("cdmi_mcount", "0");  //TODO
             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -647,11 +672,10 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private boolean checkIfDirectoryFileExists(String dirPath)
     {
         boolean result = false;
-
         String searchedItem = getItem(dirPath);
         String tmpDirPath = addPrefixSlashToPath(dirPath);
-        Map<String, FileType> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
-        for (Map.Entry<String, FileType> entry : listing.entrySet()) {
+        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
+        for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
             if (entry.getKey().compareTo(searchedItem) == 0) {
                 result = true;
             }
@@ -659,11 +683,25 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
-    private Map<String, FileType> listDirectoriesFilesByPath(String path)
+    private FileAttributes getAttributesByPath(String path)
+    {
+        FileAttributes result = null;
+        String searchedItem = getItem(path);
+        String tmpDirPath = addPrefixSlashToPath(path);
+        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
+        for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
+            if (entry.getKey().compareTo(searchedItem) == 0) {
+                result = entry.getValue();
+            }
+        }
+        return result;
+    }
+
+    private Map<String, FileAttributes> listDirectoriesFilesByPath(String path)
     {
         String tmpPath = addPrefixSlashToPath(path);
         FsPath fsPath = new FsPath(tmpPath);
-        Map<String, FileType> result = new HashMap<>();
+        Map<String, FileAttributes> result = new HashMap<>();
         Test.write("/tmp/listing.log", path);
         Test.write("/tmp/listing.log", listDirectoryHandler.toString());
         try {
@@ -731,18 +769,18 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
     private static class ListPrinter implements DirectoryListPrinter
     {
-        private final Map<String, FileType> list;
+        private final Map<String, FileAttributes> list;
 
-        private ListPrinter(Map<String, FileType> list)
+        private ListPrinter(Map<String, FileAttributes> list)
         {
+            Test.write("/tmp/listing.log", "Listing:"); //temporary
             this.list = list;
-            Test.write("/tmp/listing.log", "Listing_2:"); //temporary
         }
 
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            return EnumSet.of(TYPE, SIZE);
+            return EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, ACL);
         }
 
         @Override
@@ -750,8 +788,28 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 throws InterruptedException
         {
             FileAttributes attr = entry.getFileAttributes();
-            list.put(entry.getName(), attr.getFileType());
-            Test.write("/tmp/listing.log", "Out_2:" + dir.getName() + "|" + entry.getName() + "|" + String.valueOf(attr.getFileType()) + "|" + String.valueOf(attr.getSize())); //temporary
+            list.put(entry.getName(), attr);
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+                String str = "";
+                str += "Out: DirName:" + dir.getName();
+                str += "|EntryName:" + entry.getName();
+                if (attr.getPnfsId() != null) str += "|PnfsId:" + attr.getPnfsId().toIdString();
+                if (attr.getPnfsId() != null) str += "|ShortPnfsId:" + attr.getPnfsId().toShortString();
+                str += "|CreationTime:" + sdf.format(attr.getCreationTime());
+                str += "|AccessTime:" + sdf.format(attr.getAccessTime());
+                str += "|ChangeTime:" + sdf.format(attr.getChangeTime());
+                str += "|ModificationTime:" + sdf.format(attr.getModificationTime());
+                if (attr.getAcl() != null) str += "|ACL:" + attr.getAcl().toString();
+                if (attr.getAcl() != null) str += "|ACLExtraFormat:" + attr.getAcl().toExtraFormat(); //ACLException
+                if (attr.getAcl() != null) str += "|ACLNFS4:" + attr.getAcl().toNFSv4String();
+                if (attr.getAcl() != null) str += "|ACLOrg:" + attr.getAcl().toOrgString();
+                if (attr.getFileType() != null) str += "|FileType:" + attr.getFileType().name();
+                str += "|Size:" + String.valueOf(attr.getSize());
+                Test.write("/tmp/listing.log", str); //temporary
+            } catch (ACLException ex) {
+                Logger.getLogger(CDMIContainerDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
     }
 
@@ -776,13 +834,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 transfer.createNameSpaceEntryWithParents();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    pnfsId = CDMIDataTransfer.getPnfsId();
-                    creationTime = CDMIDataTransfer.getCreationTime();
-                    accessTime = CDMIDataTransfer.getAccessTime();
-                    changeTime = CDMIDataTransfer.getChangeTime();
-                    modificationTime = CDMIDataTransfer.getModificationTime();
-                    size = CDMIDataTransfer.getSize();
-                    fileType = CDMIDataTransfer.getFileType();
                 }
                 finally {
                     pnfsId = CDMIDataTransfer.getPnfsId();
@@ -835,6 +886,10 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 transfer.readNameSpaceEntry();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+                    result = CDMIDataTransfer.getDataAsBytes();
+                    _log.error("CDMIDataObjectDaoImpl received data: " + result.toString());
+                }
+                finally {
                     pnfsId = CDMIDataTransfer.getPnfsId();
                     creationTime = CDMIDataTransfer.getCreationTime();
                     accessTime = CDMIDataTransfer.getAccessTime();
@@ -842,10 +897,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     modificationTime = CDMIDataTransfer.getModificationTime();
                     size = CDMIDataTransfer.getSize();
                     fileType = CDMIDataTransfer.getFileType();
-                    result = CDMIDataTransfer.getDataAsBytes();
-                    _log.error("CDMIDataObjectDaoImpl received data: " + result.toString());
-                }
-                finally {
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -867,6 +918,16 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             _log.error("CDMIDataObjectDaoImpl, File could not become read, exception is: " + ex.getMessage());
         }
         return result;
+    }
+
+    public static class HelperClass {
+        public static void sleep(long ms) {
+            try {
+                Thread.sleep(ms);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
     }
 
 }
