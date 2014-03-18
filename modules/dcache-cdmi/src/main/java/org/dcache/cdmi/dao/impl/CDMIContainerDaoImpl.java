@@ -79,6 +79,7 @@ import org.snia.cdmiserver.util.ObjectID;
 import com.mongodb.WriteResult;
 import diskCacheV111.util.PnfsId;
 import java.text.ParseException;
+import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.dcache.acl.ACLException;
@@ -127,6 +128,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     private long changeTime;
     private long modificationTime;
     private long size;
+    private Collection<String> locations;
     private FileType fileType;
     private static final boolean useDB = false;
 
@@ -324,7 +326,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                         currentContainer.fromJson(readMetadata(currentContainer.getObjectID()).getBytes(), true);
                     } catch (Exception ex) {
                         ex.printStackTrace();
-                        System.out.println("Exception while reading storage meta data: " + ex);
+                        _log.error("Exception while reading storage meta data: " + ex);
                         throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
                     }
                 }
@@ -411,7 +413,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
             if (useDB) {
                 if (!writeMetadata(containerRequest.getObjectID(), containerRequest.metadataToJson(true))) {
-                    System.out.println("Exception while writing to Mongo DB.");
+                    _log.error("Exception while writing to Mongo DB.");
                     throw new IllegalArgumentException("Cannot write metadata to table '"
                                                        + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                        + DB_MONGO_DATABASE_NAME);
@@ -606,7 +608,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         }
         mdb.disconnect();
         if (writeResult.getError() != null) {
-            System.out.println("Exception while writing to Mongo database.");
+            _log.error("Exception while writing to Mongo database.");
             throw new IllegalArgumentException("Cannot write metadata to table '"
                                                + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
@@ -629,7 +631,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         }
         mdb.disconnect();
         if (dbObject == null) {
-            System.out.println("Exception while reading from Mongo database.");
+            _log.error("Exception while reading from Mongo database.");
             throw new IllegalArgumentException("Cannot read metadata from table '"
                                                + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
@@ -647,7 +649,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
             writeResult = mdb.deleteById(DB_MONGO_TABLE_METADATA, objectID);
             if (writeResult.getError() != null) {
-                System.out.println("Exception while deleting from Mongo database.");
+                _log.error("Exception while deleting from Mongo database.");
                 throw new IllegalArgumentException("Cannot delete metadata from table '"
                                                    + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                    + DB_MONGO_DATABASE_NAME + "', internal error message: "
@@ -724,7 +726,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 deleteMetadata(requestedContainer.getObjectID());
             } catch (Exception ex) {
                 ex.printStackTrace();
-                System.out.println("Exception while deleting storage meta data: " + ex);
+                _log.error("Exception while deleting storage meta data: " + ex);
                 throw new IllegalArgumentException("Cannot delete storage meta data, internal error : " + ex);
             }
         }
@@ -847,7 +849,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             if (useDB) {
                 try {
                     if (!writeMetadata(requestedContainer.getObjectID(), requestedContainer.metadataToJson(true))) {
-                        System.out.println("Exception while writing to Mongo DB.");
+                        _log.error("Exception while writing to Mongo DB.");
                         throw new IllegalArgumentException("Cannot write metadata to table '"
                                                            + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                            + DB_MONGO_DATABASE_NAME);
@@ -919,7 +921,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                                + containerFieldsFile.getAbsolutePath());
         } catch (Exception ex) {
             ex.printStackTrace();
-            System.out.println("Exception while building File objects: " + ex);
+            _log.error("Exception while building File objects: " + ex);
             throw new IllegalArgumentException("Cannot build Object @" + path + " error : " + ex);
         }
         return containerFieldsFile;
@@ -942,7 +944,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             System.out.println("Container fields read were:" + mds);
         } catch (Exception ex) {
             ex.printStackTrace();
-            System.out.println("Exception while reading: " + ex);
+            _log.error("Exception while reading: " + ex);
             throw new IllegalArgumentException("Cannot read container fields file error: " + ex);
         }
         return containerFields;
@@ -1520,7 +1522,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            return EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, ACL);
+            return EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, ACL, LOCATIONS);
         }
 
         @Override
@@ -1544,6 +1546,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 if (attr.getAcl() != null) str += "|ACLExtraFormat:" + attr.getAcl().toExtraFormat(); //ACLException
                 if (attr.getAcl() != null) str += "|ACLNFS4:" + attr.getAcl().toNFSv4String();
                 if (attr.getAcl() != null) str += "|ACLOrg:" + attr.getAcl().toOrgString();
+                if (attr.getLocations() != null) str += "|Locations:" + attr.getLocations().toString();
                 if (attr.getFileType() != null) str += "|FileType:" + attr.getFileType().name();
                 str += "|Size:" + String.valueOf(attr.getSize());
                 Test.write("/tmp/listing.log", str); //temporary
@@ -1583,6 +1586,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     modificationTime = CDMIDataTransfer.getModificationTime();
                     size = CDMIDataTransfer.getSize();
                     fileType = CDMIDataTransfer.getFileType();
+                    locations = CDMIDataTransfer.getLocations();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -1594,6 +1598,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 System.out.println("TEST1W-modificationTime:" + sdf.format(modificationTime));
                 System.out.println("TEST1W-size:" + size);
                 if (fileType != null) System.out.println("TEST1W-fileType:" + fileType.toString());
+                if (locations != null) System.out.println("TEST1W-locations:" + locations.toString());
                 System.out.println("TEST1W-data:" + data);
                 result = true;
             } finally {
@@ -1627,7 +1632,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
                     result = CDMIDataTransfer.getDataAsBytes();
-                    _log.error("CDMIContainerDaoImpl received data: " + result.toString());
+                    System.out.println("CDMIContainerDaoImpl received data: " + result.toString());
                 }
                 finally {
                     pnfsId = CDMIDataTransfer.getPnfsId();
@@ -1637,6 +1642,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     modificationTime = CDMIDataTransfer.getModificationTime();
                     size = CDMIDataTransfer.getSize();
                     fileType = CDMIDataTransfer.getFileType();
+                    locations = CDMIDataTransfer.getLocations();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -1648,6 +1654,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 System.out.println("TEST1R-modificationTime:" + sdf.format(modificationTime));
                 System.out.println("TEST1R-size:" + size);
                 if (fileType != null) System.out.println("TEST1R-fileType:" + fileType.toString());
+                if (locations != null) System.out.println("TEST1R-locations:" + locations.toString());
                 System.out.println("TEST1R-data:" + result.toString());
             } finally {
                 if (result == null) {
@@ -1707,7 +1714,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             transfer.readNameSpaceEntry();
             transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
             String data = CDMIDataTransfer.getDataAsString();
-            _log.error("CDMIContainerDaoImpl received data: " + data);
+            System.out.println("CDMIContainerDaoImpl received data: " + data);
         } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("File could not become read, exception is: " + ex.getMessage());
         }

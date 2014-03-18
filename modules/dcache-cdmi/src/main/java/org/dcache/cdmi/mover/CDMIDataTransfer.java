@@ -2,6 +2,7 @@ package org.dcache.cdmi.mover;
 
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
+import java.util.Collection;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileType;
 import org.dcache.util.list.ListDirectoryHandler;
@@ -37,6 +38,7 @@ public class CDMIDataTransfer
     private static byte[] bytData;
     private static String strData;
     private static PnfsId pnfsId;
+    private static Collection<String> locations;
     private static long accessTime;
     private static long creationTime;
     private static long changeTime;
@@ -159,6 +161,11 @@ public class CDMIDataTransfer
         fileType = value;
     }
 
+    public static void setLocations(Collection<String> value)
+    {
+        locations = value;
+    }
+
     public static String getBaseDirectoryName()
     {
         return baseDirectoryName;
@@ -274,4 +281,9 @@ public class CDMIDataTransfer
         return fileType;
     }
 
+    public static Collection<String> getLocations()
+    {
+        return locations;
+    }
+    
 }
