@@ -65,6 +65,7 @@ public class CDMI extends AbstractCellComponent
     implements Runnable, CellCommandListener, CellMessageReceiver
 {
 
+    private static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
     private boolean isDefaultFormal;
     private CellStub poolManager;
     private CellStub helloStub;
@@ -76,17 +77,17 @@ public class CDMI extends AbstractCellComponent
     private CellStub pool;
     private DirectoryListSource list;
     private String result = "";
-    private boolean useDB = false;
+    private static final boolean useDB = false;
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
 
     public CDMI() {
-        useDB = false;
         if (useDB) {
             MongoDB mdb = new MongoDB();
             mdb.connectWithoutDb();
             mdb.printMongoInformation();
+            mdb.dropDB(DB_MONGO_DATABASE_NAME);
             mdb.disconnect();
         }
     }

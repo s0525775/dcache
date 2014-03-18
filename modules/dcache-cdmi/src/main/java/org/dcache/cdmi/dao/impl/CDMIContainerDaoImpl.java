@@ -114,15 +114,13 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     private CellStub poolStub;
     private CellStub poolMgrStub;
     private CellStub billingStub;
-    public static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
-    public static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
-    public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
-    public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
-    public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
-    public static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
-    public static final String DB_MONGO_TABLE_STORAGE_SYS_METADATA = "storage_metadata";
-    public static final String DB_MONGO_TABLE_DATA_SYS_METADATA = "data_metadata";
-    public static final String DB_MONGO_TABLE_USER_METADATA = "user_metadata";
+    private static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
+    private static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
+    private static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
+    private static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
+    private static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
+    private static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
+    private static final String DB_MONGO_TABLE_METADATA = "metadata";
     private PnfsId pnfsId;
     private long accessTime;
     private long creationTime;
@@ -130,7 +128,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     private long modificationTime;
     private long size;
     private FileType fileType;
-    private boolean useDB = false;
+    private static final boolean useDB = false;
 
     /**
      * <p>
@@ -154,7 +152,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         if (listDirectoryHandler == null) {
             init();
         }
-        useDB = false;
     }
 
     /**
@@ -415,8 +412,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             if (useDB) {
                 if (!writeMetadata(containerRequest.getObjectID(), containerRequest.metadataToJson(true))) {
                     System.out.println("Exception while writing to Mongo DB.");
-                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                    throw new IllegalArgumentException("Cannot write metadata to table '"
+                                                       + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                        + DB_MONGO_DATABASE_NAME);
                 }
             }
@@ -568,7 +565,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 if (useDB) {
                     if (!writeMetadata(containerRequest.getObjectID(), cMd.metadataToJson(true))) {
                         System.out.println("Exception while writing to Mongo DB.");
-                        throw new IllegalArgumentException("Cannot write storage system metadata to table '"
+                        throw new IllegalArgumentException("Cannot write metadata to table '"
                                                            + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
                                                            + DB_MONGO_DATABASE_NAME);
                     }
@@ -600,18 +597,18 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         MongoDB mdb = new MongoDB();
         mdb.connect(DB_MONGO_DATABASE_NAME);
         dbObject = mdb.convertJsonToDbObject(jsonObject);
-        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
             // update
-            writeResult = mdb.updateById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID, dbObject);
+            writeResult = mdb.updateById(DB_MONGO_TABLE_METADATA, objectID, dbObject);
         } else {
             // create
-            writeResult = mdb.saveToDB(DB_MONGO_TABLE_STORAGE_SYS_METADATA, dbObject);
+            writeResult = mdb.saveToDB(DB_MONGO_TABLE_METADATA, dbObject);
         }
         mdb.disconnect();
         if (writeResult.getError() != null) {
             System.out.println("Exception while writing to Mongo database.");
-            throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+            throw new IllegalArgumentException("Cannot write metadata to table '"
+                                               + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
                                                + writeResult.getError());
         } else {
@@ -625,16 +622,16 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         DBObject dbObject = null;
         MongoDB mdb = new MongoDB();
         mdb.connect(DB_MONGO_DATABASE_NAME);
-        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
-            dbObject = mdb.fetchById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
+            dbObject = mdb.fetchById(DB_MONGO_TABLE_METADATA, objectID);
             if (dbObject != null)
                 result = mdb.convertDbObjectToJson(dbObject);
         }
         mdb.disconnect();
         if (dbObject == null) {
             System.out.println("Exception while reading from Mongo database.");
-            throw new IllegalArgumentException("Cannot read storage system metadata from table '"
-                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+            throw new IllegalArgumentException("Cannot read metadata from table '"
+                                               + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
                                                + "no JSON object for objectID '" + objectID + "' found");
         }
@@ -647,12 +644,12 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         WriteResult writeResult;
         MongoDB mdb = new MongoDB();
         mdb.connect(DB_MONGO_DATABASE_NAME);
-        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
-            writeResult = mdb.deleteById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
+            writeResult = mdb.deleteById(DB_MONGO_TABLE_METADATA, objectID);
             if (writeResult.getError() != null) {
                 System.out.println("Exception while deleting from Mongo database.");
-                throw new IllegalArgumentException("Cannot delete storage system metadata from table '"
-                                                   + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                throw new IllegalArgumentException("Cannot delete metadata from table '"
+                                                   + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                    + DB_MONGO_DATABASE_NAME + "', internal error message: "
                                                    + writeResult.getError());
             } else {
@@ -771,6 +768,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         // Setup ISO-8601 Date
         //
         Date now = new Date();
+        long nowAsLong = now.getTime();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
         String objectID = "";
@@ -803,6 +801,12 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 _log.error("CDMIContainerDao<Read>, Cannot read meta information from directory: " + directory.getAbsolutePath());
             }
 
+            //
+            // Dynamically generate the default values
+            //
+            requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
+            requestedContainer.setDomainURI("/cdmi_domains/default_domain");
+
             requestedContainer.setMetadata("cdmi_acount", "0");
             requestedContainer.setMetadata("cdmi_mcount", "0");
             // set default ACL
@@ -815,25 +819,15 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             subMetadata_ACL.add(subMetadataEntry_ACL);
             requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
 
+            // Read real metadata from DB
             if (useDB) {
                 try {
                     requestedContainer.fromJson(readMetadata(requestedContainer.getObjectID()).getBytes(), true);
                 } catch (Exception ex) {
-                    ex.printStackTrace();
-                    System.out.println("Exception while reading storage meta data: " + ex);
-                    throw new IllegalArgumentException("Cannot read storage meta data, internal error : " + ex);
+                    _log.error("CDMIContainerDao<Read>, Cannot read meta information from directory: " + directory.getAbsolutePath());
                 }
-            }
-
-            //
-            // Dynamically generate the default values
-            //
-            requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
-            requestedContainer.setDomainURI("/cdmi_domains/default_domain");
-
-            if (useDB) {
                 int acount = Integer.parseInt(requestedContainer.getMetadata().get("cdmi_acount"));
-                requestedContainer.setMetadata("cdmi_mcount", String.valueOf(acount + 1));
+                requestedContainer.setMetadata("cdmi_acount", String.valueOf(acount + 1));
             }
 
             //
@@ -843,21 +837,23 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             // update meta information
             try {
                 FileAttributes attr2 = new FileAttributes();
-                Date atime = sdf.parse(requestedContainer.getMetadata().get("cdmi_atime"));
-                long atimeAsLong = atime.getTime();
-                attr2.setAccessTime(atimeAsLong);
-                PnfsId id = new PnfsId(requestedContainer.getPnfsID());
-                pnfsHandler.setFileAttributes(id, attr2);
-            } catch (CacheException | ParseException ex) {
+                attr2.setAccessTime(nowAsLong);
+                pnfsHandler.setFileAttributes(pnfsId, attr2);
+                requestedContainer.setMetadata("cdmi_atime", sdf.format(now));
+            } catch (CacheException ex) {
                 _log.error("CDMIContainerDao<Read>, Cannot update meta information for object with objectID " + requestedContainer.getObjectID());
             }
 
             if (useDB) {
-                if (!writeMetadata(requestedContainer.getObjectID(), requestedContainer.metadataToJson(true))) {
-                    System.out.println("Exception while writing to Mongo DB.");
-                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
-                                                       + DB_MONGO_DATABASE_NAME);
+                try {
+                    if (!writeMetadata(requestedContainer.getObjectID(), requestedContainer.metadataToJson(true))) {
+                        System.out.println("Exception while writing to Mongo DB.");
+                        throw new IllegalArgumentException("Cannot write metadata to table '"
+                                                           + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
+                                                           + DB_MONGO_DATABASE_NAME);
+                    }
+                } catch (Exception ex) {
+                    _log.error("CDMIContainerDao<Read>, Cannot update meta information for object with objectID " + requestedContainer.getObjectID());
                 }
             }
 

@@ -303,8 +303,8 @@ public class CDMIPathResource {
                 } else {
                     // make http response
                     // build a JSON representation
-                    //String respStr = dObj.toJsonWithMetadata();
-                    String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
+                    String respStr = dObj.toJsonWithMetadata();
+                    //String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
                     System.out.println("MimeType = " + dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();

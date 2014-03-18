@@ -109,15 +109,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private CellStub poolStub;
     private CellStub poolMgrStub;
     private CellStub billingStub;
-    public static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
-    public static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
-    public static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
-    public static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
-    public static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
-    public static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
-    public static final String DB_MONGO_TABLE_STORAGE_SYS_METADATA = "storage_metadata";
-    public static final String DB_MONGO_TABLE_DATA_SYS_METADATA = "data_metadata";
-    public static final String DB_MONGO_TABLE_USER_METADATA = "user_metadata";
+    private static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
+    private static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
+    private static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
+    private static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
+    private static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
+    private static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
+    private static final String DB_MONGO_TABLE_METADATA = "metadata";
     private PnfsId pnfsId;
     private long accessTime;
     private long creationTime;
@@ -125,8 +123,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private long modificationTime;
     private long size;
     private FileType fileType;
-    private boolean setObjectID = false;
-    private boolean useDB = false;
+    private static final boolean useDB = false;
 
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
@@ -154,7 +151,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         if (listDirectoryHandler == null) {
             init();
         }
-        useDB = false;
     }
 
     // ---------------------------------------------------- ContainerDao Methods
@@ -252,10 +248,14 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     // update with real info
                     System.out.println("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
-                    dObj.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
-                    dObj.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
-                    dObj.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
-                    dObj.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                    long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
+                    long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
+                    long mtime = (attr.getModificationTime() > modificationTime) ? attr.getModificationTime() : modificationTime;
+                    long osize = (attr.getSize() > size) ? attr.getSize() : size;
+                    dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
+                    dObj.setMetadata("cdmi_atime", sdf.format(atime));
+                    dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
+                    dObj.setMetadata("cdmi_size", String.valueOf(osize));
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
                     System.out.println("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
@@ -291,8 +291,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             if (useDB) {
                 if (!writeMetadata(dObj.getObjectID(), dObj.metadataToJson())) {
                     System.out.println("Exception while writing to Mongo DB.");
-                    throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                                       + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+                    throw new IllegalArgumentException("Cannot write metadata to table '"
+                                                       + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                        + DB_MONGO_DATABASE_NAME);
                 }
             }
@@ -312,18 +312,18 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         MongoDB mdb = new MongoDB();
         mdb.connect(DB_MONGO_DATABASE_NAME);
         dbObject = mdb.convertJsonToDbObject(jsonObject);
-        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
+        if ((objectID != null) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
             // update
-            writeResult = mdb.updateById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID, dbObject);
+            writeResult = mdb.updateById(DB_MONGO_TABLE_METADATA, objectID, dbObject);
         } else {
             // create
-            writeResult = mdb.saveToDB(DB_MONGO_TABLE_STORAGE_SYS_METADATA, dbObject);
+            writeResult = mdb.saveToDB(DB_MONGO_TABLE_METADATA, dbObject);
         }
         mdb.disconnect();
         if (writeResult.getError() != null) {
             System.out.println("Exception while writing to Mongo database.");
-            throw new IllegalArgumentException("Cannot write storage system metadata to table '"
-                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+            throw new IllegalArgumentException("Cannot write metadata to table '"
+                                               + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
                                                + writeResult.getError());
         } else {
@@ -337,16 +337,16 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         DBObject dbObject = null;
         MongoDB mdb = new MongoDB();
         mdb.connect(DB_MONGO_DATABASE_NAME);
-        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID))) {
-            dbObject = mdb.fetchById(DB_MONGO_TABLE_STORAGE_SYS_METADATA, objectID);
+        if ((objectID != null) && (!objectID.isEmpty()) && (mdb.checkIfObjectExistsById(DB_MONGO_TABLE_METADATA, objectID))) {
+            dbObject = mdb.fetchById(DB_MONGO_TABLE_METADATA, objectID);
             if (dbObject != null)
                 result = mdb.convertDbObjectToJson(dbObject);
         }
         mdb.disconnect();
         if (dbObject == null) {
             System.out.println("Exception while reading from Mongo database.");
-            throw new IllegalArgumentException("Cannot read storage system metadata from table '"
-                                               + DB_MONGO_TABLE_STORAGE_SYS_METADATA + "' of MongoDB '"
+            throw new IllegalArgumentException("Cannot read metadata from table '"
+                                               + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
                                                + DB_MONGO_DATABASE_NAME + "', internal error message: "
                                                + "no JSON object for objectID '" + objectID + "' found");
         }
@@ -428,25 +428,24 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    System.out.println("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                    System.out.println("CDMIDataObjectDao<Read>, setPnfsID: " + pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
-                    dObj.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
-                    dObj.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
-                    dObj.setMetadata("cdmi_mtime", sdf.format(attr.getModificationTime()));
-                    dObj.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
+                    long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
+                    long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
+                    long mtime = (attr.getModificationTime() > modificationTime) ? attr.getModificationTime() : modificationTime;
+                    long osize = (attr.getSize() > size) ? attr.getSize() : size;
+                    dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
+                    dObj.setMetadata("cdmi_atime", sdf.format(atime));
+                    dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
+                    dObj.setMetadata("cdmi_size", String.valueOf(osize));
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
-                    System.out.println("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
+                    System.out.println("CDMIDataObjectDao<Read>, setObjectID: " + objectID);
                 } else {
-                    _log.error("CDMIDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    _log.error("CDMIDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("CDMIDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
-            }
-
-            // Read real metadata from DB
-            if (useDB) {
-                dObj.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
+                _log.error("CDMIDataObjectDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
             }
 
             dObj.setMetadata("cdmi_acount", "0");  //TODO
@@ -459,6 +458,18 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
             subMetadata_ACL.add(subMetadataEntry_ACL);
             dObj.setSubMetadata_ACL(subMetadata_ACL);
+
+            // Read real metadata from DB
+            if (useDB) {
+                try {
+                    dObj.fromJson(readMetadata(dObj.getObjectID()).getBytes(), true);
+                } catch (Exception ex) {
+                    _log.error("CDMIContainerDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
+                }
+                // need to increment acount dObj.setMetadata("cdmi_acount", "0");
+                int acount = Integer.parseInt(dObj.getMetadata().get("cdmi_acount"));
+                dObj.setMetadata("cdmi_acount", String.valueOf(acount + 1));
+            }
 
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
@@ -481,12 +492,20 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             pnfsHandler.setFileAttributes(pnfsId, attr);
             dObj.setMetadata("cdmi_atime", sdf.format(now));
         } catch (CacheException ex) {
-            Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+            _log.error("CDMIDataObjectDao<Read>, Cannot update meta information for object with objectID " + dObj.getObjectID());
         }
-        // need to increment acount dObj.setMetadata("cdmi_acount", "0");
+
         if (useDB) {
-            int acount = Integer.parseInt(dObj.getMetadata().get("cdmi_acount"));
-            dObj.setMetadata("cdmi_acount", String.valueOf(acount + 1));
+            try {
+                if (!writeMetadata(dObj.getObjectID(), dObj.metadataToJson())) {
+                    System.out.println("Exception while writing to Mongo DB.");
+                    throw new IllegalArgumentException("Cannot write metadata to table '"
+                            + DB_MONGO_TABLE_METADATA + "' of MongoDB '"
+                            + DB_MONGO_DATABASE_NAME);
+                }
+            } catch (Exception ex) {
+                _log.error("CDMIDataObjectDao<Read>, Cannot update meta information for object with objectID " + dObj.getObjectID());
+            }
         }
 
         return dObj;
@@ -792,7 +811,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             try {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 String str = "";
-                str += "Out: DirName:" + dir.getName();
+                str += "Out2: DirName:" + dir.getName();
                 str += "|EntryName:" + entry.getName();
                 if (attr.getPnfsId() != null) str += "|PnfsId:" + attr.getPnfsId().toIdString();
                 if (attr.getPnfsId() != null) str += "|ShortPnfsId:" + attr.getPnfsId().toShortString();

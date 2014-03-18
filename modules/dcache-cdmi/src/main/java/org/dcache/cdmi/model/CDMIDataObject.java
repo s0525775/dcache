@@ -50,6 +50,8 @@ public class CDMIDataObject extends DataObject {
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+    private List<HashMap<String, String>> subMetadata_GEOPLACMNT = new ArrayList<HashMap<String, String>>();
+    private List<HashMap<String, String>> subMetadata_HOLDID = new ArrayList<HashMap<String, String>>();
     private final List<String> ignoreList = new ArrayList() {{
         add("cdmi_ctime");
         add("cdmi_atime");
@@ -224,6 +226,14 @@ public class CDMIDataObject extends DataObject {
         return subMetadata_ACL;
     }
 
+    public List<HashMap<String, String>> getSubMetadata_GEOPLACMNT() {
+        return subMetadata_GEOPLACMNT;
+    }
+
+    public List<HashMap<String, String>> getSubMetadata_HOLDID() {
+        return subMetadata_HOLDID;
+    }
+
     @Override
     public void setMetadata(String key, String val) {
         metadata.put(key, val);
@@ -237,12 +247,36 @@ public class CDMIDataObject extends DataObject {
         subMetadata_ACL.add(mainKey, metadata);
     }
 
+    public void addSubMetadata_GEOPLACMNT(HashMap<String, String> metadata) {
+        subMetadata_GEOPLACMNT.add(metadata);
+    }
+
+    public void addSubMetadata_GEOPLACMNT(int mainKey, HashMap<String, String> metadata) {
+        subMetadata_GEOPLACMNT.add(mainKey, metadata);
+    }
+
+    public void addSubMetadata_HOLDID(HashMap<String, String> metadata) {
+        subMetadata_HOLDID.add(metadata);
+    }
+
+    public void addSubMetadata_HOLDID(int mainKey, HashMap<String, String> metadata) {
+        subMetadata_HOLDID.add(mainKey, metadata);
+    }
+
     public void setMetadata(Map<String, String> metadata) {
         this.metadata = metadata;
     }
 
     public void setSubMetadata_ACL(List<HashMap<String, String>> metadata) {
         this.subMetadata_ACL = metadata;
+    }
+
+    public void setSubMetadata_GEOPLACMNT(List<HashMap<String, String>> metadata) {
+        this.subMetadata_GEOPLACMNT = metadata;
+    }
+
+    public void setSubMetadata_HOLDID(List<HashMap<String, String>> metadata) {
+        this.subMetadata_HOLDID = metadata;
     }
 
     private boolean isValidSubMetadata_ACL() {
@@ -322,6 +356,24 @@ public class CDMIDataObject extends DataObject {
                 }
                 g.writeEndObject();
             }
+            if (!subMetadata_GEOPLACMNT.isEmpty()) {
+                g.writeObjectFieldStart("cdmi_geographic_placement");
+                for (HashMap<String, String> entry : subMetadata_GEOPLACMNT) {
+                    for (String key : entry.keySet()) {
+                        g.writeStringField(key, entry.get(key));
+                    }
+                }
+                g.writeEndObject();
+            }
+            if (!subMetadata_HOLDID.isEmpty()) {
+                g.writeObjectFieldStart("cdmi_hold_id");
+                for (HashMap<String, String> entry : subMetadata_HOLDID) {
+                    for (String key : entry.keySet()) {
+                        g.writeStringField(key, entry.get(key));
+                    }
+                }
+                g.writeEndObject();
+            }
             g.writeEndObject();
             //
             g.writeEndObject();
@@ -367,6 +419,24 @@ public class CDMIDataObject extends DataObject {
                 }
                 g.writeEndObject();
             }
+            if (!subMetadata_GEOPLACMNT.isEmpty()) {
+                g.writeObjectFieldStart("cdmi_geographic_placement");
+                for (HashMap<String, String> entry : subMetadata_GEOPLACMNT) {
+                    for (String key : entry.keySet()) {
+                        g.writeStringField(key, entry.get(key));
+                    }
+                }
+                g.writeEndObject();
+            }
+            if (!subMetadata_HOLDID.isEmpty()) {
+                g.writeObjectFieldStart("cdmi_hold_id");
+                for (HashMap<String, String> entry : subMetadata_HOLDID) {
+                    for (String key : entry.keySet()) {
+                        g.writeStringField(key, entry.get(key));
+                    }
+                }
+                g.writeEndObject();
+            }
             g.writeEndObject();
             //
             g.writeEndObject();
@@ -406,14 +476,40 @@ public class CDMIDataObject extends DataObject {
                     key = jp.getCurrentName();
                     if ("cdmi_acl".equals(key)) {// process metadata_ACL
                         tolkein = jp.nextToken();
-                        HashMap<String, String> tmpMap = new HashMap<String, String>();
+                        subMetadata_ACL.clear();
+                        HashMap<String, String> tmpMap1 = new HashMap<String, String>();
                         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
                             key = jp.getCurrentName();
                             tolkein = jp.nextToken();
                             String value = jp.getText();
                             System.out.println("   Key = " + key + " : Value = " + value);
+                            tmpMap1.put(key, value);
                         }// while
-                        this.getSubMetadata_ACL().add(tmpMap);
+                        addSubMetadata_ACL(tmpMap1);
+                    } else if ("cdmi_geographic_placement".equals(key)) {// process metadata_GEOPLACMNT
+                        tolkein = jp.nextToken();
+                        subMetadata_GEOPLACMNT.clear();
+                        HashMap<String, String> tmpMap2 = new HashMap<String, String>();
+                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                            key = jp.getCurrentName();
+                            tolkein = jp.nextToken();
+                            String value = jp.getText();
+                            System.out.println("   Key = " + key + " : Value = " + value);
+                            tmpMap2.put(key, value);
+                        }// while
+                        addSubMetadata_GEOPLACMNT(tmpMap2);
+                    } else if ("cdmi_hold_id".equals(key)) {// process metadata_HOLDID
+                        tolkein = jp.nextToken();
+                        subMetadata_HOLDID.clear();
+                        HashMap<String, String> tmpMap3 = new HashMap<String, String>();
+                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                            key = jp.getCurrentName();
+                            tolkein = jp.nextToken();
+                            String value = jp.getText();
+                            System.out.println("   Key = " + key + " : Value = " + value);
+                            tmpMap3.put(key, value);
+                        }// while
+                        addSubMetadata_HOLDID(tmpMap3);
                     } else {
                         tolkein = jp.nextToken();
                         String value = jp.getText();

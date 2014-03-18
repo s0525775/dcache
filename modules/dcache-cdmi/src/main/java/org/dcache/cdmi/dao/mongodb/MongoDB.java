@@ -128,15 +128,14 @@ public class MongoDB {
         return result;
     }
 
-    public WriteResult updateById(String table, String pnfsId, DBObject newObject) {
+    public WriteResult updateById(String table, String objectId, DBObject newObject) {
         WriteResult result;
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", pnfsId);
-	query.put("objectID", pnfsId);
+	query.put("objectID", objectId);
 	BasicDBObject updateObject = new BasicDBObject();
 	updateObject.put("$set", newObject);
-	result = mongoTable.update(query, updateObject);
+	result = mongoTable.update(query, updateObject, false, true);
         return result;
     }
 
@@ -144,20 +143,18 @@ public class MongoDB {
         WriteResult result;
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", oldObject.get("PnfsId"));
 	query.put("objectID", oldObject.get("objectID"));
 	BasicDBObject updateObject = new BasicDBObject();
 	updateObject.put("$set", newObject);
-	result = mongoTable.update(query, updateObject);
+	result = mongoTable.update(query, updateObject, false, true);
         return result;
     }
 
-    public DBObject fetchById(String table, String pnfsId) {
+    public DBObject fetchById(String table, String objectId) {
         DBObject result = null;
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", pnfsId);
-	query.put("objectID", pnfsId);
+	query.put("objectID", objectId);
         try (DBCursor cursor = mongoTable.find(query)) {
             while (cursor.hasNext()) {
                 result = cursor.next();
@@ -167,12 +164,11 @@ public class MongoDB {
         return result;
     }
 
-    public boolean checkIfObjectExistsById(String table, String pnfsId) {
+    public boolean checkIfObjectExistsById(String table, String objectId) {
         boolean result = false;
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", pnfsId);
-	query.put("objectID", pnfsId);
+	query.put("objectID", objectId);
         try (DBCursor cursor = mongoTable.find(query)) {
             if (cursor.hasNext()) {
                 result = true;
@@ -182,11 +178,10 @@ public class MongoDB {
         return result;
     }
 
-    public void fetchByIdAndPrint(String table, String pnfsId) {
+    public void fetchByIdAndPrint(String table, String objectId) {
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", pnfsId);
-	query.put("objectID", pnfsId);
+	query.put("objectID", objectId);
         System.out.println("Object(s) in table '" + mongoTable.getName() + "' of Mongo database '" + mongoDB.getName() + "':");
         try (DBCursor cursor = mongoTable.find(query)) {
             while (cursor.hasNext()) {
@@ -196,13 +191,12 @@ public class MongoDB {
         }
     }
 
-    public WriteResult deleteById(String table, String pnfsId) {
+    public WriteResult deleteById(String table, String objectId) {
         WriteResult result;
 	DBCollection mongoTable = mongoDB.getCollection(table);
 	BasicDBObject searchQuery = new BasicDBObject();
 	BasicDBObject query = new BasicDBObject();
-	//query.put("PnfsId", pnfsId);
-	query.put("objectID", pnfsId);
+	query.put("objectID", objectId);
  	result = mongoTable.remove(searchQuery);
         return result;
     }
