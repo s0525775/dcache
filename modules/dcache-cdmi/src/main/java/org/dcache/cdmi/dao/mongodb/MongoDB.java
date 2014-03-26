@@ -194,10 +194,9 @@ public class MongoDB {
     public WriteResult deleteById(String table, String objectId) {
         WriteResult result;
 	DBCollection mongoTable = mongoDB.getCollection(table);
-	BasicDBObject searchQuery = new BasicDBObject();
 	BasicDBObject query = new BasicDBObject();
 	query.put("objectID", objectId);
- 	result = mongoTable.remove(searchQuery);
+ 	result = mongoTable.remove(query);
         return result;
     }
 

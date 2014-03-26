@@ -48,13 +48,13 @@ public class CDMIContainer extends Container {
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-    private List<HashMap<String, String>> subMetadata_GEOPLACMNT = new ArrayList<HashMap<String, String>>();
-    private List<HashMap<String, String>> subMetadata_HOLDID = new ArrayList<HashMap<String, String>>();
     private final List<String> ignoreList = new ArrayList() {{
         add("cdmi_ctime");
         add("cdmi_atime");
         add("cdmi_mtime");
         add("cdmi_size");
+        add("cdmi_owner");
+        add("cdmi_acl");
     }};
 
     @Override
@@ -209,14 +209,6 @@ public class CDMIContainer extends Container {
         return subMetadata_ACL;
     }
 
-    public List<HashMap<String, String>> getSubMetadata_GEOPLACMNT() {
-        return subMetadata_GEOPLACMNT;
-    }
-
-    public List<HashMap<String, String>> getSubMetadata_HOLDID() {
-        return subMetadata_HOLDID;
-    }
-
     public void setMetadata(String key, String val) {
         metadata.put(key, val);
     }
@@ -229,36 +221,12 @@ public class CDMIContainer extends Container {
         subMetadata_ACL.add(position, metadata);
     }
 
-    public void addSubMetadata_GEOPLACMNT(HashMap<String, String> metadata) {
-        subMetadata_GEOPLACMNT.add(metadata);
-    }
-
-    public void addSubMetadata_GEOPLACMNT(int mainKey, HashMap<String, String> metadata) {
-        subMetadata_GEOPLACMNT.add(mainKey, metadata);
-    }
-
-    public void addSubMetadata_HOLDID(HashMap<String, String> metadata) {
-        subMetadata_HOLDID.add(metadata);
-    }
-
-    public void addSubMetadata_HOLDID(int mainKey, HashMap<String, String> metadata) {
-        subMetadata_HOLDID.add(mainKey, metadata);
-    }
-
     public void setMetadata(Map<String, String> metadata) {
         this.metadata = metadata;
     }
 
     public void setSubMetadata_ACL(List<HashMap<String, String>> metadata) {
         this.subMetadata_ACL = metadata;
-    }
-
-    public void setSubMetadata_GEOPLACMNT(List<HashMap<String, String>> metadata) {
-        this.subMetadata_GEOPLACMNT = metadata;
-    }
-
-    public void setSubMetadata_HOLDID(List<HashMap<String, String>> metadata) {
-        this.subMetadata_HOLDID = metadata;
     }
 
     private boolean isValidSubMetadata_ACL() {
@@ -356,24 +324,6 @@ public class CDMIContainer extends Container {
                 }
                 g.writeEndObject();
             }
-            if (!subMetadata_GEOPLACMNT.isEmpty()) {
-                g.writeObjectFieldStart("cdmi_geographic_placement");
-                for (HashMap<String, String> entry : subMetadata_GEOPLACMNT) {
-                    for (String key : entry.keySet()) {
-                        g.writeStringField(key, entry.get(key));
-                    }
-                }
-                g.writeEndObject();
-            }
-            if (!subMetadata_HOLDID.isEmpty()) {
-                g.writeObjectFieldStart("cdmi_hold_id");
-                for (HashMap<String, String> entry : subMetadata_HOLDID) {
-                    for (String key : entry.keySet()) {
-                        g.writeStringField(key, entry.get(key));
-                    }
-                }
-                g.writeEndObject();
-            }
             g.writeEndObject();
 
             if (!toFile) {
@@ -418,34 +368,6 @@ public class CDMIContainer extends Container {
                     g.writeStringField(entry.getKey(), entry.getValue());
                 }
             }
-            if (!subMetadata_ACL.isEmpty() && isValidSubMetadata_ACL()) {
-                g.writeObjectFieldStart("cdmi_acl");
-                for (HashMap<String, String> entry : subMetadata_ACL) {
-                    g.writeStringField("acetype", entry.get("acetype"));
-                    g.writeStringField("identifier", entry.get("identifier"));
-                    g.writeStringField("aceflags", entry.get("aceflags"));
-                    g.writeStringField("acemask", entry.get("acemask"));
-                }
-                g.writeEndObject();
-            }
-            if (!subMetadata_GEOPLACMNT.isEmpty()) {
-                g.writeObjectFieldStart("cdmi_geographic_placement");
-                for (HashMap<String, String> entry : subMetadata_GEOPLACMNT) {
-                    for (String key : entry.keySet()) {
-                        g.writeStringField(key, entry.get(key));
-                    }
-                }
-                g.writeEndObject();
-            }
-            if (!subMetadata_HOLDID.isEmpty()) {
-                g.writeObjectFieldStart("cdmi_hold_id");
-                for (HashMap<String, String> entry : subMetadata_HOLDID) {
-                    for (String key : entry.keySet()) {
-                        g.writeStringField(key, entry.get(key));
-                    }
-                }
-                g.writeEndObject();
-            }
             g.writeEndObject();
             g.writeEndObject();
 
@@ -472,6 +394,7 @@ public class CDMIContainer extends Container {
     }
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
+        System.out.println("   CDMIContainer<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
@@ -480,48 +403,10 @@ public class CDMIContainer extends Container {
                 tolkein = jp.nextToken();
                 while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
                     key = jp.getCurrentName();
-                    if ("cdmi_acl".equals(key)) {// process metadata_ACL
-                        tolkein = jp.nextToken();
-                        subMetadata_ACL.clear();
-                        HashMap<String, String> tmpMap1 = new HashMap<String, String>();
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            key = jp.getCurrentName();
-                            tolkein = jp.nextToken();
-                            String value = jp.getText();
-                            System.out.println("   Key = " + key + " : Value = " + value);
-                            tmpMap1.put(key, value);
-                        }// while
-                        addSubMetadata_ACL(tmpMap1);
-                    } else if ("cdmi_geographic_placement".equals(key)) {// process metadata_GEOPLACMNT
-                        tolkein = jp.nextToken();
-                        subMetadata_GEOPLACMNT.clear();
-                        HashMap<String, String> tmpMap2 = new HashMap<String, String>();
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            key = jp.getCurrentName();
-                            tolkein = jp.nextToken();
-                            String value = jp.getText();
-                            System.out.println("   Key = " + key + " : Value = " + value);
-                            tmpMap2.put(key, value);
-                        }// while
-                        addSubMetadata_GEOPLACMNT(tmpMap2);
-                    } else if ("cdmi_hold_id".equals(key)) {// process metadata_HOLDID
-                        tolkein = jp.nextToken();
-                        subMetadata_HOLDID.clear();
-                        HashMap<String, String> tmpMap3 = new HashMap<String, String>();
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            key = jp.getCurrentName();
-                            tolkein = jp.nextToken();
-                            String value = jp.getText();
-                            System.out.println("   Key = " + key + " : Value = " + value);
-                            tmpMap3.put(key, value);
-                        }// while
-                        addSubMetadata_HOLDID(tmpMap3);
-                    } else {
-                        tolkein = jp.nextToken();
-                        String value = jp.getText();
-                        System.out.println("   Key = " + key + " : Value = " + value);
-                        this.getMetadata().put(key, value);
-                    }// while
+                    tolkein = jp.nextToken();
+                    String value = jp.getText();
+                    System.out.println("   Key = " + key + " : Value = " + value);
+                    this.getMetadata().put(key, value);
                 }
             } else if ("exports".equals(key)) {// process exports
                 tolkein = jp.nextToken();
@@ -573,57 +458,6 @@ public class CDMIContainer extends Container {
             }
         }
     }
-
-    /*
-    private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
-        JsonToken tolkein;
-        tolkein = jp.nextToken();// START_OBJECT
-        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-            String key = jp.getCurrentName();
-            if ("metadata".equals(key)) {// process metadata
-                tolkein = jp.nextToken();
-                while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                    key = jp.getCurrentName();
-                    if ("cdmi_acl".equals(key)) {// process metadata_ACL
-                        tolkein = jp.nextToken();
-                        HashMap<String, String> tmpMap = new HashMap<String, String>();
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            key = jp.getCurrentName();
-                            tolkein = jp.nextToken();
-                            String value = jp.getText();
-                            System.out.println("   Key = " + key + " : Value = " + value);
-                        }// while
-                        this.getSubMetadata_ACL().add(tmpMap);
-                    } else {
-                        tolkein = jp.nextToken();
-                        String value = jp.getText();
-                        System.out.println("   Key = " + key + " : Value = " + value);
-                        this.getMetadata().put(key, value);
-                    }// while
-                }
-            } else {
-                if (fromFile) { // accept rest of key-values
-                    if ("objectID".equals(key)) { // process value
-                        jp.nextToken();
-                        String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
-                        this.setObjectID(value2);
-                    } else if ("_id".equals(key)) {
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            // that's a MongoDB feature, so ignore or you will throw an exception
-                        }// while
-                    } else {
-                        System.out.println("Invalid Key : " + key);
-                        throw new BadRequestException("Invalid Key : " + key);
-                    } // inner if
-                } else {
-                    System.out.println("Invalid Key : " + key);
-                    throw new BadRequestException("Invalid Key : " + key);
-                }
-            }
-        }
-    }
-    */
 
     @Override
     public Object getObjectURI() {

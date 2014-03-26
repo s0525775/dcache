@@ -143,6 +143,24 @@ public class CapabilityDaoImpl implements CapabilityDao {
             capability.getMetadata().put("cdmi_export_occi_iscsi", "true");
             capability.getMetadata().put("cdmi_metadata_maxitems", "1024");
             capability.getMetadata().put("cdmi_metadata_maxsize", "4096");
+            // Data System Metadata Support - Start
+            capability.getMetadata().put("cdmi_assignedsize", "false");
+            capability.getMetadata().put("cdmi_data_redundancy", "");
+            capability.getMetadata().put("cdmi_data_dispersion", "false");
+            capability.getMetadata().put("cdmi_data_retention", "false");
+            capability.getMetadata().put("cdmi_data_autodelete", "false");
+            capability.getMetadata().put("cdmi_data_holds", "false");
+            capability.getMetadata().put("cdmi_encryption", "{}");
+            capability.getMetadata().put("cdmi_geographic_placement", "false");
+            capability.getMetadata().put("cdmi_immediate_redundancy", "");
+            capability.getMetadata().put("cdmi_infrastructure_redundancy", "");
+            capability.getMetadata().put("cdmi_latency", "false");
+            capability.getMetadata().put("cdmi_RPO", "false");
+            capability.getMetadata().put("cdmi_RTO", "false");
+            capability.getMetadata().put("cdmi_sanitization_method", "{}");
+            capability.getMetadata().put("cdmi_throughput", "false");
+            capability.getMetadata().put("cdmi_value_hash", "{}");
+            // Data System Metadata Support - End
             // capability.getMetadata().put("cdmi_security_https_transport", "true");
             // capability.getMetadata().put("cdmi_serialization_json", "true");
             capability.getChildren().add("container");

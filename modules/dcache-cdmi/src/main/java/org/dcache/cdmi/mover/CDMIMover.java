@@ -86,8 +86,8 @@ public class CDMIMover implements MoverProtocol
                 CDMIDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
                 CDMIDataTransfer.setSize(channel.getFileAttributes().getSize());
                 CDMIDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                CDMIDataTransfer.setLocations(channel.getFileAttributes().getLocations());
-                System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toExtraFormat());
+                CDMIDataTransfer.setOwner(channel.getFileAttributes().getOwner());
+                CDMIDataTransfer.setACL(channel.getFileAttributes().getAcl());
                 System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toNFSv4String());
             } catch (IOException ex) {
                 _log.error("Data could not be written into CDMI channel, exception is: " + ex.getMessage());
@@ -108,13 +108,13 @@ public class CDMIMover implements MoverProtocol
                     System.out.println("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
                     CDMIDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
                     CDMIDataTransfer.setSize(channel.getFileAttributes().getSize());
+                    CDMIDataTransfer.setOwner(channel.getFileAttributes().getOwner());
                     CDMIDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
                     CDMIDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
                     CDMIDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
                     CDMIDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
                     CDMIDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    CDMIDataTransfer.setLocations(channel.getFileAttributes().getLocations());
-                    System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toExtraFormat());
+                    CDMIDataTransfer.setACL(channel.getFileAttributes().getAcl());
                     System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toNFSv4String());
                 }
             } catch (IOException ex) {
@@ -136,13 +136,13 @@ public class CDMIMover implements MoverProtocol
                     CDMIDataTransfer.setData(strData);
                     CDMIDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
                     CDMIDataTransfer.setSize(channel.getFileAttributes().getSize());
+                    CDMIDataTransfer.setOwner(channel.getFileAttributes().getOwner());
                     CDMIDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
                     CDMIDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
                     CDMIDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
                     CDMIDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
                     CDMIDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    CDMIDataTransfer.setLocations(channel.getFileAttributes().getLocations());
-                    System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toExtraFormat());
+                    CDMIDataTransfer.setACL(channel.getFileAttributes().getAcl());
                     System.out.println("CDMIMover ACL data read: " + channel.getFileAttributes().getAcl().toNFSv4String());
                 }
             } catch (IOException ex) {

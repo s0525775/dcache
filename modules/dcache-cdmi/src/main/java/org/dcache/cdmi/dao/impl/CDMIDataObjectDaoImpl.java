@@ -62,6 +62,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.dcache.acl.ACE;
+import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
 import org.dcache.cdmi.dao.CDMIDataObjectDao;
 import org.dcache.cdmi.dao.mongodb.MongoDB;
@@ -123,9 +125,10 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private long changeTime;
     private long modificationTime;
     private long size;
-    private Collection<String> locations;
+    private int owner;
+    private ACL acl;
     private FileType fileType;
-    private static final boolean useDB = false;
+    private static final boolean useDB = true;
 
     //
     public void setBaseDirectoryName(String baseDirectoryName) {
@@ -243,6 +246,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
             //update ObjectID with correct ObjectID
             String objectID = "";
+            int oowner = 0;
+            ACL oacl = null;
             FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
             if (attr != null) {
                 pnfsId = attr.getPnfsId();
@@ -258,6 +263,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     dObj.setMetadata("cdmi_atime", sdf.format(atime));
                     dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
                     dObj.setMetadata("cdmi_size", String.valueOf(osize));
+                    oowner = attr.getOwner();
+                    oacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
                     System.out.println("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
@@ -271,14 +278,28 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             // Add metadata
             dObj.setMetadata("cdmi_acount", "0");
             dObj.setMetadata("cdmi_mcount", "0");
-            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-            subMetadataEntry_ACL.put("acetype", "ALLOW");
-            subMetadataEntry_ACL.put("identifier", "OWNER@");
-            subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-            subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-            subMetadata_ACL.add(subMetadataEntry_ACL);
-            dObj.setSubMetadata_ACL(subMetadata_ACL);
+            dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO
+            if (oacl != null && !oacl.isEmpty()) {
+                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                for (ACE ace : oacl.getList()) {
+                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                    subMetadataEntry_ACL.put("acetype", ace.getType().name());
+                    subMetadataEntry_ACL.put("identifier", ace.getWho().name());
+                    subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
+                    subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                    subMetadata_ACL.add(subMetadataEntry_ACL);
+                }
+                dObj.setSubMetadata_ACL(subMetadata_ACL);
+            } else {
+                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                subMetadataEntry_ACL.put("acetype", "ALLOW");
+                subMetadataEntry_ACL.put("identifier", "OWNER@");
+                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                subMetadata_ACL.add(subMetadataEntry_ACL);
+                dObj.setSubMetadata_ACL(subMetadata_ACL);
+            }
 
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
@@ -425,6 +446,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
             //update ObjectID with correct ObjectID
             String objectID = "";
+            int oowner = 0;
+            ACL oacl = null;
             FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
             if (attr != null) {
                 pnfsId = attr.getPnfsId();
@@ -440,6 +463,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     dObj.setMetadata("cdmi_atime", sdf.format(atime));
                     dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
                     dObj.setMetadata("cdmi_size", String.valueOf(osize));
+                    oowner = attr.getOwner();
+                    oacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
                     System.out.println("CDMIDataObjectDao<Read>, setObjectID: " + objectID);
@@ -452,14 +477,28 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
             dObj.setMetadata("cdmi_acount", "0");  //TODO
             dObj.setMetadata("cdmi_mcount", "0");  //TODO
-            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-            subMetadataEntry_ACL.put("acetype", "ALLOW");
-            subMetadataEntry_ACL.put("identifier", "OWNER@");
-            subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-            subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-            subMetadata_ACL.add(subMetadataEntry_ACL);
-            dObj.setSubMetadata_ACL(subMetadata_ACL);
+            dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO
+            if (oacl != null && !oacl.isEmpty()) {
+                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                for (ACE ace : oacl.getList()) {
+                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                    subMetadataEntry_ACL.put("acetype", ace.getType().name());
+                    subMetadataEntry_ACL.put("identifier", ace.getWho().name());
+                    subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
+                    subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                    subMetadata_ACL.add(subMetadataEntry_ACL);
+                }
+                dObj.setSubMetadata_ACL(subMetadata_ACL);
+            } else {
+                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                subMetadataEntry_ACL.put("acetype", "ALLOW");
+                subMetadataEntry_ACL.put("identifier", "OWNER@");
+                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                subMetadata_ACL.add(subMetadataEntry_ACL);
+                dObj.setSubMetadata_ACL(subMetadata_ACL);
+            }
 
             // Read real metadata from DB
             if (useDB) {
@@ -801,7 +840,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         @Override
         public Set<FileAttribute> getRequiredAttributes()
         {
-            return EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, ACL, LOCATIONS);
+            return EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, ACL, OWNER);
         }
 
         @Override
@@ -821,11 +860,11 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 str += "|AccessTime:" + sdf.format(attr.getAccessTime());
                 str += "|ChangeTime:" + sdf.format(attr.getChangeTime());
                 str += "|ModificationTime:" + sdf.format(attr.getModificationTime());
+                str += "|Owner:" + attr.getOwner();
                 if (attr.getAcl() != null) str += "|ACL:" + attr.getAcl().toString();
                 if (attr.getAcl() != null) str += "|ACLExtraFormat:" + attr.getAcl().toExtraFormat(); //ACLException
                 if (attr.getAcl() != null) str += "|ACLNFS4:" + attr.getAcl().toNFSv4String();
                 if (attr.getAcl() != null) str += "|ACLOrg:" + attr.getAcl().toOrgString();
-                if (attr.getLocations() != null) str += "|Locations:" + attr.getLocations().toString();
                 if (attr.getFileType() != null) str += "|FileType:" + attr.getFileType().name();
                 str += "|Size:" + String.valueOf(attr.getSize());
                 Test.write("/tmp/listing.log", str); //temporary
@@ -864,8 +903,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     changeTime = CDMIDataTransfer.getChangeTime();
                     modificationTime = CDMIDataTransfer.getModificationTime();
                     size = CDMIDataTransfer.getSize();
+                    owner = CDMIDataTransfer.getOwner();
+                    acl = CDMIDataTransfer.getACL();
                     fileType = CDMIDataTransfer.getFileType();
-                    locations = CDMIDataTransfer.getLocations();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -876,8 +916,12 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 System.out.println("TEST2W-changeTime:" + sdf.format(changeTime));
                 System.out.println("TEST2W-modificationTime:" + sdf.format(modificationTime));
                 System.out.println("TEST2W-size:" + size);
+                System.out.println("TEST2W-owner:" + owner);
+                if (acl != null) System.out.println("TEST2W-acl:" + acl.toString());
+                if (acl != null) System.out.println("TEST2W-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) System.out.println("TEST2W-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) System.out.println("TEST2W-aclOrgString:" + acl.toOrgString());
                 if (fileType != null) System.out.println("TEST2W-fileType:" + fileType.toString());
-                if (locations != null) System.out.println("TEST2W-locations:" + locations.toString());
                 System.out.println("TEST2W-data:" + data);
                 result = true;
             } finally {
@@ -885,7 +929,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     //transfer.deleteNameSpaceEntry();
                 }
             }
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+        } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
             _log.error("CDMIDataObjectDaoImpl, File could not become written, exception is: " + ex.getMessage());
         }
         return result;
@@ -920,8 +964,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     changeTime = CDMIDataTransfer.getChangeTime();
                     modificationTime = CDMIDataTransfer.getModificationTime();
                     size = CDMIDataTransfer.getSize();
+                    owner = CDMIDataTransfer.getOwner();
+                    acl = CDMIDataTransfer.getACL();
                     fileType = CDMIDataTransfer.getFileType();
-                    locations = CDMIDataTransfer.getLocations();
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -932,15 +977,19 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 System.out.println("TEST2R-changeTime:" + sdf.format(changeTime));
                 System.out.println("TEST2R-modificationTime:" + sdf.format(modificationTime));
                 System.out.println("TEST2R-size:" + size);
+                System.out.println("TEST2R-owner:" + owner);
+                if (acl != null) System.out.println("TEST2R-acl:" + acl.toString());
+                if (acl != null) System.out.println("TEST2R-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) System.out.println("TEST2R-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) System.out.println("TEST2R-aclOrgString:" + acl.toOrgString());
                 if (fileType != null) System.out.println("TEST2R-fileType:" + fileType.toString());
-                if (locations != null) System.out.println("TEST2R-locations:" + locations.toString());
                 System.out.println("TEST2R-data:" + result.toString());
             } finally {
                 if (result == null) {
                     //transfer.deleteNameSpaceEntry();
                 }
             }
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
+        } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
             _log.error("CDMIDataObjectDaoImpl, File could not become read, exception is: " + ex.getMessage());
         }
         return result;

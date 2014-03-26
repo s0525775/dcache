@@ -77,7 +77,7 @@ public class CDMI extends AbstractCellComponent
     private CellStub pool;
     private DirectoryListSource list;
     private String result = "";
-    private static final boolean useDB = false;
+    private static final boolean useDB = true;
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
