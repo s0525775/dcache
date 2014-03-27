@@ -723,8 +723,6 @@ public class PoolManagerV5
                    .getPoolSelector(fileAttributes, protocolInfo, _request.getLinkGroup())
                    .selectWritePool(_request.getPreallocated());
 
-              _log.warn("{} write handler selected {} after {} ms", _pnfsId, pool.getName(),
-                      System.currentTimeMillis() - started);
               _log.info("{} write handler selected {} after {} ms", _pnfsId, pool.getName(),
                       System.currentTimeMillis() - started);
               requestSucceeded(pool);

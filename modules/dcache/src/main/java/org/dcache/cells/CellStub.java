@@ -340,6 +340,7 @@ public class CellStub
     }
 
 
+
     /**
      * Sends a message and waits for the reply. The reply is expected
      * to contain a message object of the same type as the message

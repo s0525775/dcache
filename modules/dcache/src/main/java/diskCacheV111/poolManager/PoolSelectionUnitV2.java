@@ -316,7 +316,6 @@ public class PoolSelectionUnitV2
 
     public void setActive(String poolName, boolean active) {
         _psuWriteLock.lock();
-        _log.warn("PSU001:" + poolName + "|" + active);
         try {
             Pool pool = _pools.get(poolName);
             if (pool != null) {
@@ -390,7 +389,6 @@ public class PoolSelectionUnitV2
     @Override
     public SelectionPool getPool(String poolName, boolean create) {
         Pool pool = _pools.get(poolName);
-
         if ((pool != null) || !create) {
             return pool;
         }
@@ -530,6 +528,7 @@ public class PoolSelectionUnitV2
                 list.add(unit);
             }
             if (protocolUnitName != null) {
+
                 Unit unit = findProtocolUnit(protocolUnitName);
                 //
                 if (unit == null){
@@ -726,7 +725,7 @@ public class PoolSelectionUnitV2
             _psuReadLock.unlock();
         }
 
-        if(_log.isDebugEnabled() ) {  //changed: added true
+        if( _log.isDebugEnabled() ) {
 
             StringBuilder sb = new StringBuilder("match done: ");
 
@@ -736,7 +735,6 @@ public class PoolSelectionUnitV2
                     sb.append(" ").append(poolName);
                 }
             }
-            _log.warn(sb.toString());
             _log.debug(sb.toString());
         }
         return result;

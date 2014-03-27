@@ -9,8 +9,6 @@ import diskCacheV111.pools.PoolCostInfo;
 import dmg.cells.nucleus.CellAddressCore;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class PoolInfo implements Serializable
 {
