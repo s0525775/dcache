@@ -6,6 +6,7 @@
 
 package org.dcache.cdmi.model;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonToken;
+import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.model.Container;
 
@@ -25,6 +27,11 @@ import org.snia.cdmiserver.model.Container;
  * @author Jana
  */
 public class CDMIContainer extends Container {
+
+    //
+    // Something important
+    //
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIContainer.class);
 
     // Container creation fields
     private Map<String, Object> exports = new HashMap<String, Object>();
@@ -42,9 +49,9 @@ public class CDMIContainer extends Container {
     private String completionStatus;
     private Integer percentComplete; // FIXME - Specification says String but that does not make
                                      // sense
-    private List<String> snapshots = new ArrayList<String>();
+    private final List<String> snapshots = new ArrayList<String>();
     private String childrenrange;
-    private List<String> children = new ArrayList<String>();
+    private final List<String> children = new ArrayList<String>();
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -282,7 +289,7 @@ public class CDMIContainer extends Container {
 
             g.writeEndObject();
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             return ("Error : " + ex);
         }
@@ -342,7 +349,7 @@ public class CDMIContainer extends Container {
 
             g.writeEndObject();
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             return ("Error : " + ex);
         }
@@ -372,7 +379,7 @@ public class CDMIContainer extends Container {
             g.writeEndObject();
 
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             return("Error : " + ex);
         }
@@ -394,7 +401,7 @@ public class CDMIContainer extends Container {
     }
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
-        System.out.println("   CDMIContainer<fromJson>:");
+        _log.debug("   CDMIContainer<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
@@ -405,7 +412,7 @@ public class CDMIContainer extends Container {
                     key = jp.getCurrentName();
                     tolkein = jp.nextToken();
                     String value = jp.getText();
-                    System.out.println("   Key = " + key + " : Value = " + value);
+                    _log.debug("   Key = " + key + " : Value = " + value);
                     this.getMetadata().put(key, value);
                 }
             } else if ("exports".equals(key)) {// process exports
@@ -419,40 +426,36 @@ public class CDMIContainer extends Container {
             } else if ("capabilitiesURI".equals(key)) {// process capabilitiesURI
                 jp.nextToken();
                 String value2 = jp.getText();
-                System.out.println("Key : " + key + " Val : " + value2);
+                _log.debug("Key : " + key + " Val : " + value2);
                 this.setCapabilitiesURI(value2);
             } else if ("domainURI".equals(key)) {// process domainURI
                 jp.nextToken();
                 String value2 = jp.getText();
-                System.out.println("Key : " + key + " Val : " + value2);
+                _log.debug("Key : " + key + " Val : " + value2);
                 this.setDomainURI(value2);
             } else if ("move".equals(key)) {// process move
                 jp.nextToken();
                 String value2 = jp.getText();
-                System.out.println("Key : " + key + " Val : " + value2);
+                _log.debug("Key : " + key + " Val : " + value2);
                 this.setMove(value2);
             } else {
                 if (fromFile) { // accept rest of key-values
                     if ("objectID".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setObjectID(value2);
                     } else if ("pnfsID".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setPnfsID(value2);
-                    } else if ("_id".equals(key)) {
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            // that's a MongoDB feature, so ignore or you will throw an exception
-                        }// while
                     } else {
-                        System.out.println("Invalid Key : " + key);
+                        _log.debug("Invalid Key : " + key);
                         throw new BadRequestException("Invalid Key : " + key);
                     } // inner if
                 } else {
-                    System.out.println("Invalid Key : " + key);
+                    _log.debug("Invalid Key : " + key);
                     throw new BadRequestException("Invalid Key : " + key);
                 }
             }

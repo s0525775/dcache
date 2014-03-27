@@ -30,6 +30,7 @@
  */
 package org.dcache.cdmi.dao.impl;
 
+import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
 import org.snia.cdmiserver.util.ObjectID;
@@ -40,7 +41,12 @@ import org.snia.cdmiserver.util.ObjectID;
  * store.
  * </p>
  */
-public class CapabilityDaoImpl implements CapabilityDao {
+public class CDMICapabilityDaoImpl implements CapabilityDao {
+
+    //
+    // Something important
+    //
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMICapabilityDaoImpl.class);
 
     // -------------------------------------------------------------- Properties
     /**
@@ -49,10 +55,10 @@ public class CapabilityDaoImpl implements CapabilityDao {
      * </p>
      */
     private CapabilityDao capabilityDao;
-    private String ROOTobjectID = ObjectID.getObjectID(8);
-    private String CONTAINERobjectID = ObjectID.getObjectID(8);
-    private String DEFAULTobjectID = ObjectID.getObjectID(8);
-    private String OBJECTobjectID = ObjectID.getObjectID(8);
+    private final String ROOTobjectID = ObjectID.getObjectID(8);  //TODO?
+    private final String CONTAINERobjectID = ObjectID.getObjectID(8);  //TODO?
+    private final String DEFAULTobjectID = ObjectID.getObjectID(8);  //TODO?
+    private final String OBJECTobjectID = ObjectID.getObjectID(8);  //TODO?
 
     public void setCapabilityDao(CapabilityDao capabilityDao) {
         this.capabilityDao = capabilityDao;
@@ -68,10 +74,10 @@ public class CapabilityDaoImpl implements CapabilityDao {
     public Capability findByPath(String path) {
         Capability capability = new Capability();
 
-        System.out.print("In Capability.findByPath, path is: ");
-        System.out.println(path);
+        _log.debug("In Capability.findByPath, path is: ");
+        _log.debug(path);
         if (path.equals("container/")) {
-            System.out.println("Container Capabilities");
+            _log.debug("Container Capabilities");
             // Container Capabilities
             // cdmi_list_children = true
             // cdmi_list_children_range = unset until implemented
@@ -94,7 +100,7 @@ public class CapabilityDaoImpl implements CapabilityDao {
             capability.setParentURI("cdmi_capabilities/");
             capability.setParentID(ROOTobjectID);
         } else if (path.equals("container/default/")) {
-            System.out.println("Default Container Capabilities");
+            _log.debug("Default Container Capabilities");
             capability.getMetadata().put("cdmi_list_children", "true");
             capability.getMetadata().put("cdmi_read_metadata", "true");
             capability.getMetadata().put("cdmi_modify_metadata", "true");
@@ -108,7 +114,7 @@ public class CapabilityDaoImpl implements CapabilityDao {
 
         } else if (path.equals("dataobject/")) {
             // Data Object Capabilities
-            System.out.println("Data Object Capabilities");
+            _log.debug("Data Object Capabilities");
             // cdmi_read_value = true
             // cdmi_read_value_range = unset initially, then true when implemented
             // cdmi_read_metadata = true
@@ -128,7 +134,7 @@ public class CapabilityDaoImpl implements CapabilityDao {
             capability.setParentID(ROOTobjectID);
         } else {
             // System Capabilities
-            System.out.println("System Capabilities");
+            _log.debug("System Capabilities");
             // cdmi_domains = later version true
             // cdmi_export_occi_iscsi = true for demo?
             // cdmi_metadata_maxitems, cdmi_metadata_maxsize = TBD based on our limits

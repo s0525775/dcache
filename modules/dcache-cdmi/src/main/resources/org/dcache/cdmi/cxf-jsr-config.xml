@@ -132,6 +132,6 @@
         <property name="containerDao" ref="containerDao"/>
     </bean>
 
-    <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.CapabilityDaoImpl"/>
+    <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.CDMICapabilityDaoImpl"/>
 
 </beans>

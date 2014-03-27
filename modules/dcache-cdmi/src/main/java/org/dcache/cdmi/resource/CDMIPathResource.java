@@ -55,6 +55,7 @@ import org.dcache.cdmi.dao.CDMIContainerDao;
 import org.dcache.cdmi.dao.CDMIDataObjectDao;
 import org.dcache.cdmi.model.CDMIContainer;
 import org.dcache.cdmi.model.CDMIDataObject;
+import org.slf4j.LoggerFactory;
 
 import org.snia.cdmiserver.util.MediaTypes;
 import org.snia.cdmiserver.util.ObjectID;
@@ -66,6 +67,11 @@ import org.snia.cdmiserver.util.ObjectID;
 * </p>
 */
 public class CDMIPathResource {
+
+    //
+    // Something important
+    //
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIPathResource.class);
 
     //
     // Properties and Dependency Injection Methods
@@ -119,7 +125,7 @@ public class CDMIPathResource {
             return Response.noContent().header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
         } catch (Exception ex) {
-            System.out.println(ex);
+            _log.debug(ex.toString());
             ex.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST).tag(
                     "Object Delete Error : " + ex.toString()).build();
@@ -161,12 +167,12 @@ public class CDMIPathResource {
             @PathParam("path") String path,
             @Context HttpHeaders headers) {
 
-        System.out.println("In PathResource.getContainerOrObject, path=" +
+        _log.debug("In PathResource.getContainerOrObject, path=" +
                 path);
 
         //print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-          System.out.println("Hdr: "+ hdr + " - " +
+          _log.debug("Hdr: "+ hdr + " - " +
                   headers.getRequestHeader(hdr));
         }
 
@@ -187,7 +193,7 @@ public class CDMIPathResource {
                       "X-CDMI-Specification-Version", "1.0.2").build();
             }
           } catch (Exception ex) {
-            System.out.println(ex);
+            _log.debug(ex.toString());
             ex.printStackTrace();
             return Response.status(Response.Status.NOT_FOUND).tag(
                     "Container Read Error : " + ex.toString()).build();
@@ -206,7 +212,7 @@ public class CDMIPathResource {
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
         } catch (Exception ex) {
-          System.out.println(ex);
+          _log.debug(ex.toString());
           ex.printStackTrace();
           return Response.status(Response.Status.BAD_REQUEST).tag(
                   "Object Fetch Error : " + ex.toString()).build();
@@ -231,7 +237,7 @@ public class CDMIPathResource {
             @PathParam("path") String path,
             @Context HttpHeaders headers) {
 
-        System.out.print("In PathResource.getRootContainer");
+        _log.debug("In PathResource.getRootContainer");
         return getContainerOrDataObject(path, headers);
 
     }
@@ -263,12 +269,12 @@ public class CDMIPathResource {
             @PathParam("path") String path,
             @Context HttpHeaders headers) {
 
-        System.out.print("In PathResource.getDataObjectOrContainer, path: " +
+        _log.debug("In PathResource.getDataObjectOrContainer, path: " +
                 path);
 
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-            System.out.println("Hdr: " + hdr + " - " +
+            _log.debug("Hdr: " + hdr + " - " +
                     headers.getRequestHeader(hdr));
         }
 
@@ -277,10 +283,6 @@ public class CDMIPathResource {
             // if container build container browser page
             try {
                 CDMIContainer container = containerDao.findByPath(path);
-                System.out.println("AAAAAAAAAAAAAAA003: " + container.getSubMetadata_ACL().size());
-                if (container.getSubMetadata_ACL().size() > 0) {
-                    System.out.println("AAAAAAAAAAAAAAA004: " + container.getSubMetadata_ACL().get(0).size());
-                }
                 if (container == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
@@ -289,7 +291,7 @@ public class CDMIPathResource {
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 }
             } catch (Exception ex) {
-                System.out.println(ex);
+                _log.debug(ex.toString());
                 ex.printStackTrace();
                 return Response.status(Response.Status.NOT_FOUND)
                         .tag("Container Read Error : " + ex.toString()).build();
@@ -303,14 +305,14 @@ public class CDMIPathResource {
                 } else {
                     // make http response
                     // build a JSON representation
-                    String respStr = dObj.toJsonWithMetadata();
-                    //String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
-                    System.out.println("MimeType = " + dObj.getMimetype());
+                    //String respStr = dObj.toJsonWithMetadata();
+                    String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
+                    _log.debug("MimeType = " + dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 } // if/else
             } catch (Exception ex) {
-                System.out.println(ex);
+                _log.debug(ex.toString());
                 ex.printStackTrace();
                 return Response.status(Response.Status.BAD_REQUEST)
                         .tag("Object Fetch Error : " + ex.toString()).build();
@@ -343,10 +345,10 @@ public class CDMIPathResource {
             @HeaderParam("X-CDMI-MustExist") @DefaultValue("false") String mustExist,
             byte[] bytes) {
 
-        System.out.println("In PathResource.putContainer, path is: " + path);
+        _log.debug("In PathResource.putContainer, path is: " + path);
 
         String inBuffer = new String(bytes);
-        System.out.println("Request = " + inBuffer);
+        _log.debug("Request = " + inBuffer);
 
         CDMIContainer containerRequest = new CDMIContainer();
 
@@ -368,7 +370,7 @@ public class CDMIPathResource {
                     "X-CDMI-Specification-Version", "1.0.2").build(); */
             } // if/else
         } catch (Exception ex) {
-            System.out.println(ex);
+            _log.debug(ex.toString());
             ex.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST)
                     .tag("Object Creation Error : " + ex.toString()).build();
@@ -396,13 +398,13 @@ public class CDMIPathResource {
             @PathParam("path") String path,
             byte[] bytes) {
 
-        System.out.println("putDataObject(): ");
+        _log.debug("putDataObject(): ");
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-            System.out.println(hdr + " - " + headers.getRequestHeader(hdr));
+            _log.debug(hdr + " - " + headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        System.out.println("Path = " + path + "\n" + inBuffer);
+        _log.debug("Path = " + path + "\n" + inBuffer);
 
         try {
             CDMIDataObject dObj = dataObjectDao.findByPath(path);
@@ -429,7 +431,7 @@ public class CDMIPathResource {
             dObj.fromJson(bytes,false);
             return Response.ok().build();
         } catch (Exception ex) {
-            System.out.println(ex);
+            _log.debug(ex.toString());
             ex.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST).tag(
                   "Object PUT Error : " + ex.toString()).build();
@@ -476,7 +478,7 @@ public class CDMIPathResource {
             byte[] bytes) {
 
         String inBuffer = new String(bytes);
-        System.out.println("Path = " + path + "\n" + inBuffer);
+        _log.debug("Path = " + path + "\n" + inBuffer);
 
         boolean containerRequest = false;
         if (containerDao.isContainer(path)) {
@@ -492,7 +494,7 @@ public class CDMIPathResource {
             dObj.setObjectType(objectPath);
             dObj.setValue(inBuffer);
 
-            System.out.println("objectId = " + objectId + " objecctPath = " +
+            _log.debug("objectId = " + objectId + " objecctPath = " +
                     objectPath);
 
             dObj = dataObjectDao.createByPath(objectPath, dObj);
@@ -503,7 +505,7 @@ public class CDMIPathResource {
             }
             return Response.ok().build();
         } catch (Exception ex) {
-            System.out.println(ex);
+            _log.debug(ex.toString());
             ex.printStackTrace();
             return Response.status(Response.Status.BAD_REQUEST).
               tag("Object Creation Error : " + ex.toString()).build();

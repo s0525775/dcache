@@ -34,7 +34,7 @@ public class CRC16Calculator
                 sreg |= bit;
                 if( hibit != 0 )
                     sreg ^= poly;
-                //System.out.printf("Bit: %d sreg=%x hi=%d\n",bit,sreg,hibit);
+                //_log.debug("Bit: %d sreg=%x hi=%d\n",bit,sreg,hibit);
             }
         }
         for (int i = 0; i < pbits; ++i) {

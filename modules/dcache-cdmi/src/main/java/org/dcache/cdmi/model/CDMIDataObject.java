@@ -6,6 +6,7 @@
 
 package org.dcache.cdmi.model;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonToken;
+import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.model.DataObject;
 
@@ -24,6 +26,11 @@ import org.snia.cdmiserver.model.DataObject;
  * @author Jana
  */
 public class CDMIDataObject extends DataObject {
+
+    //
+    // Something important
+    //
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIDataObject.class);
 
     // DataObject creation fields
     private String mimetype;
@@ -282,7 +289,7 @@ public class CDMIDataObject extends DataObject {
             g.writeEndObject();
 
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             throw ex;
             //return("Error : " + ex);
@@ -328,7 +335,7 @@ public class CDMIDataObject extends DataObject {
             g.writeEndObject();
 
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             throw ex;
             //return("Error : " + ex);
@@ -363,7 +370,7 @@ public class CDMIDataObject extends DataObject {
             g.writeEndObject();
 
             g.flush();
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             ex.printStackTrace();
             throw ex;
             //return("Error : " + ex);
@@ -387,7 +394,7 @@ public class CDMIDataObject extends DataObject {
     }
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
-        System.out.println("   CDMIDataObject<fromJson>:");
+        _log.debug("   CDMIDataObject<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
@@ -398,57 +405,53 @@ public class CDMIDataObject extends DataObject {
                     key = jp.getCurrentName();
                     tolkein = jp.nextToken();
                     String value = jp.getText();
-                    System.out.println("   Key = " + key + " : Value = " + value);
+                    _log.debug("   Key = " + key + " : Value = " + value);
                     this.getMetadata().put(key, value);
                     // jp.nextToken();
                 }
             } else if ("value".equals(key)) { // process value
                 jp.nextToken();
                 String value1 = jp.getText();
-                System.out.println("Key : " + key + " Val : " + value1);
+                _log.debug("Key : " + key + " Val : " + value1);
                 this.setValue(value1);
             } else if ("mimetype".equals(key)) { // process mimetype
                 jp.nextToken();
                 String value2 = jp.getText();
-                System.out.println("Key : " + key + " Val : " + value2);
+                _log.debug("Key : " + key + " Val : " + value2);
                 this.setMimetype(value2);
             } else {
                 if (fromFile) { // accept rest of key-values
                     if ("objectType".equals(key)) {
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setObjectType(value2);
                     } else if ("capabilitiesURI".equals(key)) {
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setCapabilitiesURI(value2);
                     } else if ("objectID".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setObjectID(value2);
                     } else if ("pnfsID".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setPnfsID(value2);
                     } else if ("valueRange".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
-                        System.out.println("Key : " + key + " Val : " + value2);
+                        _log.debug("Key : " + key + " Val : " + value2);
                         this.setValuerange(value2);
-                    } else if ("_id".equals(key)) {
-                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                            // that's a MongoDB feature, so ignore or you will throw an exception
-                        }// while
                     } else {
-                        System.out.println("Invalid Key : " + key);
+                        _log.debug("Invalid Key : " + key);
                         throw new BadRequestException("Invalid Key : " + key);
                     } // inner if
                 } else {
-                    System.out.println("Invalid Key : " + key);
+                    _log.debug("Invalid Key : " + key);
                     throw new BadRequestException("Invalid Key : " + key);
                 }
             }

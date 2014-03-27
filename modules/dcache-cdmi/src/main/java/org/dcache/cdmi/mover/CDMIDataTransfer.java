@@ -2,7 +2,6 @@ package org.dcache.cdmi.mover;
 
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
-import java.util.Collection;
 import org.dcache.acl.ACL;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileType;

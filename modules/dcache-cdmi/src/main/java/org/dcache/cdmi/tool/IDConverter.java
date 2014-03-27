@@ -20,9 +20,9 @@ public class IDConverter {
     private String strObjectID = "";
     private String strPnfsID = "";
     private final byte reservedByte = 0;
-    private final int enterpriseNumber = 1343;
-    private final int enterpriseNumber2 = 6840;
-    private final byte length = 40;
+    private static final int ENTERPRISE_NUMBER = 1343;
+    private static final int ENTERPRISE_NUMBER_2 = 6840;
+    private static final byte length = 40;
 
     public String toPnfsID(String objectID) {
         strObjectID = objectID;
@@ -48,7 +48,7 @@ public class IDConverter {
         // set 0th byte of tempObjectID
         tempObjectID[0] = reservedByte;
         // convert EnterpriseNumber to Network Byte Order
-        byte[] enterpriseNr = toNetworkByteOrder3(enterpriseNumber);
+        byte[] enterpriseNr = toNetworkByteOrder3(ENTERPRISE_NUMBER);
         // set 1st byte of tempObjectID
         tempObjectID[1] = enterpriseNr[0];
         // set 2nd byte of tempObjectID
@@ -138,11 +138,11 @@ public class IDConverter {
     /*
     public void test() {
         String oldID0 = "00007CE39F587D004C57BF7BF822257B35EB";
-        System.out.println("PnfsID: " + oldID0 + " | " + oldID0.length());
+        _log.debug("PnfsID: " + oldID0 + " | " + oldID0.length());
         String newID1 = new IDConverter().toObjectID(oldID0);
-        System.out.println("ObjectID: " + newID1 + " | " + newID1.length());
+        _log.debug("ObjectID: " + newID1 + " | " + newID1.length());
         String newID2 = new IDConverter().toPnfsID(newID1);
-        System.out.println("PnfsID2: " + newID2 + " | " + newID2.length());
+        _log.debug("PnfsID2: " + newID2 + " | " + newID2.length());
     }
     */
 

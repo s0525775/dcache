@@ -33,6 +33,8 @@ public class Base16Coder {
 
     /**
      * Convert bytes to a base16 string.
+     * @param byteArray
+     * @return
      */
     public static String encode(byte[] byteArray) {
         StringBuffer hexBuffer = new StringBuffer(byteArray.length * 2);
@@ -44,6 +46,8 @@ public class Base16Coder {
 
     /**
      * Convert a base16 string into a byte array.
+     * @param s
+     * @return
      */
     public static byte[] decode(String s) {
         int len = s.length();

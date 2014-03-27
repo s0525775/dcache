@@ -3,12 +3,9 @@ package org.dcache.cdmi.mover;
 import java.net.InetSocketAddress;
 
 import diskCacheV111.vehicles.IpProtocolInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class CDMIProtocolInfo implements IpProtocolInfo
 {
-    private static final Logger _log = LoggerFactory.getLogger(CDMIMover.class);
     private final InetSocketAddress address;
 
     public CDMIProtocolInfo(InetSocketAddress address)

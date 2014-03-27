@@ -1,33 +1,25 @@
 package org.dcache.cdmi;
 
-import org.dcache.cdmi.temp.Test;
 import java.util.ArrayList;
-import java.util.Collection;						//added
 import java.util.concurrent.Callable;
-import com.google.common.collect.Range;					//added
+import com.google.common.collect.Range;
 
 import diskCacheV111.util.CacheException;
-import diskCacheV111.util.FileNotFoundCacheException;
-import diskCacheV111.util.FsPath;					//added
+import diskCacheV111.util.FsPath;
 import diskCacheV111.util.NotDirCacheException;
 import diskCacheV111.util.PnfsHandler;
-import diskCacheV111.vehicles.PoolManagerGetPoolsByPoolGroupMessage;    //added
-import diskCacheV111.vehicles.PoolManagerPoolInformation;               //added
-import dmg.cells.nucleus.CellPath;                                      //added
-import dmg.cells.nucleus.DelayedReply;                                  //added
-import dmg.cells.nucleus.Reply;                                         //added
+import diskCacheV111.vehicles.PoolManagerGetPoolsByPoolGroupMessage;
+import diskCacheV111.vehicles.PoolManagerPoolInformation;
+import dmg.cells.nucleus.CellPath;
+import dmg.cells.nucleus.DelayedReply;
+import dmg.cells.nucleus.Reply;
 
 import dmg.util.Args;
 import dmg.util.command.Argument;
 import dmg.util.command.Command;
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetBoundException;
@@ -36,8 +28,8 @@ import java.nio.channels.SocketChannel;
 
 import dmg.cells.nucleus.CellCommandListener;
 import org.dcache.cells.CellStub;
-import org.dcache.util.list.DirectoryEntry;				//added
-import org.dcache.util.list.ListDirectoryHandler;			//added
+import org.dcache.util.list.DirectoryEntry;
+import org.dcache.util.list.ListDirectoryHandler;
 import org.springframework.beans.factory.annotation.Required;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.vehicles.FileAttributes;
@@ -45,14 +37,10 @@ import org.dcache.vehicles.FileAttributes;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
-import java.util.logging.Level;
 import org.dcache.auth.Subjects;
 import dmg.cells.nucleus.AbstractCellComponent;
-import org.dcache.cells.AbstractMessageCallback;                        //added
+import org.dcache.cells.AbstractMessageCallback;
 import dmg.cells.nucleus.CellMessageReceiver;
-import org.dcache.cdmi.dao.mongodb.MongoDB;
-import org.dcache.util.Transfer;
-import org.dcache.util.TransferRetryPolicies;
 import org.dcache.util.list.DirectoryListPrinter;
 import org.dcache.util.list.DirectoryListSource;
 import org.slf4j.Logger;
@@ -65,7 +53,6 @@ public class CDMI extends AbstractCellComponent
     implements Runnable, CellCommandListener, CellMessageReceiver
 {
 
-    private static final String DB_MONGO_DATABASE_NAME = "dcache-metadata";
     private boolean isDefaultFormal;
     private CellStub poolManager;
     private CellStub helloStub;
@@ -77,19 +64,11 @@ public class CDMI extends AbstractCellComponent
     private CellStub pool;
     private DirectoryListSource list;
     private String result = "";
-    private static final boolean useDB = true;
 
     private final static Logger _log =
         LoggerFactory.getLogger(CDMI.class);
 
     public CDMI() {
-        if (useDB) {
-            MongoDB mdb = new MongoDB();
-            mdb.connectWithoutDb();
-            mdb.printMongoInformation();
-            mdb.dropDB(DB_MONGO_DATABASE_NAME);
-            mdb.disconnect();
-        }
     }
 
     public boolean isDefaultFormal()
@@ -323,7 +302,6 @@ public class CDMI extends AbstractCellComponent
         private ListPrinter(PrintWriter writer)
         {
             this.writer = writer;
-            Test.write("/tmp/test006.log", "Writer:");
         }
 
         @Override
@@ -340,10 +318,10 @@ public class CDMI extends AbstractCellComponent
             FileAttributes attr = entry.getFileAttributes();
             if (attr.getFileType() == DIR) {
                 writer.println(entry.getName() + "::d::" + attr.getSize() + "\n");
-                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::d::" + attr.getSize() + "\n");
+                _log.debug("Writer:" + entry.getName() + "::d::" + attr.getSize() + "\n");
             } if (attr.getFileType() == REGULAR) {
                 writer.println(entry.getName() + "::f::" + attr.getSize() + "\n");
-                Test.write("/tmp/test006.log", "Writer:" + entry.getName() + "::f::" + attr.getSize() + "\n");
+                _log.debug("Writer:" + entry.getName() + "::f::" + attr.getSize() + "\n");
             } else {
                 writer.println(entry.getName() + "::s::" + attr.getSize() + "\n");
             }
@@ -527,7 +505,6 @@ public class CDMI extends AbstractCellComponent
         public DirectoryPrinter(StringBuilder out)
         {
             this.out = out;
-            Test.write("/tmp/test006.log", "Writer2:");
         }
 
         @Override
@@ -547,7 +524,6 @@ public class CDMI extends AbstractCellComponent
             } else {
                 out.append(entry.getName()).append("::s::").append(attr.getSize()).append("\n");
             }
-            Test.write("/tmp/test006.log", "Writer2:" + entry.getName());
         }
     }
 
