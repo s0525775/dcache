@@ -2,6 +2,7 @@
 /modules/*/target/
 /packages/*/target/
 /plugins/*/target/
+/datanucleus.log
 
 ## Ignore Eclipse-generated files and directories
 /.project
