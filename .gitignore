@@ -3,6 +3,7 @@
 /packages/*/target/
 /plugins/*/target/
 /datanucleus.log
+/.gitignore
 
 ## Ignore Eclipse-generated files and directories
 /.project
