@@ -26,7 +26,8 @@ import org.snia.cdmiserver.model.Container;
  *
  * @author Jana
  */
-public class CDMIContainer extends Container {
+public class CDMIContainer extends Container
+{
 
     //
     // Something important
@@ -65,178 +66,215 @@ public class CDMIContainer extends Container {
     }};
 
     @Override
-    public Map<String, Object> getExports() {
+    public Map<String, Object> getExports()
+    {
         return exports;
     }
 
     @Override
-    public String getCopy() {
+    public String getCopy()
+    {
         return copy;
     }
 
     @Override
-    public void setCopy(String copy) {
+    public void setCopy(String copy)
+    {
         this.copy = copy;
     }
 
     @Override
-    public String getMove() {
+    public String getMove()
+    {
         return move;
     }
 
     @Override
-    public void setMove(String move) {
+    public void setMove(String move)
+    {
         this.move = move;
     }
 
     @Override
-    public String getReference() {
+    public String getReference()
+    {
         return reference;
     }
 
     @Override
-    public void setReference(String reference) {
+    public void setReference(String reference)
+    {
         this.reference = reference;
     }
 
     @Override
-    public String getSnapshot() {
+    public String getSnapshot()
+    {
         return snapshot;
     }
 
     @Override
-    public void setSnapshot(String snapshot) {
+    public void setSnapshot(String snapshot)
+    {
         this.snapshot = snapshot;
     }
 
     @Override
-    public String getObjectType() {
+    public String getObjectType()
+    {
         return objectType;
     }
 
     @Override
-    public void setObjectType(String objectURI) {
+    public void setObjectType(String objectURI)
+    {
         this.objectType = objectURI;
     }
 
     @Override
-    public String getParentURI() {
+    public String getParentURI()
+    {
         return parentURI;
     }
 
     @Override
-    public void setParentURI(String parentURI) {
+    public void setParentURI(String parentURI)
+    {
         this.parentURI = parentURI;
     }
 
     @Override
-    public String getDomainURI() {
+    public String getDomainURI()
+    {
         return domainURI;
     }
 
     @Override
-    public void setDomainURI(String domainURI) {
+    public void setDomainURI(String domainURI)
+    {
         this.domainURI = domainURI;
     }
 
     @Override
-    public String getCapabilitiesURI() {
+    public String getCapabilitiesURI()
+    {
         return capabilitiesURI;
     }
 
     @Override
-    public void setCapabilitiesURI(String capabilitiesURI) {
+    public void setCapabilitiesURI(String capabilitiesURI)
+    {
         this.capabilitiesURI = capabilitiesURI;
     }
 
     @Override
-    public String getCompletionStatus() {
+    public String getCompletionStatus()
+    {
         return completionStatus;
     }
 
     @Override
-    public void setCompletionStatus(String completionStatus) {
+    public void setCompletionStatus(String completionStatus)
+    {
         this.completionStatus = completionStatus;
     }
 
     @Override
-    public Integer getPercentComplete() {
+    public Integer getPercentComplete()
+    {
         return percentComplete;
     }
 
     @Override
-    public void setPercentComplete(Integer percentComplete) {
+    public void setPercentComplete(Integer percentComplete)
+    {
         this.percentComplete = percentComplete;
     }
 
     @Override
-    public List<String> getSnapshots() {
+    public List<String> getSnapshots()
+    {
         return snapshots;
     }
 
     @Override
-    public String getChildrenrange() {
+    public String getChildrenrange()
+    {
         return childrenrange;
     }
 
     @Override
-    public void setChildrenrange(String childrenrange) {
+    public void setChildrenrange(String childrenrange)
+    {
         this.childrenrange = childrenrange;
     }
 
     @Override
-    public List<String> getChildren() {
+    public List<String> getChildren()
+    {
         return children;
     }
 
     @Override
-    public String getObjectID() {
+    public String getObjectID()
+    {
         return objectID;
     }
 
     @Override
-    public void setObjectID(String objectID) {
+    public void setObjectID(String objectID)
+    {
         this.objectID = objectID;
     }
 
-    public String getPnfsID() {
+    public String getPnfsID()
+    {
         return pnfsID;
     }
 
-    public void setPnfsID(String pnfsId) {
+    public void setPnfsID(String pnfsId)
+    {
         this.pnfsID = pnfsId;
     }
 
     @Override
-    public Map<String, String> getMetadata() {
+    public Map<String, String> getMetadata()
+    {
         return metadata;
     }
 
-    public List<HashMap<String, String>> getSubMetadata_ACL() {
+    public List<HashMap<String, String>> getSubMetadata_ACL()
+    {
         return subMetadata_ACL;
     }
 
-    public void setMetadata(String key, String val) {
+    public void setMetadata(String key, String val)
+    {
         metadata.put(key, val);
     }
 
-    public void addSubMetadata_ACL(HashMap<String, String> metadata) {
+    public void addSubMetadata_ACL(HashMap<String, String> metadata)
+    {
         subMetadata_ACL.add(metadata);
     }
 
-    public void addSubMetadata_ACL(int position, HashMap<String, String> metadata) {
+    public void addSubMetadata_ACL(int position, HashMap<String, String> metadata)
+    {
         subMetadata_ACL.add(position, metadata);
     }
 
-    public void setMetadata(Map<String, String> metadata) {
+    public void setMetadata(Map<String, String> metadata)
+    {
         this.metadata = metadata;
     }
 
-    public void setSubMetadata_ACL(List<HashMap<String, String>> metadata) {
+    public void setSubMetadata_ACL(List<HashMap<String, String>> metadata)
+    {
         this.subMetadata_ACL = metadata;
     }
 
-    private boolean isValidSubMetadata_ACL() {
+    private boolean isValidSubMetadata_ACL()
+    {
         boolean result = true;
         if (!subMetadata_ACL.isEmpty()) {
             for (HashMap<String, String> entry : subMetadata_ACL) {
@@ -252,7 +290,8 @@ public class CDMIContainer extends Container {
     }
 
     @Override
-    public String toJson(boolean toFile) {
+    public String toJson(boolean toFile)
+    {
         //
         StringWriter outBuffer = new StringWriter();
         try {
@@ -297,7 +336,8 @@ public class CDMIContainer extends Container {
         return outBuffer.toString();
     }
 
-    public String toJsonWithMetadata(boolean toFile) {
+    public String toJsonWithMetadata(boolean toFile)
+    {
         //
         StringWriter outBuffer = new StringWriter();
         try {
@@ -357,7 +397,8 @@ public class CDMIContainer extends Container {
         return outBuffer.toString();
     }
 
-    public String metadataToJson(boolean toFile) {
+    public String metadataToJson(boolean toFile)
+    {
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
@@ -387,20 +428,23 @@ public class CDMIContainer extends Container {
     }
 
     @Override
-    public void fromJson(InputStream jsonIs, boolean fromFile) throws Exception {
+    public void fromJson(InputStream jsonIs, boolean fromFile) throws Exception
+    {
         JsonFactory f = new JsonFactory();
         JsonParser jp = f.createJsonParser(jsonIs);
         fromJson(jp, fromFile);
     }
 
     @Override
-    public void fromJson(byte[] jsonBytes, boolean fromFile) throws Exception {
+    public void fromJson(byte[] jsonBytes, boolean fromFile) throws Exception
+    {
         JsonFactory f = new JsonFactory();
         JsonParser jp = f.createJsonParser(jsonBytes);
         fromJson(jp, fromFile);
     }
 
-    private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
+    private void fromJson(JsonParser jp, boolean fromFile) throws Exception
+    {
         _log.debug("   CDMIContainer<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
@@ -463,7 +507,8 @@ public class CDMIContainer extends Container {
     }
 
     @Override
-    public Object getObjectURI() {
+    public Object getObjectURI()
+    {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 

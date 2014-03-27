@@ -66,7 +66,8 @@ import org.snia.cdmiserver.util.ObjectID;
 * Access to objects by path.
 * </p>
 */
-public class CDMIPathResource {
+public class CDMIPathResource
+{
 
     //
     // Something important
@@ -84,8 +85,8 @@ public class CDMIPathResource {
     * </p>
     * @param containerDao
     */
-    public void setContainerDao(
-            CDMIContainerDao containerDao) {
+    public void setContainerDao(CDMIContainerDao containerDao)
+    {
         this.containerDao = containerDao;
     }
 
@@ -97,8 +98,8 @@ public class CDMIPathResource {
     * </p>
     * @param dataObjectDao
     */
-    public void setDataObjectDao(
-            CDMIDataObjectDao dataObjectDao) {
+    public void setDataObjectDao(CDMIDataObjectDao dataObjectDao)
+    {
         this.dataObjectDao = dataObjectDao;
     }
 
@@ -117,8 +118,8 @@ public class CDMIPathResource {
     */
     @DELETE
     @Path("/{path:.+}")
-    public Response deleteDataObjectOrContainer(
-            @PathParam("path") String path) {
+    public Response deleteDataObjectOrContainer(@PathParam("path") String path)
+    {
 
         try {
             containerDao.deleteByPath(path);
@@ -143,7 +144,8 @@ public class CDMIPathResource {
     */
     @DELETE
     @Path("/")
-    public Response deleteRootContainer(@PathParam("path") String path) {
+    public Response deleteRootContainer(@PathParam("path") String path)
+    {
         return Response.status(Response.Status.BAD_REQUEST).tag(
                 "Can not delete root container").build();
     }
@@ -165,7 +167,8 @@ public class CDMIPathResource {
     @Consumes(MediaTypes.OBJECT)
     public Response getContainerOrDataObject(
             @PathParam("path") String path,
-            @Context HttpHeaders headers) {
+            @Context HttpHeaders headers)
+    {
 
         _log.debug("In PathResource.getContainerOrObject, path=" +
                 path);
@@ -235,7 +238,8 @@ public class CDMIPathResource {
     @Consumes(MediaTypes.CONTAINER)
     public Response getRootContainer(
             @PathParam("path") String path,
-            @Context HttpHeaders headers) {
+            @Context HttpHeaders headers)
+    {
 
         _log.debug("In PathResource.getRootContainer");
         return getContainerOrDataObject(path, headers);
@@ -267,7 +271,8 @@ public class CDMIPathResource {
     @Path("/{path:.+}")
     public Response getDataObjectOrContainer(
             @PathParam("path") String path,
-            @Context HttpHeaders headers) {
+            @Context HttpHeaders headers)
+    {
 
         _log.debug("In PathResource.getDataObjectOrContainer, path: " +
                 path);
@@ -343,7 +348,8 @@ public class CDMIPathResource {
             @PathParam("path") String path,
             @HeaderParam("X-CDMI-NoClobber") @DefaultValue("false") String noClobber,
             @HeaderParam("X-CDMI-MustExist") @DefaultValue("false") String mustExist,
-            byte[] bytes) {
+            byte[] bytes)
+    {
 
         _log.debug("In PathResource.putContainer, path is: " + path);
 
@@ -396,7 +402,8 @@ public class CDMIPathResource {
     public Response putDataObject(
             @Context HttpHeaders headers,
             @PathParam("path") String path,
-            byte[] bytes) {
+            byte[] bytes)
+    {
 
         _log.debug("putDataObject(): ");
         // print headers for debug
@@ -455,7 +462,8 @@ public class CDMIPathResource {
     public Response putDataObject(
             @PathParam("path") String path,
             @HeaderParam("Content-Type") String contentType,
-            byte[] bytes) {
+            byte[] bytes)
+    {
 
         throw new UnsupportedOperationException(
                 "PathResource.putDataObject(Non-CDMI Content Type");
@@ -475,7 +483,8 @@ public class CDMIPathResource {
     @POST
     public Response postDataObject(
             @PathParam("path") String path,
-            byte[] bytes) {
+            byte[] bytes)
+    {
 
         String inBuffer = new String(bytes);
         _log.debug("Path = " + path + "\n" + inBuffer);

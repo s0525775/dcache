@@ -86,7 +86,8 @@ import org.dcache.cdmi.tool.IDConverter;
  * </p>
  */
 public class CDMIContainerDaoImpl extends AbstractCellComponent
-    implements CDMIContainerDao, ServletContextListener, CellLifeCycleAware {
+    implements CDMIContainerDao, ServletContextListener, CellLifeCycleAware
+{
 
     //
     // Something important
@@ -131,7 +132,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @param baseDirectory
      *            The new base directory name
      */
-    public void setBaseDirectoryName(String baseDirectoryName) {
+    public void setBaseDirectoryName(String baseDirectoryName)
+    {
         this.baseDirectoryName = baseDirectoryName;
         _log.debug("******* Base Directory (C) = " + baseDirectoryName);
         //Temp Helper Part
@@ -140,7 +142,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
     private boolean recreate = true;
 
-    public CDMIContainerDaoImpl() {
+    public CDMIContainerDaoImpl()
+    {
         _log.debug("Re-Init CDMIContainerDaoImpl...");
         if (listDirectoryHandler == null) {
             init();
@@ -157,7 +160,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @param recreate
      *            The new recreate flag value
      */
-    public void setRecreate(boolean recreate) {
+    public void setRecreate(boolean recreate)
+    {
         this.recreate = recreate;
     }
 
@@ -165,7 +169,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     // ContainerDao Methods invoked from PathResource
     //
     @Override
-    public CDMIContainer createByPath(String path, CDMIContainer containerRequest) {
+    public CDMIContainer createByPath(String path, CDMIContainer containerRequest)
+    {
 
         //
         // The User metadata and exports have already been de-serialized into the
@@ -612,7 +617,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     // PathResource.
     //
     @Override
-    public void deleteByPath(String path) {
+    public void deleteByPath(String path)
+    {
         File directoryOrFile = absoluteFile(path);
 
         _log.debug("Delete container/object <path>: " + directoryOrFile.getAbsolutePath());
@@ -670,7 +676,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     // Not Implemented
     //
     @Override
-    public CDMIContainer findByObjectId(String objectId) {
+    public CDMIContainer findByObjectId(String objectId)
+    {
         throw new UnsupportedOperationException("ContainerDaoImpl.findByObjectId()");
     }
 
@@ -678,7 +685,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     //
     //
     @Override
-    public CDMIContainer findByPath(String path) {
+    public CDMIContainer findByPath(String path)
+    {
 
         if (listDirectoryHandler == null) {
             init();
@@ -810,7 +818,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @param path
      *            Path of the requested container.
      */
-    private File getContainerFieldsFile(String path) {
+    private File getContainerFieldsFile(String path)
+    {
         // path should be /<parent container name>/<container name>
         String[] tokens = path.split("[/]+");
         if (tokens.length < 1) {
@@ -855,29 +864,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
     /**
      * <p>
-     * Return a {@link Container} instance for the container fields.
-     * </p>
-     *
-     * @param containerFieldsFile
-     *            File object for the container fields file.
-     */
-    private CDMIContainer getPersistedContainerFields(File containerFieldsFile) {
-        CDMIContainer containerFields = new CDMIContainer();
-        try {
-            byte[] inBytes = readFile(containerFieldsFile.getAbsolutePath());
-            containerFields.fromJson(inBytes, true);
-            String mds = new String(inBytes);
-            _log.debug("Container fields read were:" + mds);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception while reading: " + ex);
-            throw new IllegalArgumentException("Cannot read container fields file error: " + ex);
-        }
-        return containerFields;
-    }
-
-    /**
-     * <p>
      * Return a {@link File} instance for the file or directory at the specified path from our base
      * directory.
      * </p>
@@ -886,7 +872,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      *            Path of the requested file or directory.
      * @return
      */
-    public File absoluteFile(String path) {
+    public File absoluteFile(String path)
+    {
         if (path == null) {
             return baseDirectory();
         } else {
@@ -905,7 +892,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @exception IllegalArgumentException
      *                if we cannot create the base directory
      */
-    private File baseDirectory() {
+    private File baseDirectory()
+    {
         if (baseDirectory == null) {
             baseDirectory = new File(baseDirectoryName);
             if (recreate) {
@@ -937,7 +925,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @exception IllegalArgumentException
      *                if the specified path identifies a data object instead of a container
      */
-    private CDMIContainer completeContainer(CDMIContainer container, File directory, String path) {
+    private CDMIContainer completeContainer(CDMIContainer container, File directory, String path)
+    {
         _log.debug("In ContainerDaoImpl.Container, path is: " + path);
 
         _log.debug("In ContainerDaoImpl.Container, absolute path is: "
@@ -1007,7 +996,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
      * @param directory
      *            {@link File} identifying the directory to be deleted
      */
-    private void recursivelyDelete(File directory) {
+    private void recursivelyDelete(File directory)
+    {
         for (File file : directory.listFiles()) {
             if (file.isDirectory()) {
                 recursivelyDelete(file);
@@ -1021,7 +1011,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     //
 
     @Override
-    public boolean isContainer(String path) {
+    public boolean isContainer(String path)
+    {
 
         if (listDirectoryHandler == null) {
             init();
@@ -1053,7 +1044,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
     //In other words: contextInitialized() must be called before afterStart().
     @Override
-    public void contextInitialized(ServletContextEvent servletContextEvent) {
+    public void contextInitialized(ServletContextEvent servletContextEvent)
+    {
         _log.debug("Init CDMIContainerDaoImpl...");
         this.servletContext = servletContextEvent.getServletContext();
         this.pnfsStub = getCellStubAttribute();
@@ -1089,7 +1081,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
     {
     }
 
-    private CellStub getCellStubAttribute()  //tested, ok
+    private CellStub getCellStubAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -1104,7 +1096,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private ListDirectoryHandler getListDirAttribute()  //tested, ok
+    private ListDirectoryHandler getListDirAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -1119,7 +1111,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         return (ListDirectoryHandler) attribute;
     }
 
-    private CellStub getPoolAttribute()  //tested, ok
+    private CellStub getPoolAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -1134,7 +1126,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private CellStub getPoolMgrAttribute()  //tested, ok
+    private CellStub getPoolMgrAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -1149,7 +1141,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private CellStub getBillingAttribute()  //tested, ok
+    private CellStub getBillingAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -1423,7 +1415,8 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
     //OLD:
     @Override
-    public Container createByPath(String string, Container cntnr) {
+    public Container createByPath(String string, Container cntnr)
+    {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
@@ -1486,20 +1479,20 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("TEST1W-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("TEST1W-pnfsId:" + pnfsId);
-                _log.debug("TEST1W-creationTime:" + sdf.format(creationTime));
-                _log.debug("TEST1W-accessTime:" + sdf.format(accessTime));
-                _log.debug("TEST1W-changeTime:" + sdf.format(changeTime));
-                _log.debug("TEST1W-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("TEST1W-size:" + size);
-                _log.debug("TEST1W-owner:" + owner);
-                if (acl != null) _log.debug("TEST1W-acl:" + acl.toString());
-                if (acl != null) _log.debug("TEST1W-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("TEST1W-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("TEST1W-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("TEST1W-fileType:" + fileType.toString());
-                _log.debug("TEST1W-data:" + data);
+                _log.debug("CDMIContainerDaoImpl<Write>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("CDMIContainerDaoImpl<Write>-pnfsId:" + pnfsId);
+                _log.debug("CDMIContainerDaoImpl<Write>-creationTime:" + sdf.format(creationTime));
+                _log.debug("CDMIContainerDaoImpl<Write>-accessTime:" + sdf.format(accessTime));
+                _log.debug("CDMIContainerDaoImpl<Write>-changeTime:" + sdf.format(changeTime));
+                _log.debug("CDMIContainerDaoImpl<Write>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("CDMIContainerDaoImpl<Write>-size:" + size);
+                _log.debug("CDMIContainerDaoImpl<Write>-owner:" + owner);
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Write>-acl:" + acl.toString());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Write>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Write>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Write>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("CDMIContainerDaoImpl<Write>-fileType:" + fileType.toString());
+                _log.debug("CDMIContainerDaoImpl<Write>-data:" + data);
                 result = true;
             } finally {
                 if (result == false) {
@@ -1547,20 +1540,20 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("TEST1R-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("TEST1R-pnfsId:" + pnfsId);
-                _log.debug("TEST1R-creationTime:" + sdf.format(creationTime));
-                _log.debug("TEST1R-accessTime:" + sdf.format(accessTime));
-                _log.debug("TEST1R-changeTime:" + sdf.format(changeTime));
-                _log.debug("TEST1R-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("TEST1R-size:" + size);
-                _log.debug("TEST1R-owner:" + owner);
-                if (acl != null) _log.debug("TEST1R-acl:" + acl.toString());
-                if (acl != null) _log.debug("TEST1R-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("TEST1R-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("TEST1R-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("TEST1R-fileType:" + fileType.toString());
-                _log.debug("TEST1R-data:" + result.toString());
+                _log.debug("CDMIContainerDaoImpl<Read>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("CDMIContainerDaoImpl<Read>-pnfsId:" + pnfsId);
+                _log.debug("CDMIContainerDaoImpl<Read>-creationTime:" + sdf.format(creationTime));
+                _log.debug("CDMIContainerDaoImpl<Read>-accessTime:" + sdf.format(accessTime));
+                _log.debug("CDMIContainerDaoImpl<Read>-changeTime:" + sdf.format(changeTime));
+                _log.debug("CDMIContainerDaoImpl<Read>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("CDMIContainerDaoImpl<Read>-size:" + size);
+                _log.debug("CDMIContainerDaoImpl<Read>-owner:" + owner);
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Read>-acl:" + acl.toString());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Read>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Read>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("CDMIContainerDaoImpl<Read>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("CDMIContainerDaoImpl<Read>-fileType:" + fileType.toString());
+                _log.debug("CDMIContainerDaoImpl<Read>-data:" + result.toString());
             } finally {
                 if (result == null) {
                     //transfer.deleteNameSpaceEntry();
@@ -1570,59 +1563,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
             _log.error("CDMIContainerDaoImpl, File could not become read, exception is: " + ex.getMessage());
         }
         return result;
-    }
-
-    //Minimum to write a file
-    public void writeFileExample()
-    {
-        try {
-            //The order of all commands is very important!
-            String data = "Hello!";
-            String filePath = "/disk/test2.txt";
-            PnfsId id = null;
-            Subject subject = Subjects.ROOT;
-            CDMIDataTransfer.setData(data);
-            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
-            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            transfer.setPoolStub(poolStub);
-            transfer.setPoolManagerStub(poolMgrStub);
-            transfer.setBillingStub(billingStub);
-            transfer.setCellName(getCellName());
-            transfer.setDomainName(getCellDomainName());
-            transfer.setProtocolInfo(cdmiProtocolInfo);
-            transfer.setOverwriteAllowed(true);
-            transfer.createNameSpaceEntryWithParents();
-            transfer.getPnfsId();
-            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
-            _log.error("File could not become written, exception is: " + ex.getMessage());
-        }
-    }
-
-    //Minimum to read a file
-    public void readFileExample()
-    {
-        try {
-            //The order of all commands is very important!
-            String filePath = "/disk/test2.txt";
-            Subject subject = Subjects.ROOT;
-            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
-            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            transfer.setPoolStub(poolStub);
-            transfer.setPoolManagerStub(poolMgrStub);
-            transfer.setBillingStub(billingStub);
-            transfer.setCellName(getCellName());
-            transfer.setDomainName(getCellDomainName());
-            transfer.setProtocolInfo(cdmiProtocolInfo);
-            transfer.readNameSpaceEntry();
-            transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-            String data = CDMIDataTransfer.getDataAsString();
-            _log.debug("CDMIContainerDaoImpl received data: " + data);
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
-            _log.error("File could not become read, exception is: " + ex.getMessage());
-        }
     }
 
 }

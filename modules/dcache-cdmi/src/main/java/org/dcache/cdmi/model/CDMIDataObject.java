@@ -25,7 +25,8 @@ import org.snia.cdmiserver.model.DataObject;
  *
  * @author Jana
  */
-public class CDMIDataObject extends DataObject {
+public class CDMIDataObject extends DataObject
+{
 
     //
     // Something important
@@ -66,194 +67,234 @@ public class CDMIDataObject extends DataObject {
     }};
 
     @Override
-    public String getMimetype() {
+    public String getMimetype()
+    {
         return mimetype;
     }
 
     @Override
-    public void setMimetype(String mimetype) {
+    public void setMimetype(String mimetype)
+    {
         this.mimetype = mimetype;
     }
 
     @Override
-    public String getDeserialize() {
+    public String getDeserialize()
+    {
         return deserialize;
     }
 
     @Override
-    public void setDeserialize(String deserialize) {
+    public void setDeserialize(String deserialize)
+    {
         this.deserialize = deserialize;
     }
 
     @Override
-    public String getSerialize() {
+    public String getSerialize()
+    {
         return serialize;
     }
 
     @Override
-    public void setSerialize(String serialize) {
+    public void setSerialize(String serialize)
+    {
         this.serialize = serialize;
     }
 
     @Override
-    public String getCopy() {
+    public String getCopy()
+    {
         return copy;
     }
 
     @Override
-    public void setCopy(String copy) {
+    public void setCopy(String copy)
+    {
         this.copy = copy;
     }
 
     @Override
-    public String getMove() {
+    public String getMove()
+    {
         return move;
     }
 
     @Override
-    public void setMove(String move) {
+    public void setMove(String move)
+    {
         this.move = move;
     }
 
     @Override
-    public String getReference() {
+    public String getReference()
+    {
         return reference;
     }
 
     @Override
-    public void setReference(String reference) {
+    public void setReference(String reference)
+    {
         this.reference = reference;
     }
 
     @Override
-    public String getValue() {
+    public String getValue()
+    {
         return value;
     }
 
     @Override
-    public void setValue(String value) {
+    public void setValue(String value)
+    {
         this.value = value;
     }
 
     @Override
-    public String getObjectType() {
+    public String getObjectType()
+    {
         return objectType;
     }
 
     @Override
-    public void setObjectType(String objectURI) {
+    public void setObjectType(String objectURI)
+    {
         this.objectType = objectURI;
     }
 
     @Override
-    public String getParentURI() {
+    public String getParentURI()
+    {
         return parentURI;
     }
 
     @Override
-    public void setParentURI(String parentURI) {
+    public void setParentURI(String parentURI)
+    {
         this.parentURI = parentURI;
     }
 
     @Override
-    public String getAccountURI() {
+    public String getAccountURI()
+    {
         return accountURI;
     }
 
     @Override
-    public void setAccountURI(String accountURI) {
+    public void setAccountURI(String accountURI)
+    {
         this.accountURI = accountURI;
     }
 
     @Override
-    public String getCapabilitiesURI() {
+    public String getCapabilitiesURI()
+    {
         return capabilitiesURI;
     }
 
     @Override
-    public void setCapabilitiesURI(String capabilitiesURI) {
+    public void setCapabilitiesURI(String capabilitiesURI)
+    {
         this.capabilitiesURI = capabilitiesURI;
     }
 
     @Override
-    public String getCompletionStatus() {
+    public String getCompletionStatus()
+    {
         return completionStatus;
     }
 
     @Override
-    public void setCompletionStatus(String completionStatus) {
+    public void setCompletionStatus(String completionStatus)
+    {
         this.completionStatus = completionStatus;
     }
 
     @Override
-    public Integer getPercentComplete() {
+    public Integer getPercentComplete()
+    {
         return percentComplete;
     }
 
     @Override
-    public void setPercentComplete(Integer percentComplete) {
+    public void setPercentComplete(Integer percentComplete)
+    {
         this.percentComplete = percentComplete;
     }
 
     @Override
-    public String getValuerange() {
+    public String getValuerange()
+    {
         return valuerange;
     }
 
     @Override
-    public void setValuerange(String valuerange) {
+    public void setValuerange(String valuerange)
+    {
         this.valuerange = valuerange;
     }
 
     @Override
-    public String getObjectID() {
+    public String getObjectID()
+    {
         return objectID;
     }
 
     @Override
-    public void setObjectID(String objectID) {
+    public void setObjectID(String objectID)
+    {
         this.objectID = objectID;
     }
 
-    public String getPnfsID() {
+    public String getPnfsID()
+    {
         return pnfsID;
     }
 
-    public void setPnfsID(String pnfsId) {
+    public void setPnfsID(String pnfsId)
+    {
         this.pnfsID = pnfsId;
     }
 
     @Override
-    public Map<String, String> getMetadata() {
+    public Map<String, String> getMetadata()
+    {
         return metadata;
     }
 
-    public List<HashMap<String, String>> getSubMetadata_ACL() {
+    public List<HashMap<String, String>> getSubMetadata_ACL()
+    {
         return subMetadata_ACL;
     }
 
     @Override
-    public void setMetadata(String key, String val) {
+    public void setMetadata(String key, String val)
+    {
         metadata.put(key, val);
     }
 
-    public void addSubMetadata_ACL(HashMap<String, String> metadata) {
+    public void addSubMetadata_ACL(HashMap<String, String> metadata)
+    {
         subMetadata_ACL.add(metadata);
     }
 
-    public void addSubMetadata_ACL(int mainKey, HashMap<String, String> metadata) {
+    public void addSubMetadata_ACL(int mainKey, HashMap<String, String> metadata)
+    {
         subMetadata_ACL.add(mainKey, metadata);
     }
 
-    public void setMetadata(Map<String, String> metadata) {
+    public void setMetadata(Map<String, String> metadata)
+    {
         this.metadata = metadata;
     }
 
-    public void setSubMetadata_ACL(List<HashMap<String, String>> metadata) {
+    public void setSubMetadata_ACL(List<HashMap<String, String>> metadata)
+    {
         this.subMetadata_ACL = metadata;
     }
 
-    private boolean isValidSubMetadata_ACL() {
+    private boolean isValidSubMetadata_ACL()
+    {
         boolean result = true;
         if (!subMetadata_ACL.isEmpty()) {
             for (HashMap<String, String> entry : subMetadata_ACL) {
@@ -269,7 +310,8 @@ public class CDMIDataObject extends DataObject {
     }
 
     @Override
-    public String toJson() throws Exception {
+    public String toJson() throws Exception
+    {
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
@@ -298,7 +340,8 @@ public class CDMIDataObject extends DataObject {
         return outBuffer.toString();
     }
 
-    public String toJsonWithMetadata() throws Exception {
+    public String toJsonWithMetadata() throws Exception
+    {
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
@@ -345,7 +388,8 @@ public class CDMIDataObject extends DataObject {
     }
 
     @Override
-    public String metadataToJson() throws Exception {
+    public String metadataToJson() throws Exception
+    {
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
@@ -380,20 +424,23 @@ public class CDMIDataObject extends DataObject {
     }
 
     @Override
-    public void fromJson(InputStream jsonIs, boolean fromFile) throws Exception {
+    public void fromJson(InputStream jsonIs, boolean fromFile) throws Exception
+    {
         JsonFactory f = new JsonFactory();
         JsonParser jp = f.createJsonParser(jsonIs);
         fromJson(jp, fromFile);
     }
 
     @Override
-    public void fromJson(byte[] jsonBytes, boolean fromFile) throws Exception {
+    public void fromJson(byte[] jsonBytes, boolean fromFile) throws Exception
+    {
         JsonFactory f = new JsonFactory();
         JsonParser jp = f.createJsonParser(jsonBytes);
         fromJson(jp, fromFile);
     }
 
-    private void fromJson(JsonParser jp, boolean fromFile) throws Exception {
+    private void fromJson(JsonParser jp, boolean fromFile) throws Exception
+    {
         _log.debug("   CDMIDataObject<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT

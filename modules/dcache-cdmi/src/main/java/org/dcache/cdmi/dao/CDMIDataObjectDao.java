@@ -19,7 +19,8 @@ import org.snia.cdmiserver.dao.DataObjectDao;
 * DAO for manipulating CDMI <em>DataObject</em> instances.
 * </p>
 */
-public interface CDMIDataObjectDao extends DataObjectDao {
+public interface CDMIDataObjectDao extends DataObjectDao
+{
 
     /**
     * <p>

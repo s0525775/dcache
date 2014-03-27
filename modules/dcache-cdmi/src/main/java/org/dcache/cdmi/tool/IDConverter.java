@@ -14,7 +14,8 @@ import static org.dcache.cdmi.tool.Base16Coder.*;
  *
  * @author Jana
  */
-public class IDConverter {
+public class IDConverter
+{
 
     private byte[] realObjectID = null;
     private String strObjectID = "";
@@ -24,7 +25,8 @@ public class IDConverter {
     private static final int ENTERPRISE_NUMBER_2 = 6840;
     private static final byte length = 40;
 
-    public String toPnfsID(String objectID) {
+    public String toPnfsID(String objectID)
+    {
         strObjectID = objectID;
         realObjectID = fromBase16(strObjectID);
         byte[] pnfsIDArray = new byte[32];
@@ -42,7 +44,8 @@ public class IDConverter {
         return strPnfsID;
     }
 
-    public String toObjectID(String pnfsID) {
+    public String toObjectID(String pnfsID)
+    {
         strPnfsID = pnfsID;
         byte[] tempObjectID = new byte[40];
         // set 0th byte of tempObjectID
@@ -84,7 +87,8 @@ public class IDConverter {
         return strObjectID;
     }
 
-    private byte[] toNetworkByteOrder3(int data) {
+    private byte[] toNetworkByteOrder3(int data)
+    {
         byte[] result = new byte[3];
         result[0] = (byte) ((data >> 16) & 0xff);
         result[1] = (byte) ((data >> 8) & 0xff);
@@ -92,14 +96,16 @@ public class IDConverter {
         return result;
     }
 
-    private byte[] toNetworkByteOrder2(String data) {
+    private byte[] toNetworkByteOrder2(String data)
+    {
         byte[] result = new byte[2];
         result[0] = (byte) ((data.charAt(0) >> 8) & 0xff);
         result[1] = (byte) (data.charAt(1) & 0xff);
         return result;
     }
 
-    private byte[] toNetworkByteOrder32(String data) {
+    private byte[] toNetworkByteOrder32(String data)
+    {
         byte[] result = new byte[32];
         byte[] temp = new BigInteger(data, 16).toByteArray();
         if (temp.length < 33) {
@@ -115,28 +121,33 @@ public class IDConverter {
         return result;
     }
 
-    private String fromNetworkByteOrder32(byte[] data) {
+    private String fromNetworkByteOrder32(byte[] data)
+    {
         String result = encode(data);
         return result.toUpperCase();
     }
 
-    private String toCRC16(byte[] data) {
+    private String toCRC16(byte[] data)
+    {
         String result = Long.toHexString(doCRC(data, 0x8005, 16, 0, true, true, false));
         return result.toUpperCase();
     }
 
-    private String toBase16(byte[] data) {
+    private String toBase16(byte[] data)
+    {
         String result = encode(data);
         return result.toUpperCase();
     }
 
-    private byte[] fromBase16(String data) {
+    private byte[] fromBase16(String data)
+    {
         byte[] result = decode(data);
         return result;
     }
 
     /*
-    public void test() {
+    public void test()
+    {
         String oldID0 = "00007CE39F587D004C57BF7BF822257B35EB";
         _log.debug("PnfsID: " + oldID0 + " | " + oldID0.length());
         String newID1 = new IDConverter().toObjectID(oldID0);

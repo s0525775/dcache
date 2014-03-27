@@ -25,9 +25,10 @@ package org.dcache.cdmi.tool;
  * @author Marc Prud'hommeaux
  * @nojavadoc
  */
-public class Base16Coder {
+public class Base16Coder
+{
 
-    private final static char[] HEX = new char[]{
+    private final static char[] HEX = new char[] {
         '0', '1', '2', '3', '4', '5', '6', '7',
         '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
@@ -36,7 +37,8 @@ public class Base16Coder {
      * @param byteArray
      * @return
      */
-    public static String encode(byte[] byteArray) {
+    public static String encode(byte[] byteArray)
+    {
         StringBuffer hexBuffer = new StringBuffer(byteArray.length * 2);
         for (int i = 0; i < byteArray.length; i++)
             for (int j = 1; j >= 0; j--)
@@ -49,7 +51,8 @@ public class Base16Coder {
      * @param s
      * @return
      */
-    public static byte[] decode(String s) {
+    public static byte[] decode(String s)
+    {
         int len = s.length();
         byte[] r = new byte[len / 2];
         for (int i = 0; i < r.length; i++) {

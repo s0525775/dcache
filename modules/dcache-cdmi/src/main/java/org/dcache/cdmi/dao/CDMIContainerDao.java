@@ -19,7 +19,8 @@ import org.snia.cdmiserver.dao.ContainerDao;
 * DAO for manipulating CDMI <em>Container</em> instances.
 * </p>
 */
-public interface CDMIContainerDao extends ContainerDao {
+public interface CDMIContainerDao extends ContainerDao
+{
 
     /**
     * <p>

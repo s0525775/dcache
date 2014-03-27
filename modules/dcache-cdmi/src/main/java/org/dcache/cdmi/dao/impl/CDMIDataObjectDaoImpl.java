@@ -86,7 +86,8 @@ import org.snia.cdmiserver.model.DataObject;
  * </p>
  */
 public class CDMIDataObjectDaoImpl extends AbstractCellComponent
-    implements CDMIDataObjectDao, ServletContextListener, CellLifeCycleAware {
+    implements CDMIDataObjectDao, ServletContextListener, CellLifeCycleAware
+{
 
     //
     // Something important
@@ -122,7 +123,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     private FileType fileType;
 
     //
-    public void setBaseDirectoryName(String baseDirectoryName) {
+    public void setBaseDirectoryName(String baseDirectoryName)
+    {
         this.baseDirectoryName = baseDirectoryName;
         _log.debug("******* Base Directory (O) = " + baseDirectoryName);
         //Temp Helper Part
@@ -138,11 +140,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
     // private Map<String,DataObject> dataDB =
     // new ConcurrentHashMap<String, DataObject>();
-    public void setContainerDao(ContainerDao containerDao) {
+    public void setContainerDao(ContainerDao containerDao)
+    {
         this.containerDao = containerDao;
     }
 
-    public CDMIDataObjectDaoImpl() {
+    public CDMIDataObjectDaoImpl()
+    {
         _log.debug("Re-Init CDMIDataObjectDaoImpl...");
         if (listDirectoryHandler == null) {
             init();
@@ -152,7 +156,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     // ---------------------------------------------------- ContainerDao Methods
     // utility function
     // given a path, find out metadata file name and container directory
-    String getmetadataFileName(String path) {
+    String getmetadataFileName(String path)
+    {
         // Make sure we have a file name for the object
         // check for file name
         // path should be <container name>/<file name>
@@ -168,7 +173,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     //
-    String getcontainerName(String path) {
+    String getcontainerName(String path)
+    {
         // Make sure we have a file name for the object
         // check for file name
         // path should be <container name>/<file name>
@@ -307,17 +313,20 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public CDMIDataObject createById(String objectId, CDMIDataObject dObj) {
+    public CDMIDataObject createById(String objectId, CDMIDataObject dObj)
+    {
         throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.createById()");
     }
 
     @Override
-    public void deleteByPath(String path) {
+    public void deleteByPath(String path)
+    {
         throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.deleteByPath()");
     }
 
     @Override
-    public CDMIDataObject findByPath(String path) {
+    public CDMIDataObject findByPath(String path)
+    {
 
         // ISO-8601 Date
         Date now = new Date();
@@ -458,7 +467,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public CDMIDataObject findByObjectId(String objectId) {
+    public CDMIDataObject findByObjectId(String objectId)
+    {
         throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.findByObjectId()");
     }
     // --------------------------------------------------------- Private Methods
@@ -468,7 +478,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
      */
 
     // Temp Helper Function
-    private void init() {
+    private void init()
+    {
         pnfsStub = CDMIDataTransfer.getPnfsStub2();
         pnfsHandler = CDMIDataTransfer.getPnfsHandler2();
         listDirectoryHandler = CDMIDataTransfer.getListDirectoryHandler2();
@@ -482,7 +493,8 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
     //In other words: contextInitialized() must be called before afterStart().
     @Override
-    public void contextInitialized(ServletContextEvent servletContextEvent) {
+    public void contextInitialized(ServletContextEvent servletContextEvent)
+    {
         _log.debug("Init CDMIDataObjectDaoImpl...");
         this.servletContext = servletContextEvent.getServletContext();
         this.pnfsStub = getCellStubAttribute();
@@ -518,7 +530,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     {
     }
 
-    private CellStub getCellStubAttribute()  //tested, ok
+    private CellStub getCellStubAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -533,7 +545,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private ListDirectoryHandler getListDirAttribute()  //tested, ok
+    private ListDirectoryHandler getListDirAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -548,7 +560,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return (ListDirectoryHandler) attribute;
     }
 
-    private CellStub getPoolAttribute()  //tested, ok
+    private CellStub getPoolAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -563,7 +575,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private CellStub getPoolMgrAttribute()  //tested, ok
+    private CellStub getPoolMgrAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -578,7 +590,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return (CellStub) attribute;
     }
 
-    private CellStub getBillingAttribute()  //tested, ok
+    private CellStub getBillingAttribute()
     {
         if (servletContext == null) {
             throw new RuntimeException("ServletContext is not set");
@@ -721,13 +733,15 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public DataObject createByPath(String string, DataObject d) throws Exception {
+    public DataObject createByPath(String string, DataObject d) throws Exception
+    {
         throw new UnsupportedOperationException("CDMIDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     //OLD:
     @Override
-    public DataObject createById(String string, DataObject d) {
+    public DataObject createById(String string, DataObject d)
+    {
         throw new UnsupportedOperationException("CDMIDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
@@ -790,20 +804,20 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("TEST2W-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("TEST2W-pnfsId:" + pnfsId);
-                _log.debug("TEST2W-creationTime:" + sdf.format(creationTime));
-                _log.debug("TEST2W-accessTime:" + sdf.format(accessTime));
-                _log.debug("TEST2W-changeTime:" + sdf.format(changeTime));
-                _log.debug("TEST2W-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("TEST2W-size:" + size);
-                _log.debug("TEST2W-owner:" + owner);
-                if (acl != null) _log.debug("TEST2W-acl:" + acl.toString());
-                if (acl != null) _log.debug("TEST2W-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("TEST2W-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("TEST2W-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("TEST2W-fileType:" + fileType.toString());
-                _log.debug("TEST2W-data:" + data);
+                _log.debug("CDMIDataObjectDaoImpl<Write>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("CDMIDataObjectDaoImpl<Write>-pnfsId:" + pnfsId);
+                _log.debug("CDMIDataObjectDaoImpl<Write>-creationTime:" + sdf.format(creationTime));
+                _log.debug("CDMIDataObjectDaoImpl<Write>-accessTime:" + sdf.format(accessTime));
+                _log.debug("CDMIDataObjectDaoImpl<Write>-changeTime:" + sdf.format(changeTime));
+                _log.debug("CDMIDataObjectDaoImpl<Write>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("CDMIDataObjectDaoImpl<Write>-size:" + size);
+                _log.debug("CDMIDataObjectDaoImpl<Write>-owner:" + owner);
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-acl:" + acl.toString());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("CDMIDataObjectDaoImpl<Write>-fileType:" + fileType.toString());
+                _log.debug("CDMIDataObjectDaoImpl<Write>-data:" + data);
                 result = true;
             } finally {
                 if (result == false) {
@@ -851,20 +865,20 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     //transfer.killMover(2000, TimeUnit.MILLISECONDS);
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("TEST2R-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("TEST2R-pnfsId:" + pnfsId);
-                _log.debug("TEST2R-creationTime:" + sdf.format(creationTime));
-                _log.debug("TEST2R-accessTime:" + sdf.format(accessTime));
-                _log.debug("TEST2R-changeTime:" + sdf.format(changeTime));
-                _log.debug("TEST2R-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("TEST2R-size:" + size);
-                _log.debug("TEST2R-owner:" + owner);
-                if (acl != null) _log.debug("TEST2R-acl:" + acl.toString());
-                if (acl != null) _log.debug("TEST2R-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("TEST2R-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("TEST2R-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("TEST2R-fileType:" + fileType.toString());
-                _log.debug("TEST2R-data:" + result.toString());
+                _log.debug("CDMIDataObjectDaoImpl<Read>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("CDMIDataObjectDaoImpl<Read>-pnfsId:" + pnfsId);
+                _log.debug("CDMIDataObjectDaoImpl<Read>-creationTime:" + sdf.format(creationTime));
+                _log.debug("CDMIDataObjectDaoImpl<Read>-accessTime:" + sdf.format(accessTime));
+                _log.debug("CDMIDataObjectDaoImpl<Read>-changeTime:" + sdf.format(changeTime));
+                _log.debug("CDMIDataObjectDaoImpl<Read>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("CDMIDataObjectDaoImpl<Read>-size:" + size);
+                _log.debug("CDMIDataObjectDaoImpl<Read>-owner:" + owner);
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-acl:" + acl.toString());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("CDMIDataObjectDaoImpl<Read>-fileType:" + fileType.toString());
+                _log.debug("CDMIDataObjectDaoImpl<Read>-data:" + result.toString());
             } finally {
                 if (result == null) {
                     //transfer.deleteNameSpaceEntry();
@@ -876,8 +890,10 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
-    public static class HelperClass {
-        public static void sleep(long ms) {
+    public static class HelperClass
+    {
+        public static void sleep(long ms)
+        {
             try {
                 Thread.sleep(ms);
             } catch (InterruptedException ex) {

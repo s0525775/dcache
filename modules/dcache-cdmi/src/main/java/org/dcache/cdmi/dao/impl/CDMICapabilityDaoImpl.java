@@ -41,7 +41,8 @@ import org.snia.cdmiserver.util.ObjectID;
  * store.
  * </p>
  */
-public class CDMICapabilityDaoImpl implements CapabilityDao {
+public class CDMICapabilityDaoImpl implements CapabilityDao
+{
 
     //
     // Something important
@@ -60,18 +61,21 @@ public class CDMICapabilityDaoImpl implements CapabilityDao {
     private final String DEFAULTobjectID = ObjectID.getObjectID(8);  //TODO?
     private final String OBJECTobjectID = ObjectID.getObjectID(8);  //TODO?
 
-    public void setCapabilityDao(CapabilityDao capabilityDao) {
+    public void setCapabilityDao(CapabilityDao capabilityDao)
+    {
         this.capabilityDao = capabilityDao;
     }
 
     // ---------------------------------------------------- ContainerDao Methods
     @Override
-    public Capability findByObjectId(String objectId) {
+    public Capability findByObjectId(String objectId)
+    {
         throw new UnsupportedOperationException("CapabilityDaoImpl.findByObjectId()");
     }
 
     @Override
-    public Capability findByPath(String path) {
+    public Capability findByPath(String path)
+    {
         Capability capability = new Capability();
 
         _log.debug("In Capability.findByPath, path is: ");

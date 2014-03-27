@@ -66,7 +66,8 @@ public class CDMIMover implements MoverProtocol
         return channel.getLastTransferred();
     }
 
-    private void writeFile() throws ACLException {
+    private void writeFile() throws ACLException
+    {
         if (channel.isOpen()) {
             try {
                 strData = CDMIDataTransfer.getDataAsString();
@@ -88,7 +89,8 @@ public class CDMIMover implements MoverProtocol
         }
     }
 
-    private void readFileAsBytes() throws ACLException {
+    private void readFileAsBytes() throws ACLException
+    {
         if (channel.isOpen()) {
             try {
                 int dataSize = (int) channel.getFileAttributes().getSize();
@@ -115,7 +117,8 @@ public class CDMIMover implements MoverProtocol
         }
     }
 
-    private void readFileAsString() throws ACLException {
+    private void readFileAsString() throws ACLException
+    {
         if (channel.isOpen()) {
             try {
                 int dataSize = (int) channel.getFileAttributes().getSize();
@@ -142,7 +145,8 @@ public class CDMIMover implements MoverProtocol
         }
     }
 
-    public void closeChannel() {
+    public void closeChannel()
+    {
         if (channel.isOpen()) {
             try {
                 channel.close();
@@ -152,11 +156,13 @@ public class CDMIMover implements MoverProtocol
         }
     }
 
-    private synchronized static ByteBuffer stringToByteBuffer(String data) {
+    private synchronized static ByteBuffer stringToByteBuffer(String data)
+    {
         return ByteBuffer.wrap(data.getBytes());
     }
 
-    private synchronized static String byteBufferToString(ByteBuffer data) {
+    private synchronized static String byteBufferToString(ByteBuffer data)
+    {
         String result = "";
         try {
             result = new String(data.array(), "UTF-8");
