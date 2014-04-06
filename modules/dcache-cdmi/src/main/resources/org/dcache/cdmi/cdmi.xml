@@ -17,46 +17,24 @@
     <bean id="pnfs-stub" class="org.dcache.cells.CellStub">
         <description>PnfsManager communication stub</description>
         <property name="destination" value="${dcache.service.pnfsmanager}"/>
-        <property name="timeout" value="120000"/>
-        <property name="timeoutUnit" value="MILLISECONDS"/>
-    </bean>
-
-    <bean id="pnfs-stub-2" class="org.dcache.cells.CellStub">
-        <description>PnfsManager communication stub</description>
-        <property name="destination" value="${dcache.service.pnfsmanager}"/>
         <property name="timeout" value="30000"/>
         <property name="timeoutUnit" value="MILLISECONDS"/>
         <property name="retryOnNoRouteToCell" value="true"/>
     </bean>
 
-    <bean id="pnfs-handler" class="diskCacheV111.util.PnfsHandler">
-        <description>PNFS manager client module</description>
-        <constructor-arg ref="pnfs-stub"/>
-    </bean>
-
-    <bean id="hello-stub" class="org.dcache.cells.CellStub">
-        <property name="timeout" value="30000"/>
-    </bean>
-
     <bean id="billing-stub" class="org.dcache.cells.CellStub">
-        <property name="destination" value="billing"/>
-        <property name="timeout" value="30000"/>
-    </bean>
-
-    <bean id="billing-stub-2" class="org.dcache.cells.CellStub">
+        <description>Billing communication stub</description>
         <property name="destination" value="billing"/>
         <property name="timeout" value="30000"/>
     </bean>
 
     <bean id="pool-stub" class="org.dcache.cells.CellStub">
-        <property name="timeout" value="10000"/>
-    </bean>
-
-    <bean id="pool-stub-2" class="org.dcache.cells.CellStub">
+        <description>Pool communication stub</description>
         <property name="timeout" value="10000"/>
     </bean>
 
     <bean id="list-handler" class="org.dcache.util.list.ListDirectoryHandler">
+        <description>ListDirectoryHandler</description>
       <constructor-arg>
 	  <bean class="diskCacheV111.util.PnfsHandler">
 	      <constructor-arg ref="pnfs-stub"/>
@@ -64,47 +42,10 @@
       </constructor-arg>
     </bean>
 
-    <bean id="list-handler-2" class="org.dcache.util.list.ListDirectoryHandler">
-      <constructor-arg>
-	  <bean class="diskCacheV111.util.PnfsHandler">
-	      <constructor-arg ref="pnfs-stub-2"/>
-	  </bean>
-      </constructor-arg>
-    </bean>
-
-    <!-- New convention -->
     <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
-        <description>PoolManager communication stub</description>
-        <property name="destination" value="${cdmi.service.poolmanager}"/>
-        <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
-        <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
-    </bean>
-
-    <bean id="pool-manager-stub-2" class="org.dcache.cells.CellStub">
-        <description>PoolManager communication stub</description>
-        <property name="destination" value="${dcache.service.poolmanager}"/>
-        <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
-        <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
-    </bean>
-
-    <bean id="pool-manager-stub-3" class="org.dcache.cells.CellStub">
         <description>Communication stub for pool manager</description>
         <property name="destination" value="${poolmanager}"/>
         <property name="timeout" value="30000"/>
-    </bean>
-
-    <!-- poolManager refers to pool-manager-stub bean -->
-    <bean id="cdmi" class="org.dcache.cdmi.CDMI"
-          init-method="start" destroy-method="stop"> <!-- added -->
-        <description>CDMI Test</description>
-        <property name="defaultFormal" value="${isDefaultFormal}"/>
-        <property name="poolManager" ref="pool-manager-stub"/>
-        <property name="pnfsStub" ref="pnfs-stub"/>
-        <property name="pnfsHandler" ref="pnfs-handler"/>
-        <property name="helloStub" ref="hello-stub"/> <!-- added -->
-        <property name="listDirectoryHandler" ref="list-handler"/> <!-- added -->
-        <property name="pool" ref="pool-stub"/> <!-- added -->
-        <property name="billing" ref="billing-stub"/> <!-- added -->
     </bean>
 
     <!-- JETTY CONFIG -->
@@ -113,8 +54,8 @@
         <description>Thread pool used by Jetty for request processing</description>
         <property name="maxIdleTimeMs"
               value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
-		     ${cdmi.limits.jetty.threads.idle-time.max},
-		     '${cdmi.limits.jetty.threads.idle-time.max.unit}')}" />
+                      ${cdmi.limits.jetty.threads.idle-time.max},
+                     '${cdmi.limits.jetty.threads.idle-time.max.unit}')}" />
         <property name="maxThreads" value="${cdmi.limits.jetty.threads.max}"/>
         <property name="minThreads" value="${cdmi.limits.jetty.threads.min}"/>
         <property name="name" value="jetty-cdmi"/>
@@ -130,7 +71,7 @@
             <list>
                 <bean id="Connector" class="org.eclipse.jetty.server.nio.SelectChannelConnector">
                     <property name="port" value="${cdmi.net.port}" />
-                    <property name="host" value="#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }"/>
+                    <property name="host" value="#{T(com.google.common.base.Strings).emptyToNull('${cdmi.net.listen}')}"/>
                 </bean>
             </list>
         </property>
@@ -178,11 +119,11 @@
                                 <bean class="org.eclipse.jetty.util.AttributesMap">
                                     <constructor-arg>
                                         <map>
-                                            <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub-2"/>
-                                            <entry key="org.dcache.cdmi.lister" value-ref="list-handler-2"/>
-                                            <entry key="org.dcache.cdmi.poolmgrstub" value-ref="pool-manager-stub-3"/>
-                                            <entry key="org.dcache.cdmi.poolstub" value-ref="pool-stub-2"/> <!-- added -->
-                                            <entry key="org.dcache.cdmi.billingstub" value-ref="billing-stub-2"/> <!-- added -->
+                                            <entry key="org.dcache.cdmi.pnfsstub" value-ref="pnfs-stub"/>
+                                            <entry key="org.dcache.cdmi.lister" value-ref="list-handler"/>
+                                            <entry key="org.dcache.cdmi.poolmgrstub" value-ref="pool-manager-stub"/>
+                                            <entry key="org.dcache.cdmi.poolstub" value-ref="pool-stub"/>
+                                            <entry key="org.dcache.cdmi.billingstub" value-ref="billing-stub"/>
                                         </map>
                                     </constructor-arg>
                                 </bean>

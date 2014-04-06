@@ -178,7 +178,7 @@
     <threshold>
       <appender>events</appender>
       <logger>org.dcache.events</logger>
-      <level>all</level>
+      <level>debug</level>
     </threshold>
 
     <threshold>

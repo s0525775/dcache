@@ -1,19 +1,9 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package org.dcache.cdmi.tool;
 
 import java.math.BigInteger;
 import static org.dcache.cdmi.tool.CRC16Calculator.doCRC;
-import static org.dcache.cdmi.tool.Base16Coder.*;
+import com.google.common.io.BaseEncoding;
 
-/**
- *
- * @author Jana
- */
 public class IDConverter
 {
 
@@ -21,8 +11,8 @@ public class IDConverter
     private String strObjectID = "";
     private String strPnfsID = "";
     private final byte reservedByte = 0;
-    private static final int ENTERPRISE_NUMBER = 1343;
-    private static final int ENTERPRISE_NUMBER_2 = 6840;
+    private static final int ENTERPRISE_NUMBER = 1343;  //see: http://www.iana.org/assignments/enterprise-numbers/enterprise-numbers
+    private static final int ENTERPRISE_NUMBER_2 = 6840;  //alternative, see: http://www.iana.org/assignments/enterprise-numbers/enterprise-numbers
     private static final byte length = 40;
 
     public String toPnfsID(String objectID)
@@ -123,7 +113,7 @@ public class IDConverter
 
     private String fromNetworkByteOrder32(byte[] data)
     {
-        String result = encode(data);
+        String result = BaseEncoding.base16().encode(data);
         return result.toUpperCase();
     }
 
@@ -135,26 +125,14 @@ public class IDConverter
 
     private String toBase16(byte[] data)
     {
-        String result = encode(data);
+        String result = BaseEncoding.base16().encode(data);
         return result.toUpperCase();
     }
 
     private byte[] fromBase16(String data)
     {
-        byte[] result = decode(data);
+        byte[] result = BaseEncoding.base16().decode(data);
         return result;
     }
-
-    /*
-    public void test()
-    {
-        String oldID0 = "00007CE39F587D004C57BF7BF822257B35EB";
-        _log.debug("PnfsID: " + oldID0 + " | " + oldID0.length());
-        String newID1 = new IDConverter().toObjectID(oldID0);
-        _log.debug("ObjectID: " + newID1 + " | " + newID1.length());
-        String newID2 = new IDConverter().toPnfsID(newID1);
-        _log.debug("PnfsID2: " + newID2 + " | " + newID2.length());
-    }
-    */
 
 }

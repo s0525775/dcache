@@ -4,6 +4,11 @@ package org.dcache.cdmi.tool;
 /*
     Name       Poly     pbits  Init S   refIn   reflOut   xorOut   CRC for 123456789
     "CRC-16",  0x8005,  16,    0x0000,      1,        1,       0,  0xbb3d
+
+    I still have not found a better algorithm than this since the CRC-16 algorithm can work, be programmed, be configured in millions of ways with
+    different results. There is no default way to implement the CRC-16 algorithm. SNIA told in their reference implementation that their CRC-16
+    algorithm might not be the correct one. The CRC-16 algorithm in this file got tested and is the correct one, the CRC for 123456789 and the
+    given input parameters is 0xbb3d as specified in the CDMI specification of ISO/IEC.
 */
 
 public class CRC16Calculator

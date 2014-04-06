@@ -367,9 +367,6 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
 
         if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
             return null;
-            //throw new ConflictException("Object File <"
-            //                            + objFile.getAbsolutePath()
-            //                            + "> doesn't exist");
         }
         //
         // Both Files are there. So open, read, create object and send out

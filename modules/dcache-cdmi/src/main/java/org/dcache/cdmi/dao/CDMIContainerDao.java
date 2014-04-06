@@ -1,18 +1,7 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package org.dcache.cdmi.dao;
 
 import org.dcache.cdmi.model.CDMIContainer;
 import org.snia.cdmiserver.dao.ContainerDao;
-
-/**
- *
- * @author Jana
- */
 
 /**
 * <p>

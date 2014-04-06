@@ -1,9 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package org.dcache.cdmi.model;
 
 import java.io.IOException;
@@ -21,16 +15,9 @@ import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.model.DataObject;
 
-/**
- *
- * @author Jana
- */
 public class CDMIDataObject extends DataObject
 {
 
-    //
-    // Something important
-    //
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIDataObject.class);
 
     // DataObject creation fields
@@ -49,8 +36,8 @@ public class CDMIDataObject extends DataObject
     private String accountURI;
     private String capabilitiesURI;
     private String completionStatus;
-    private Integer percentComplete; // FIXME - Specification says String but that does not make
-                                     // sense
+    private Integer percentComplete; // FIXME for SNIA - Specification says String but that does not make
+                                     // sense (SNIA says Integer now!)
     private String valuerange;
 
     // Representation also includes "mimetype", "metadata", and "value" from creation fields

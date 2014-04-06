@@ -181,8 +181,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
         _log.debug("Create container <path>: " + directory.getAbsolutePath());
 
-        //File containerFieldsFile = getContainerFieldsFile(path);
-
         //
         // Setup ISO-8601 Date
         //
@@ -204,8 +202,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                     throw new IllegalArgumentException("Cannot create container '" + path + "'");
                 }
 
-                // OLD:
-                // String objectID = ObjectID.getObjectID(9); // System.nanoTime()+"";
                 String objectID = "";
                 int cowner = 0;
                 ACL cacl = null;
@@ -290,8 +286,6 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
                 //
                 // Read the persistent metadata from the "." file
                 //
-                //TODO:
-                //CDMIContainer currentContainer = getPersistedContainerFields(containerFieldsFile);
                 CDMIContainer currentContainer = new CDMIContainer();
 
                 String objectID = "";
@@ -449,7 +443,7 @@ public class CDMIContainerDaoImpl extends AbstractCellComponent
 
             return completeContainer(containerRequest, directory, path);
 
-        } else { // Moving a Container
+        } else { // Moving a Container, this part is still work in process, I still need that code as guide.
 
             //TODO:
 
