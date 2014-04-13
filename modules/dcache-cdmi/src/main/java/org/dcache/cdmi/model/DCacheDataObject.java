@@ -6,7 +6,6 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
@@ -14,32 +13,35 @@ import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonToken;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.exception.BadRequestException;
-import org.snia.cdmiserver.model.Container;
+import org.snia.cdmiserver.model.DataObject;
 
-public class CDMIContainer extends Container
+public class DCacheDataObject extends DataObject
 {
 
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIContainer.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheDataObject.class);
 
-    // Container creation fields
-    private Map<String, Object> exports = new HashMap<String, Object>();
+    // DataObject creation fields
+    private String mimetype;
+    private String deserialize;
+    private String serialize;
     private String copy;
     private String move;
     private String reference;
-    private String snapshot; // To create a snapshot via the "update" operation
-    // Container representation fields
+    private String value;
+    // DataObject representation fields
     private String objectType;
     private String objectID;
     private String pnfsID;
     private String parentURI;
-    private String domainURI;
+    private String accountURI;
     private String capabilitiesURI;
     private String completionStatus;
     private Integer percentComplete; // FIXME for SNIA - Specification says String but that does not make
                                      // sense (SNIA says Integer now!)
-    private final List<String> snapshots = new ArrayList<String>();
-    private String childrenrange;
-    private final List<String> children = new ArrayList<String>();
+    private String valuerange;
+
+    // Representation also includes "mimetype", "metadata", and "value" from creation fields
+    //
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -49,13 +51,42 @@ public class CDMIContainer extends Container
         add("cdmi_mtime");
         add("cdmi_size");
         add("cdmi_owner");
-        add("cdmi_acl");
     }};
 
     @Override
-    public Map<String, Object> getExports()
+    public String getMimetype()
     {
-        return exports;
+        return mimetype;
+    }
+
+    @Override
+    public void setMimetype(String mimetype)
+    {
+        this.mimetype = mimetype;
+    }
+
+    @Override
+    public String getDeserialize()
+    {
+        return deserialize;
+    }
+
+    @Override
+    public void setDeserialize(String deserialize)
+    {
+        this.deserialize = deserialize;
+    }
+
+    @Override
+    public String getSerialize()
+    {
+        return serialize;
+    }
+
+    @Override
+    public void setSerialize(String serialize)
+    {
+        this.serialize = serialize;
     }
 
     @Override
@@ -95,15 +126,15 @@ public class CDMIContainer extends Container
     }
 
     @Override
-    public String getSnapshot()
+    public String getValue()
     {
-        return snapshot;
+        return value;
     }
 
     @Override
-    public void setSnapshot(String snapshot)
+    public void setValue(String value)
     {
-        this.snapshot = snapshot;
+        this.value = value;
     }
 
     @Override
@@ -131,15 +162,15 @@ public class CDMIContainer extends Container
     }
 
     @Override
-    public String getDomainURI()
+    public String getAccountURI()
     {
-        return domainURI;
+        return accountURI;
     }
 
     @Override
-    public void setDomainURI(String domainURI)
+    public void setAccountURI(String accountURI)
     {
-        this.domainURI = domainURI;
+        this.accountURI = accountURI;
     }
 
     @Override
@@ -179,27 +210,15 @@ public class CDMIContainer extends Container
     }
 
     @Override
-    public List<String> getSnapshots()
+    public String getValuerange()
     {
-        return snapshots;
+        return valuerange;
     }
 
     @Override
-    public String getChildrenrange()
+    public void setValuerange(String valuerange)
     {
-        return childrenrange;
-    }
-
-    @Override
-    public void setChildrenrange(String childrenrange)
-    {
-        this.childrenrange = childrenrange;
-    }
-
-    @Override
-    public List<String> getChildren()
-    {
-        return children;
+        this.valuerange = valuerange;
     }
 
     @Override
@@ -235,6 +254,7 @@ public class CDMIContainer extends Container
         return subMetadata_ACL;
     }
 
+    @Override
     public void setMetadata(String key, String val)
     {
         metadata.put(key, val);
@@ -245,9 +265,9 @@ public class CDMIContainer extends Container
         subMetadata_ACL.add(metadata);
     }
 
-    public void addSubMetadata_ACL(int position, HashMap<String, String> metadata)
+    public void addSubMetadata_ACL(int mainKey, HashMap<String, String> metadata)
     {
-        subMetadata_ACL.add(position, metadata);
+        subMetadata_ACL.add(mainKey, metadata);
     }
 
     public void setMetadata(Map<String, String> metadata)
@@ -277,73 +297,54 @@ public class CDMIContainer extends Container
     }
 
     @Override
-    public String toJson(boolean toFile)
+    public String toJson() throws Exception
     {
-        //
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
             JsonGenerator g = f.createJsonGenerator(outBuffer);
             g.useDefaultPrettyPrinter();
+
             g.writeStartObject();
-
-            g.writeStringField("objectID", objectID);
-
-            g.writeStringField("capabilitiesURI", capabilitiesURI);
-            g.writeStringField("domainURI", domainURI);
-
-            g.writeObjectFieldStart("exports");
-            for (Map.Entry<String, Object> entry : exports.entrySet()) {
-                g.writeObjectFieldStart(entry.getKey());
-                g.writeEndObject();
-            }
-            g.writeEndObject();
-
-            if (!toFile) {
+            // get top level metadata
+            if (objectType != null)
                 g.writeStringField("objectType", objectType);
-                g.writeStringField("parentURI", parentURI);
-                g.writeArrayFieldStart("children");
-                ListIterator<String> it = children.listIterator();
-                while (it.hasNext()) {
-                    g.writeString((String) it.next());
-                }
-                g.writeEndArray();
-                g.writeStringField("childrenrange", childrenrange);
-                if (completionStatus != null)
-                    g.writeStringField("completionStatus", completionStatus);
-            }
-
+            if (capabilitiesURI != null)
+                g.writeStringField("capabilitiesURI", capabilitiesURI);
+            if (objectID != null)
+                g.writeStringField("objectID", objectID);
+            if (mimetype != null)
+                g.writeStringField("mimetype", mimetype);
             g.writeEndObject();
+
             g.flush();
         } catch (IOException ex) {
             ex.printStackTrace();
-            return ("Error : " + ex);
+            throw ex;
         }
-        //
+
         return outBuffer.toString();
     }
 
-    public String toJsonWithMetadata(boolean toFile)
+    public String toJsonWithMetadata() throws Exception
     {
-        //
         StringWriter outBuffer = new StringWriter();
         try {
             JsonFactory f = new JsonFactory();
             JsonGenerator g = f.createJsonGenerator(outBuffer);
             g.useDefaultPrettyPrinter();
+
             g.writeStartObject();
-
-            g.writeStringField("objectID", objectID);
-
-            g.writeStringField("capabilitiesURI", capabilitiesURI);
-            g.writeStringField("domainURI", domainURI);
-
-            g.writeObjectFieldStart("exports");
-            for (Map.Entry<String, Object> entry : exports.entrySet()) {
-                g.writeObjectFieldStart(entry.getKey());
-                g.writeEndObject();
-            }
-            g.writeEndObject();
+            // get top level metadata
+            if (objectType != null)
+                g.writeStringField("objectType", objectType);
+            if (capabilitiesURI != null)
+                g.writeStringField("capabilitiesURI", capabilitiesURI);
+            if (objectID != null)
+                g.writeStringField("objectID", objectID);
+            if (mimetype != null)
+                g.writeStringField("mimetype", mimetype);
+            //
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
                 g.writeStringField(entry.getKey(), entry.getValue());
@@ -359,32 +360,20 @@ public class CDMIContainer extends Container
                 g.writeEndObject();
             }
             g.writeEndObject();
-
-            if (!toFile) {
-                g.writeStringField("objectType", objectType);
-                g.writeStringField("parentURI", parentURI);
-                g.writeArrayFieldStart("children");
-                ListIterator<String> it = children.listIterator();
-                while (it.hasNext()) {
-                    g.writeString((String) it.next());
-                }
-                g.writeEndArray();
-                g.writeStringField("childrenrange", childrenrange);
-                if (completionStatus != null)
-                    g.writeStringField("completionStatus", completionStatus);
-            }
-
+            //
             g.writeEndObject();
+
             g.flush();
         } catch (IOException ex) {
             ex.printStackTrace();
-            return ("Error : " + ex);
+            throw ex;
         }
-        //
+
         return outBuffer.toString();
     }
 
-    public String metadataToJson(boolean toFile)
+    @Override
+    public String metadataToJson() throws Exception
     {
         StringWriter outBuffer = new StringWriter();
         try {
@@ -393,10 +382,12 @@ public class CDMIContainer extends Container
             g.useDefaultPrettyPrinter();
 
             g.writeStartObject();
+            // get top level metadata
             if (objectID != null)
                 g.writeStringField("objectID", objectID);
             if (pnfsID != null)
                 g.writeStringField("pnfsID", pnfsID);
+            //
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
                 if (!ignoreList.contains(entry.getKey())) {
@@ -404,13 +395,15 @@ public class CDMIContainer extends Container
                 }
             }
             g.writeEndObject();
+            //
             g.writeEndObject();
 
             g.flush();
         } catch (IOException ex) {
             ex.printStackTrace();
-            return("Error : " + ex);
+            throw ex;
         }
+
         return outBuffer.toString();
     }
 
@@ -432,7 +425,7 @@ public class CDMIContainer extends Container
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception
     {
-        _log.debug("   CDMIContainer<fromJson>:");
+        _log.debug("   CDMIDataObject<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
@@ -445,33 +438,31 @@ public class CDMIContainer extends Container
                     String value = jp.getText();
                     _log.debug("   Key = " + key + " : Value = " + value);
                     this.getMetadata().put(key, value);
+                    // jp.nextToken();
                 }
-            } else if ("exports".equals(key)) {// process exports
-                tolkein = jp.nextToken();
-                while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                    key = jp.getCurrentName();
-                    tolkein = jp.nextToken(); // Start
-                    tolkein = jp.nextToken(); // End
-                    this.getExports().put(key, null); // jp.nextToken();
-                }// while
-            } else if ("capabilitiesURI".equals(key)) {// process capabilitiesURI
+            } else if ("value".equals(key)) { // process value
+                jp.nextToken();
+                String value1 = jp.getText();
+                _log.debug("Key : " + key + " Val : " + value1);
+                this.setValue(value1);
+            } else if ("mimetype".equals(key)) { // process mimetype
                 jp.nextToken();
                 String value2 = jp.getText();
                 _log.debug("Key : " + key + " Val : " + value2);
-                this.setCapabilitiesURI(value2);
-            } else if ("domainURI".equals(key)) {// process domainURI
-                jp.nextToken();
-                String value2 = jp.getText();
-                _log.debug("Key : " + key + " Val : " + value2);
-                this.setDomainURI(value2);
-            } else if ("move".equals(key)) {// process move
-                jp.nextToken();
-                String value2 = jp.getText();
-                _log.debug("Key : " + key + " Val : " + value2);
-                this.setMove(value2);
+                this.setMimetype(value2);
             } else {
                 if (fromFile) { // accept rest of key-values
-                    if ("objectID".equals(key)) { // process value
+                    if ("objectType".equals(key)) {
+                        jp.nextToken();
+                        String value2 = jp.getText();
+                        _log.debug("Key : " + key + " Val : " + value2);
+                        this.setObjectType(value2);
+                    } else if ("capabilitiesURI".equals(key)) {
+                        jp.nextToken();
+                        String value2 = jp.getText();
+                        _log.debug("Key : " + key + " Val : " + value2);
+                        this.setCapabilitiesURI(value2);
+                    } else if ("objectID".equals(key)) { // process value
                         jp.nextToken();
                         String value2 = jp.getText();
                         _log.debug("Key : " + key + " Val : " + value2);
@@ -481,6 +472,11 @@ public class CDMIContainer extends Container
                         String value2 = jp.getText();
                         _log.debug("Key : " + key + " Val : " + value2);
                         this.setPnfsID(value2);
+                    } else if ("valueRange".equals(key)) { // process value
+                        jp.nextToken();
+                        String value2 = jp.getText();
+                        _log.debug("Key : " + key + " Val : " + value2);
+                        this.setValuerange(value2);
                     } else {
                         _log.debug("Invalid Key : " + key);
                         throw new BadRequestException("Invalid Key : " + key);
@@ -491,12 +487,6 @@ public class CDMIContainer extends Container
                 }
             }
         }
-    }
-
-    @Override
-    public Object getObjectURI()
-    {
-        throw new UnsupportedOperationException("Not yet implemented");
     }
 
 }

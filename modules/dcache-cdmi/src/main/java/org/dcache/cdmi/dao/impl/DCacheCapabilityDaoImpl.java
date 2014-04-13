@@ -41,13 +41,13 @@ import org.snia.cdmiserver.util.ObjectID;
  * store.
  * </p>
  */
-public class CDMICapabilityDaoImpl implements CapabilityDao
+public class DCacheCapabilityDaoImpl implements CapabilityDao
 {
 
     //
     // Something important
     //
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMICapabilityDaoImpl.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheCapabilityDaoImpl.class);
 
     // -------------------------------------------------------------- Properties
     /**
@@ -56,10 +56,10 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
      * </p>
      */
     private CapabilityDao capabilityDao;
-    private final String ROOTobjectID = ObjectID.getObjectID(8);  //TODO?
-    private final String CONTAINERobjectID = ObjectID.getObjectID(8);  //TODO?
-    private final String DEFAULTobjectID = ObjectID.getObjectID(8);  //TODO?
-    private final String OBJECTobjectID = ObjectID.getObjectID(8);  //TODO?
+    private final String ROOTobjectID = ObjectID.getObjectID(8);  //TODO? Might need to replaced by real ObjectID
+    private final String CONTAINERobjectID = ObjectID.getObjectID(8);  //TODO? Might need to replaced by real ObjectID
+    private final String DEFAULTobjectID = ObjectID.getObjectID(8);  //TODO? Might need to replaced by real ObjectID
+    private final String OBJECTobjectID = ObjectID.getObjectID(8);  //TODO? Might need to replaced by real ObjectID
 
     public void setCapabilityDao(CapabilityDao capabilityDao)
     {
@@ -70,7 +70,7 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
     @Override
     public Capability findByObjectId(String objectId)
     {
-        throw new UnsupportedOperationException("CapabilityDaoImpl.findByObjectId()");
+        throw new UnsupportedOperationException("DCacheCapabilityDaoImpl.findByObjectId()");
     }
 
     @Override
@@ -83,20 +83,10 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
         if (path.equals("container/")) {
             _log.debug("Container Capabilities");
             // Container Capabilities
-            // cdmi_list_children = true
-            // cdmi_list_children_range = unset until implemented
-            // cdmi_read_metadata = true
-            // cdmi_modify_metadata = true
-            // cdmi_snapshot = unset, stretch goal (filesystem support?)
-            // cdmi_serialize_container = unset until implemented
-            // cdmi_create_dataobject = true
-            // cdmi_post_dataobject = true
-            // cdmi_create_container = true
             capability.getMetadata().put("cdmi_list_children", "true");
             capability.getMetadata().put("cdmi_read_metadata", "true");
             capability.getMetadata().put("cdmi_modify_metadata", "true");
             capability.getMetadata().put("cdmi_create_dataobject", "true");
-            // capability.getMetadata().put("cdmi_post_dataobject", "true");
             capability.getMetadata().put("cdmi_create_container", "true");
             capability.getChildren().add("default");
             capability.setObjectID(CONTAINERobjectID);
@@ -119,14 +109,6 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
         } else if (path.equals("dataobject/")) {
             // Data Object Capabilities
             _log.debug("Data Object Capabilities");
-            // cdmi_read_value = true
-            // cdmi_read_value_range = unset initially, then true when implemented
-            // cdmi_read_metadata = true
-            // cdmi_modify_value = true
-            // cdmi_modify_value_range = unset until implemented
-            // cdmi_modify_metadata = true
-            // cdmi_serialize_dataobject, cdmi_deserialize_dataobject = unset until implemented
-            // cdmi_delete_dataobject = true
             capability.getMetadata().put("cdmi_read_value", "true");
             capability.getMetadata().put("cdmi_read_metadata", "true");
             capability.getMetadata().put("cdmi_modify_metadata", "true");
@@ -139,16 +121,6 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
         } else {
             // System Capabilities
             _log.debug("System Capabilities");
-            // cdmi_domains = later version true
-            // cdmi_export_occi_iscsi = true for demo?
-            // cdmi_metadata_maxitems, cdmi_metadata_maxsize = TBD based on our limits
-            // cdmi_notification, cdmi_query, cdmi_queues, cdmi_security_audit = exposed as
-            // implementations become available
-            // cdmi_security_data_integrity, cdmi_security_encryption, ditto
-            // cdmi_security_https_transport = present and true
-            // cdmi_security_immutability = as XAM SDK code is integrated
-            // cdmi_security_sanitization = should we implement?
-            // cdmi_serialization_json = propose using this form for RI
             capability.getMetadata().put("domains", "false");
             capability.getMetadata().put("cdmi_export_occi_iscsi", "true");
             capability.getMetadata().put("cdmi_metadata_maxitems", "1024");
@@ -171,8 +143,6 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
             capability.getMetadata().put("cdmi_throughput", "false");
             capability.getMetadata().put("cdmi_value_hash", "{}");
             // Data System Metadata Support - End
-            // capability.getMetadata().put("cdmi_security_https_transport", "true");
-            // capability.getMetadata().put("cdmi_serialization_json", "true");
             capability.getChildren().add("container");
             capability.getChildren().add("dataobject");
             capability.setObjectID(ROOTobjectID);
@@ -181,6 +151,5 @@ public class CDMICapabilityDaoImpl implements CapabilityDao
             capability.setParentID(ROOTobjectID);
         }
         return (capability);
-        // throw new UnsupportedOperationException("CapabilityDaoImpl.findByPath()");
     }
 }

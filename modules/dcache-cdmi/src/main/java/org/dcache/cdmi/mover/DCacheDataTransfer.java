@@ -17,7 +17,7 @@ import org.dcache.util.list.ListDirectoryHandler;
 // (which are stored in that class) will be lost then - unless this static class is
 // used.
 
-public class CDMIDataTransfer
+public class DCacheDataTransfer
 {
 
     //BACKUP

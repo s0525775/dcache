@@ -51,7 +51,7 @@ import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import org.dcache.auth.Subjects;
-import org.dcache.cdmi.mover.CDMIDataTransfer;
+import org.dcache.cdmi.mover.DCacheDataTransfer;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
@@ -61,8 +61,8 @@ import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
-import org.dcache.cdmi.dao.CDMIDataObjectDao;
-import org.dcache.cdmi.model.CDMIDataObject;
+import org.dcache.cdmi.dao.DCacheDataObjectDao;
+import org.dcache.cdmi.model.DCacheDataObject;
 import org.dcache.cdmi.tool.IDConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
@@ -85,14 +85,14 @@ import org.snia.cdmiserver.model.DataObject;
  * Concrete implementation of {@link DataObjectDao} using the local filesystem as the backing store.
  * </p>
  */
-public class CDMIDataObjectDaoImpl extends AbstractCellComponent
-    implements CDMIDataObjectDao, ServletContextListener, CellLifeCycleAware
+public class DCacheDataObjectDaoImpl extends AbstractCellComponent
+    implements DCacheDataObjectDao, ServletContextListener, CellLifeCycleAware
 {
 
     //
     // Something important
     //
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIDataObjectDaoImpl.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheDataObjectDaoImpl.class);
 
     // -------------------------------------------------------------- Properties
     private String baseDirectoryName = null;
@@ -128,7 +128,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         this.baseDirectoryName = baseDirectoryName;
         _log.debug("******* Base Directory (O) = " + baseDirectoryName);
         //Temp Helper Part
-        if (this.baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName2(this.baseDirectoryName);
+        if (this.baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName2(this.baseDirectoryName);
     }
 
     /**
@@ -138,16 +138,14 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
      */
     private ContainerDao containerDao;
 
-    // private Map<String,DataObject> dataDB =
-    // new ConcurrentHashMap<String, DataObject>();
     public void setContainerDao(ContainerDao containerDao)
     {
         this.containerDao = containerDao;
     }
 
-    public CDMIDataObjectDaoImpl()
+    public DCacheDataObjectDaoImpl()
     {
-        _log.debug("Re-Init CDMIDataObjectDaoImpl...");
+        _log.debug("Re-Init DCacheDataObjectDaoImpl...");
         if (listDirectoryHandler == null) {
             init();
         }
@@ -192,12 +190,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public CDMIDataObject createByPath(String path, CDMIDataObject dObj) throws Exception {
+    public DCacheDataObject createByPath(String path, DataObject dObj) throws Exception {
         //
-        //String metadataFileName = getmetadataFileName(path);
         String containerName = getcontainerName(path);
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+        DCacheDataObject newDObj = (DCacheDataObject) dObj;
 
         //
         File objFile, baseDirectory, containerDirectory;
@@ -206,11 +205,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             baseDirectory = new File(baseDirectoryName + "/");
             _log.debug("Base Directory Absolute Path = " + baseDirectory.getAbsolutePath());
             containerDirectory = new File(baseDirectory, containerName);
-            // File directory = absoluteFile(path);
             _log.debug("Container Absolute Path = " + containerDirectory.getAbsolutePath());
             //
             objFile = new File(baseDirectory, path);
-            // File directory = absoluteFile(path);
             _log.debug("Object Absolute Path = " + objFile.getAbsolutePath());
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -228,12 +225,10 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
         }
         try {
-            // dObj.setObjectURI(path); // TBD Correct
             // Make object ID
-            // dObj.setObjectURI(directory.getAbsolutePath()+"/"+objectID);
-            dObj.setObjectType("application/cdmi-object");
-            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-            if (!writeFile(objFile.getAbsolutePath(), dObj.getValue())) {
+            newDObj.setObjectType("application/cdmi-object");
+            newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+            if (!writeFile(objFile.getAbsolutePath(), newDObj.getValue())) {
                 _log.error("Exception while writing.");
                 throw new IllegalArgumentException("Cannot write Object file @"
                                                    + path);
@@ -249,19 +244,19 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 if (pnfsId != null) {
                     // update with real info
                     _log.debug("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
-                    dObj.setPnfsID(pnfsId.toIdString());
+                    newDObj.setPnfsID(pnfsId.toIdString());
                     long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
                     long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
                     long mtime = (attr.getModificationTime() > modificationTime) ? attr.getModificationTime() : modificationTime;
                     long osize = (attr.getSize() > size) ? attr.getSize() : size;
-                    dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
-                    dObj.setMetadata("cdmi_atime", sdf.format(atime));
-                    dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
-                    dObj.setMetadata("cdmi_size", String.valueOf(osize));
+                    newDObj.setMetadata("cdmi_ctime", sdf.format(ctime));
+                    newDObj.setMetadata("cdmi_atime", sdf.format(atime));
+                    newDObj.setMetadata("cdmi_mtime", sdf.format(mtime));
+                    newDObj.setMetadata("cdmi_size", String.valueOf(osize));
                     oowner = attr.getOwner();
                     oacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
-                    dObj.setObjectID(objectID);
+                    newDObj.setObjectID(objectID);
                     _log.debug("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
                 } else {
                     _log.error("CDMIDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
@@ -271,9 +266,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             }
 
             // Add metadata
-            dObj.setMetadata("cdmi_acount", "0");
-            dObj.setMetadata("cdmi_mcount", "0");
-            dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO
+            newDObj.setMetadata("cdmi_acount", "0");
+            newDObj.setMetadata("cdmi_mcount", "0");
+            newDObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentification and authorization first
             if (oacl != null && !oacl.isEmpty()) {
                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 for (ACE ace : oacl.getList()) {
@@ -284,7 +279,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
                     subMetadata_ACL.add(subMetadataEntry_ACL);
                 }
-                dObj.setSubMetadata_ACL(subMetadata_ACL);
+                newDObj.setSubMetadata_ACL(subMetadata_ACL);
             } else {
                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
@@ -293,39 +288,33 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
                 subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
                 subMetadata_ACL.add(subMetadataEntry_ACL);
-                dObj.setSubMetadata_ACL(subMetadata_ACL);
+                newDObj.setSubMetadata_ACL(subMetadata_ACL);
             }
 
-            String mimeType = dObj.getMimetype();
+            String mimeType = newDObj.getMimetype();
             if (mimeType == null) {
                 mimeType = "text/plain";
             }
-            dObj.setMimetype(mimeType);
-            dObj.setMetadata("mimetype", mimeType);
-            dObj.setMetadata("fileName", objFile.getAbsolutePath());
+            newDObj.setMimetype(mimeType);
+            newDObj.setMetadata("mimetype", mimeType);
+            newDObj.setMetadata("fileName", objFile.getAbsolutePath());
             //
         } catch (IllegalArgumentException ex) {
             ex.printStackTrace();
             _log.error("Exception while writing: " + ex);
             throw new IllegalArgumentException("Cannot write Object @" + path + " error : " + ex);
         }
-        return dObj;
-    }
-
-    @Override
-    public CDMIDataObject createById(String objectId, CDMIDataObject dObj)
-    {
-        throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.createById()");
+        return newDObj;
     }
 
     @Override
     public void deleteByPath(String path)
     {
-        throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.deleteByPath()");
+        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl.deleteByPath()");
     }
 
     @Override
-    public CDMIDataObject findByPath(String path)
+    public DCacheDataObject findByPath(String path)
     {
 
         // ISO-8601 Date
@@ -371,7 +360,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         //
         // Both Files are there. So open, read, create object and send out
         //
-        CDMIDataObject dObj = new CDMIDataObject();
+        DCacheDataObject dObj = new DCacheDataObject();
         try {
             // Read object from file
             byte[] inBytes = readFile(objFile.getAbsolutePath());
@@ -411,9 +400,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 _log.error("CDMIDataObjectDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
             }
 
-            dObj.setMetadata("cdmi_acount", "0");  //TODO
-            dObj.setMetadata("cdmi_mcount", "0");  //TODO
-            dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO
+            dObj.setMetadata("cdmi_acount", "0");
+            dObj.setMetadata("cdmi_mcount", "0");
+            dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentication and autorization first
             if (oacl != null && !oacl.isEmpty()) {
                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 for (ACE ace : oacl.getList()) {
@@ -464,9 +453,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public CDMIDataObject findByObjectId(String objectId)
+    public DCacheDataObject findByObjectId(String objectId)
     {
-        throw new UnsupportedOperationException("CDMIDataObjectDaoImpl.findByObjectId()");
+        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl.findByObjectId()");
     }
     // --------------------------------------------------------- Private Methods
 
@@ -477,13 +466,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     // Temp Helper Function
     private void init()
     {
-        pnfsStub = CDMIDataTransfer.getPnfsStub2();
-        pnfsHandler = CDMIDataTransfer.getPnfsHandler2();
-        listDirectoryHandler = CDMIDataTransfer.getListDirectoryHandler2();
-        poolStub = CDMIDataTransfer.getPoolStub2();
-        poolMgrStub = CDMIDataTransfer.getPoolMgrStub2();
-        billingStub = CDMIDataTransfer.getBillingStub2();
-        baseDirectoryName = CDMIDataTransfer.getBaseDirectoryName2();
+        pnfsStub = DCacheDataTransfer.getPnfsStub2();
+        pnfsHandler = DCacheDataTransfer.getPnfsHandler2();
+        listDirectoryHandler = DCacheDataTransfer.getListDirectoryHandler2();
+        poolStub = DCacheDataTransfer.getPoolStub2();
+        poolMgrStub = DCacheDataTransfer.getPoolMgrStub2();
+        billingStub = DCacheDataTransfer.getBillingStub2();
+        baseDirectoryName = DCacheDataTransfer.getBaseDirectoryName2();
     }
 
     //This function is necessary, otherwise the attributes and servletContext are not set.
@@ -492,7 +481,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     @Override
     public void contextInitialized(ServletContextEvent servletContextEvent)
     {
-        _log.debug("Init CDMIDataObjectDaoImpl...");
+        _log.debug("Init DCacheDataObjectDaoImpl...");
         this.servletContext = servletContextEvent.getServletContext();
         this.pnfsStub = getCellStubAttribute();
         this.pnfsHandler = new PnfsHandler(pnfsStub);
@@ -502,13 +491,13 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         this.poolMgrStub = getPoolMgrAttribute();
         this.billingStub = getBillingAttribute();
         //Temp Helper Part
-        if (baseDirectoryName != null) CDMIDataTransfer.setBaseDirectoryName2(baseDirectoryName);
-        CDMIDataTransfer.setPnfsStub2(pnfsStub);
-        CDMIDataTransfer.setPnfsHandler2(pnfsHandler);
-        CDMIDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
-        CDMIDataTransfer.setPoolStub2(poolStub);
-        CDMIDataTransfer.setPoolMgrStub2(poolMgrStub);
-        CDMIDataTransfer.setBillingStub2(billingStub);
+        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName2(baseDirectoryName);
+        DCacheDataTransfer.setPnfsStub2(pnfsStub);
+        DCacheDataTransfer.setPnfsHandler2(pnfsHandler);
+        DCacheDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
+        DCacheDataTransfer.setPoolStub2(poolStub);
+        DCacheDataTransfer.setPoolMgrStub2(poolMgrStub);
+        DCacheDataTransfer.setBillingStub2(billingStub);
     }
 
     @Override
@@ -519,7 +508,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     @Override
     public void afterStart()
     {
-        _log.debug("Start CDMIDataObjectDaoImpl...");
+        _log.debug("Start DCacheDataObjectDaoImpl...");
     }
 
     @Override
@@ -680,7 +669,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         try {
             listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
-            _log.warn("CDMIDataObjectDaoImpl, Directory and file listing for path '" + path + "' was not possible, internal error message: " + ex.getMessage());
+            _log.warn("DCacheDataObjectDaoImpl, Directory and file listing for path '" + path + "' was not possible, internal error message: " + ex.getMessage());
         }
         return result;
     }
@@ -730,16 +719,9 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public DataObject createByPath(String string, DataObject d) throws Exception
+    public DCacheDataObject createById(String string, DataObject d)
     {
-        throw new UnsupportedOperationException("CDMIDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    //OLD:
-    @Override
-    public DataObject createById(String string, DataObject d)
-    {
-        throw new UnsupportedOperationException("CDMIDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     private static class ListPrinter implements DirectoryListPrinter
@@ -772,7 +754,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
         try {
             //The order of all commands is very important!
             Subject subject = Subjects.ROOT;
-            CDMIDataTransfer.setData(data);
+            DCacheDataTransfer.setData(data);
             CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
             Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
             transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
@@ -789,40 +771,36 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
                 }
                 finally {
-                    pnfsId = CDMIDataTransfer.getPnfsId();
-                    creationTime = CDMIDataTransfer.getCreationTime();
-                    accessTime = CDMIDataTransfer.getAccessTime();
-                    changeTime = CDMIDataTransfer.getChangeTime();
-                    modificationTime = CDMIDataTransfer.getModificationTime();
-                    size = CDMIDataTransfer.getSize();
-                    owner = CDMIDataTransfer.getOwner();
-                    acl = CDMIDataTransfer.getACL();
-                    fileType = CDMIDataTransfer.getFileType();
-                    //transfer.killMover(2000, TimeUnit.MILLISECONDS);
+                    pnfsId = DCacheDataTransfer.getPnfsId();
+                    creationTime = DCacheDataTransfer.getCreationTime();
+                    accessTime = DCacheDataTransfer.getAccessTime();
+                    changeTime = DCacheDataTransfer.getChangeTime();
+                    modificationTime = DCacheDataTransfer.getModificationTime();
+                    size = DCacheDataTransfer.getSize();
+                    owner = DCacheDataTransfer.getOwner();
+                    acl = DCacheDataTransfer.getACL();
+                    fileType = DCacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("CDMIDataObjectDaoImpl<Write>-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("CDMIDataObjectDaoImpl<Write>-pnfsId:" + pnfsId);
-                _log.debug("CDMIDataObjectDaoImpl<Write>-creationTime:" + sdf.format(creationTime));
-                _log.debug("CDMIDataObjectDaoImpl<Write>-accessTime:" + sdf.format(accessTime));
-                _log.debug("CDMIDataObjectDaoImpl<Write>-changeTime:" + sdf.format(changeTime));
-                _log.debug("CDMIDataObjectDaoImpl<Write>-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("CDMIDataObjectDaoImpl<Write>-size:" + size);
-                _log.debug("CDMIDataObjectDaoImpl<Write>-owner:" + owner);
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-acl:" + acl.toString());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Write>-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("CDMIDataObjectDaoImpl<Write>-fileType:" + fileType.toString());
-                _log.debug("CDMIDataObjectDaoImpl<Write>-data:" + data);
+                _log.debug("DCacheDataObjectDaoImpl<Write>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("DCacheDataObjectDaoImpl<Write>-pnfsId:" + pnfsId);
+                _log.debug("DCacheDataObjectDaoImpl<Write>-creationTime:" + sdf.format(creationTime));
+                _log.debug("DCacheDataObjectDaoImpl<Write>-accessTime:" + sdf.format(accessTime));
+                _log.debug("DCacheDataObjectDaoImpl<Write>-changeTime:" + sdf.format(changeTime));
+                _log.debug("DCacheDataObjectDaoImpl<Write>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("DCacheDataObjectDaoImpl<Write>-size:" + size);
+                _log.debug("DCacheDataObjectDaoImpl<Write>-owner:" + owner);
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-acl:" + acl.toString());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("DCacheDataObjectDaoImpl<Write>-fileType:" + fileType.toString());
+                _log.debug("DCacheDataObjectDaoImpl<Write>-data:" + data);
                 result = true;
             } finally {
-                if (result == false) {
-                    //transfer.deleteNameSpaceEntry();
-                }
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("CDMIDataObjectDaoImpl, File could not become written, exception is: " + ex.getMessage());
+            _log.error("DCacheDataObjectDaoImpl, File could not become written, exception is: " + ex.getMessage());
         }
         return result;
     }
@@ -846,43 +824,39 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
                 transfer.readNameSpaceEntry();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    result = CDMIDataTransfer.getDataAsBytes();
-                    _log.debug("CDMIDataObjectDaoImpl received data: " + result.toString());
+                    result = DCacheDataTransfer.getDataAsBytes();
+                    _log.debug("DCacheDataObjectDaoImpl received data: " + result.toString());
                 }
                 finally {
-                    pnfsId = CDMIDataTransfer.getPnfsId();
-                    creationTime = CDMIDataTransfer.getCreationTime();
-                    accessTime = CDMIDataTransfer.getAccessTime();
-                    changeTime = CDMIDataTransfer.getChangeTime();
-                    modificationTime = CDMIDataTransfer.getModificationTime();
-                    size = CDMIDataTransfer.getSize();
-                    owner = CDMIDataTransfer.getOwner();
-                    acl = CDMIDataTransfer.getACL();
-                    fileType = CDMIDataTransfer.getFileType();
-                    //transfer.killMover(2000, TimeUnit.MILLISECONDS);
+                    pnfsId = DCacheDataTransfer.getPnfsId();
+                    creationTime = DCacheDataTransfer.getCreationTime();
+                    accessTime = DCacheDataTransfer.getAccessTime();
+                    changeTime = DCacheDataTransfer.getChangeTime();
+                    modificationTime = DCacheDataTransfer.getModificationTime();
+                    size = DCacheDataTransfer.getSize();
+                    owner = DCacheDataTransfer.getOwner();
+                    acl = DCacheDataTransfer.getACL();
+                    fileType = DCacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("CDMIDataObjectDaoImpl<Read>-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("CDMIDataObjectDaoImpl<Read>-pnfsId:" + pnfsId);
-                _log.debug("CDMIDataObjectDaoImpl<Read>-creationTime:" + sdf.format(creationTime));
-                _log.debug("CDMIDataObjectDaoImpl<Read>-accessTime:" + sdf.format(accessTime));
-                _log.debug("CDMIDataObjectDaoImpl<Read>-changeTime:" + sdf.format(changeTime));
-                _log.debug("CDMIDataObjectDaoImpl<Read>-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("CDMIDataObjectDaoImpl<Read>-size:" + size);
-                _log.debug("CDMIDataObjectDaoImpl<Read>-owner:" + owner);
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-acl:" + acl.toString());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("CDMIDataObjectDaoImpl<Read>-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("CDMIDataObjectDaoImpl<Read>-fileType:" + fileType.toString());
-                _log.debug("CDMIDataObjectDaoImpl<Read>-data:" + result.toString());
+                _log.debug("DCacheDataObjectDaoImpl<Read>-isWrite:" + transfer.isWrite());
+                if (pnfsId != null) _log.debug("DCacheDataObjectDaoImpl<Read>-pnfsId:" + pnfsId);
+                _log.debug("DCacheDataObjectDaoImpl<Read>-creationTime:" + sdf.format(creationTime));
+                _log.debug("DCacheDataObjectDaoImpl<Read>-accessTime:" + sdf.format(accessTime));
+                _log.debug("DCacheDataObjectDaoImpl<Read>-changeTime:" + sdf.format(changeTime));
+                _log.debug("DCacheDataObjectDaoImpl<Read>-modificationTime:" + sdf.format(modificationTime));
+                _log.debug("DCacheDataObjectDaoImpl<Read>-size:" + size);
+                _log.debug("DCacheDataObjectDaoImpl<Read>-owner:" + owner);
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-acl:" + acl.toString());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclExtraFormat:" + acl.toExtraFormat());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclNFSv4String:" + acl.toNFSv4String());
+                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclOrgString:" + acl.toOrgString());
+                if (fileType != null) _log.debug("DCacheDataObjectDaoImpl<Read>-fileType:" + fileType.toString());
+                _log.debug("DCacheDataObjectDaoImpl<Read>-data:" + result.toString());
             } finally {
-                if (result == null) {
-                    //transfer.deleteNameSpaceEntry();
-                }
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("CDMIDataObjectDaoImpl, File could not become read, exception is: " + ex.getMessage());
+            _log.error("DCacheDataObjectDaoImpl, File could not become read, exception is: " + ex.getMessage());
         }
         return result;
     }
@@ -894,7 +868,7 @@ public class CDMIDataObjectDaoImpl extends AbstractCellComponent
             try {
                 Thread.sleep(ms);
             } catch (InterruptedException ex) {
-                Logger.getLogger(CDMIDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(DCacheDataObjectDaoImpl.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }

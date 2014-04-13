@@ -51,10 +51,10 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
-import org.dcache.cdmi.dao.CDMIContainerDao;
-import org.dcache.cdmi.dao.CDMIDataObjectDao;
-import org.dcache.cdmi.model.CDMIContainer;
-import org.dcache.cdmi.model.CDMIDataObject;
+import org.dcache.cdmi.dao.DCacheContainerDao;
+import org.dcache.cdmi.dao.DCacheDataObjectDao;
+import org.dcache.cdmi.model.DCacheContainer;
+import org.dcache.cdmi.model.DCacheDataObject;
 import org.slf4j.LoggerFactory;
 
 import org.snia.cdmiserver.util.MediaTypes;
@@ -66,39 +66,39 @@ import org.snia.cdmiserver.util.ObjectID;
 * Access to objects by path.
 * </p>
 */
-public class CDMIPathResource
+public class DCachePathResource
 {
 
     //
     // Something important
     //
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(CDMIPathResource.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCachePathResource.class);
 
     //
     // Properties and Dependency Injection Methods
     //
-    private CDMIContainerDao containerDao;
+    private DCacheContainerDao containerDao;
 
     /**
     * <p>
-    * Injected {@link CDMIContainerDao} instance.
+    * Injected {@link DCacheContainerDao} instance.
     * </p>
     * @param containerDao
     */
-    public void setContainerDao(CDMIContainerDao containerDao)
+    public void setContainerDao(DCacheContainerDao containerDao)
     {
         this.containerDao = containerDao;
     }
 
-    private CDMIDataObjectDao dataObjectDao;
+    private DCacheDataObjectDao dataObjectDao;
 
     /**
     * <p>
-    * Injected {@link CDMIDataObjectDao} instance.
+    * Injected {@link DCacheDataObjectDao} instance.
     * </p>
     * @param dataObjectDao
     */
-    public void setDataObjectDao(CDMIDataObjectDao dataObjectDao)
+    public void setDataObjectDao(DCacheDataObjectDao dataObjectDao)
     {
         this.dataObjectDao = dataObjectDao;
     }
@@ -187,7 +187,7 @@ public class CDMIPathResource
         if (containerDao.isContainer(path)) {
           // if container build container browser page
           try {
-            CDMIContainer container = containerDao.findByPath(path);
+            DCacheContainer container = containerDao.findByPath(path);
             if (container == null) {
               return Response.status(Response.Status.NOT_FOUND).build();
             } else {
@@ -203,14 +203,13 @@ public class CDMIPathResource
           }
         }
         try {
-          CDMIDataObject dObj = dataObjectDao.findByPath(path);
+          DCacheDataObject dObj = dataObjectDao.findByPath(path);
           if (dObj == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
           } else {
             // make http response
             // build a JSON representation
             String respStr = dObj.toJsonWithMetadata();
-            //ResponseBuilder builder = Response.status(Response.Status.CREATED)
             return Response.ok(respStr).header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
@@ -287,7 +286,7 @@ public class CDMIPathResource
         if (containerDao.isContainer(path)) {
             // if container build container browser page
             try {
-                CDMIContainer container = containerDao.findByPath(path);
+                DCacheContainer container = containerDao.findByPath(path);
                 if (container == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
@@ -304,14 +303,13 @@ public class CDMIPathResource
         } else {
             // if object, send out the object in it's native form
             try {
-                CDMIDataObject dObj = dataObjectDao.findByPath(path);
+                DCacheDataObject dObj = dataObjectDao.findByPath(path);
                 if (dObj == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
                     // make http response
                     // build a JSON representation
-                    //String respStr = dObj.toJsonWithMetadata();
-                    String respStr = dObj.getValue();// dObj.toJsonWithMetadata();
+                    String respStr = dObj.getValue();//Remark: Switch to dObj.toJsonWithMetadata() if Metadata shall be showed instead
                     _log.debug("MimeType = " + dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
@@ -356,11 +354,11 @@ public class CDMIPathResource
         String inBuffer = new String(bytes);
         _log.debug("Request = " + inBuffer);
 
-        CDMIContainer containerRequest = new CDMIContainer();
+        DCacheContainer containerRequest = new DCacheContainer();
 
         try {
             containerRequest.fromJson(bytes, false);
-            CDMIContainer container = containerDao.createByPath(path,
+            DCacheContainer container = containerDao.createByPath(path,
                     containerRequest);
             if (container == null) {
                 return Response.status(Response.Status.BAD_REQUEST).build();
@@ -370,10 +368,7 @@ public class CDMIPathResource
                 String respStr = container.toJsonWithMetadata(false);
                 ResponseBuilder builder = Response.created(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
-                //ResponseBuilder builder = Response.status(Response.Status.CREATED);
                 return builder.entity(respStr).build();
-                /* return Response.created(respStr).header(
-                    "X-CDMI-Specification-Version", "1.0.2").build(); */
             } // if/else
         } catch (Exception ex) {
             _log.debug(ex.toString());
@@ -414,9 +409,9 @@ public class CDMIPathResource
         _log.debug("Path = " + path + "\n" + inBuffer);
 
         try {
-            CDMIDataObject dObj = dataObjectDao.findByPath(path);
+            DCacheDataObject dObj = dataObjectDao.findByPath(path);
             if (dObj == null) {
-                dObj = new CDMIDataObject();
+                dObj = new DCacheDataObject();
 
                 dObj.setObjectType("application/cdmi-object");
                 // parse json
@@ -432,8 +427,6 @@ public class CDMIPathResource
                 ResponseBuilder builder = Response.created(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
-                //return Response.ok(respStr).header(
-                //        "X-CDMI-Specification-Version", "1.0.2").build();
             }
             dObj.fromJson(bytes,false);
             return Response.ok().build();
@@ -498,7 +491,7 @@ public class CDMIPathResource
             String objectId = ObjectID.getObjectID(11);
             String objectPath = path + "/" + objectId;
 
-            CDMIDataObject dObj = new CDMIDataObject();
+            DCacheDataObject dObj = new DCacheDataObject();
             dObj.setObjectID(objectId);
             dObj.setObjectType(objectPath);
             dObj.setValue(inBuffer);

@@ -40,7 +40,7 @@ public class IDConverter
         byte[] tempObjectID = new byte[40];
         // set 0th byte of tempObjectID
         tempObjectID[0] = reservedByte;
-        // convert EnterpriseNumber to Network Byte Order
+        // convert EnterpriseNumber to Network Byte Order, in exactly 3 bytes
         byte[] enterpriseNr = toNetworkByteOrder3(ENTERPRISE_NUMBER);
         // set 1st byte of tempObjectID
         tempObjectID[1] = enterpriseNr[0];
@@ -56,14 +56,14 @@ public class IDConverter
         tempObjectID[6] = reservedByte;
         // set 7th byte of tempObjectID
         tempObjectID[7] = reservedByte;
-        // set convert PnfsID to Network Byte Order
+        // set convert PnfsID to Network Byte Order, in exactly 32 bytes
         byte[] pnfsIDArray = toNetworkByteOrder32(strPnfsID);
         // set 8th - 39th byte of tempObjectID
         for (int i = 0; i < 32; i++) {
             int ind = 8 + i;
             tempObjectID[ind] = pnfsIDArray[i];
         }
-        // calculate CRC-16 of tempObjectID and convert it to Network Byte Order
+        // calculate CRC-16 of tempObjectID and convert it to Network Byte Order, in exactly 2 bytes
         byte[] crc16Number = toNetworkByteOrder2(toCRC16(tempObjectID));
         // update 6th byte of tempObjectID with CRC-16 info
         tempObjectID[6] = crc16Number[0];

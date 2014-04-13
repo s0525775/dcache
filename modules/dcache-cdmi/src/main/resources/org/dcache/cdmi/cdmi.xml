@@ -35,11 +35,11 @@
 
     <bean id="list-handler" class="org.dcache.util.list.ListDirectoryHandler">
         <description>ListDirectoryHandler</description>
-      <constructor-arg>
-	  <bean class="diskCacheV111.util.PnfsHandler">
-	      <constructor-arg ref="pnfs-stub"/>
-	  </bean>
-      </constructor-arg>
+        <constructor-arg>
+            <bean class="diskCacheV111.util.PnfsHandler">
+                <constructor-arg ref="pnfs-stub"/>
+        </bean>
+        </constructor-arg>
     </bean>
 
     <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
@@ -83,8 +83,8 @@
                         <bean class="org.eclipse.jetty.servlet.ServletContextHandler">
                             <property name="eventListeners">
                                 <list>
-                                    <bean class="org.dcache.cdmi.dao.impl.CDMIContainerDaoImpl"/>
-                                    <bean class="org.dcache.cdmi.dao.impl.CDMIDataObjectDaoImpl"/>
+                                    <bean class="org.dcache.cdmi.dao.impl.DCacheContainerDaoImpl"/>
+                                    <bean class="org.dcache.cdmi.dao.impl.DCacheDataObjectDaoImpl"/>
                                 </list>
                             </property>
                             <property name="contextPath" value="/"/>  <!-- here -->
