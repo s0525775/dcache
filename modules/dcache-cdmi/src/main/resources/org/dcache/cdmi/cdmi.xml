@@ -121,8 +121,8 @@
                             </property>
                             <property name="eventListeners">
                                 <list>
-                                    <ref bean="containerDao" />
-                                    <ref bean="dataObjectDao" />
+                                    <bean class="org.dcache.cdmi.dao.impl.DCacheContainerDaoImpl" />
+                                    <bean class="org.dcache.cdmi.dao.impl.DCacheDataObjectDaoImpl" />
                                 </list>
                             </property>
                         </bean>
@@ -132,8 +132,5 @@
             </bean>
         </property>
     </bean>
-
-    <!-- CDMI SERVICE -->
-    <import resource="cxf-jsr-config.xml" />
 
 </beans>

@@ -61,7 +61,7 @@ import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
-import org.dcache.cdmi.dao.DCacheDataObjectDao;
+//import org.dcache.cdmi.dao.DCacheDataObjectDao;
 import org.dcache.cdmi.model.DCacheDataObject;
 import org.dcache.cdmi.tool.IDConverter;
 import org.dcache.cells.CellStub;
