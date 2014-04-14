@@ -621,61 +621,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
         return completeContainer(requestedContainer, directory, path);
     }
 
-    //
-    // Private Helper Methods
-    //
-    /**
-     * <p>
-     * Return a {@link File} instance for the container fields file object.
-     * </p>
-     *
-     * @param path
-     *            Path of the requested container.
-     */
-    private File getContainerFieldsFile(String path)
-    {
-        // path should be /<parent container name>/<container name>
-        String[] tokens = path.split("[/]+");
-        if (tokens.length < 1) {
-            throw new BadRequestException("No object name in path <" + path + ">");
-        }
-        String containerName = tokens[tokens.length - 1];
-        String containerFieldsFileName = "." + containerName;
-        // piece together parent container name
-        // FIXME : This is the kludge way !
-        String parentContainerName = "";
-        for (int i = 0; i <= tokens.length - 2; i++) {
-            parentContainerName += tokens[i] + "/";
-        }
-        _log.debug("Path = " + path);
-        _log.debug("Parent Container Name = "
-                           + parentContainerName
-                           + " Container Name == "
-                           + containerName);
-
-
-        File baseDirectory1, parentContainerDirectory, containerFieldsFile;
-        try {
-            _log.debug("baseDirectory = " + baseDirectoryName);
-            baseDirectory1 = new File(baseDirectoryName + "/");
-            System.out
-                    .println("Base Directory Absolute Path = " + baseDirectory1.getAbsolutePath());
-            parentContainerDirectory = new File(baseDirectory1, parentContainerName);
-            //
-            _log.debug("Parent Container Absolute Path = "
-                               + parentContainerDirectory.getAbsolutePath());
-            //
-            containerFieldsFile = new File(parentContainerDirectory, containerFieldsFileName);
-            _log.debug("Container Metadata File Path = "
-                               + containerFieldsFile.getAbsolutePath());
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception while building File objects: " + ex);
-            throw new IllegalArgumentException("Cannot build Object @" + path + " error : " + ex);
-        }
-        return containerFieldsFile;
-    }
-
     /**
      * <p>
      * Return a {@link File} instance for the file or directory at the specified path from our base
