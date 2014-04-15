@@ -298,52 +298,6 @@ public class DCacheContainer extends Container
                 g.writeEndObject();
             }
             g.writeEndObject();
-
-            if (!toFile) {
-                g.writeStringField("objectType", objectType);
-                g.writeStringField("parentURI", parentURI);
-                g.writeArrayFieldStart("children");
-                ListIterator<String> it = children.listIterator();
-                while (it.hasNext()) {
-                    g.writeString((String) it.next());
-                }
-                g.writeEndArray();
-                g.writeStringField("childrenrange", childrenrange);
-                if (completionStatus != null)
-                    g.writeStringField("completionStatus", completionStatus);
-            }
-
-            g.writeEndObject();
-            g.flush();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            return ("Error : " + ex);
-        }
-        //
-        return outBuffer.toString();
-    }
-
-    public String toJsonWithMetadata(boolean toFile)
-    {
-        //
-        StringWriter outBuffer = new StringWriter();
-        try {
-            JsonFactory f = new JsonFactory();
-            JsonGenerator g = f.createJsonGenerator(outBuffer);
-            g.useDefaultPrettyPrinter();
-            g.writeStartObject();
-
-            g.writeStringField("objectID", objectID);
-
-            g.writeStringField("capabilitiesURI", capabilitiesURI);
-            g.writeStringField("domainURI", domainURI);
-
-            g.writeObjectFieldStart("exports");
-            for (Map.Entry<String, Object> entry : exports.entrySet()) {
-                g.writeObjectFieldStart(entry.getKey());
-                g.writeEndObject();
-            }
-            g.writeEndObject();
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
                 g.writeStringField(entry.getKey(), entry.getValue());

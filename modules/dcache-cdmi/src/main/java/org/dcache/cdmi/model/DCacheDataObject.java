@@ -315,35 +315,6 @@ public class DCacheDataObject extends DataObject
                 g.writeStringField("objectID", objectID);
             if (mimetype != null)
                 g.writeStringField("mimetype", mimetype);
-            g.writeEndObject();
-
-            g.flush();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            throw ex;
-        }
-
-        return outBuffer.toString();
-    }
-
-    public String toJsonWithMetadata() throws Exception
-    {
-        StringWriter outBuffer = new StringWriter();
-        try {
-            JsonFactory f = new JsonFactory();
-            JsonGenerator g = f.createJsonGenerator(outBuffer);
-            g.useDefaultPrettyPrinter();
-
-            g.writeStartObject();
-            // get top level metadata
-            if (objectType != null)
-                g.writeStringField("objectType", objectType);
-            if (capabilitiesURI != null)
-                g.writeStringField("capabilitiesURI", capabilitiesURI);
-            if (objectID != null)
-                g.writeStringField("objectID", objectID);
-            if (mimetype != null)
-                g.writeStringField("mimetype", mimetype);
             //
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : metadata.entrySet()) {

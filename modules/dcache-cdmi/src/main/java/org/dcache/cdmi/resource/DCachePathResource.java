@@ -51,11 +51,13 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
-import org.dcache.cdmi.dao.DCacheContainerDao;
-import org.dcache.cdmi.dao.DCacheDataObjectDao;
 import org.dcache.cdmi.model.DCacheContainer;
 import org.dcache.cdmi.model.DCacheDataObject;
 import org.slf4j.LoggerFactory;
+import org.snia.cdmiserver.dao.ContainerDao;
+import org.snia.cdmiserver.dao.DataObjectDao;
+import org.snia.cdmiserver.model.Container;
+import org.snia.cdmiserver.model.DataObject;
 
 import org.snia.cdmiserver.util.MediaTypes;
 import org.snia.cdmiserver.util.ObjectID;
@@ -77,7 +79,7 @@ public class DCachePathResource
     //
     // Properties and Dependency Injection Methods
     //
-    private DCacheContainerDao containerDao;
+    private ContainerDao containerDao;
 
     /**
     * <p>
@@ -85,12 +87,12 @@ public class DCachePathResource
     * </p>
     * @param containerDao
     */
-    public void setContainerDao(DCacheContainerDao containerDao)
+    public void setContainerDao(ContainerDao containerDao)
     {
         this.containerDao = containerDao;
     }
 
-    private DCacheDataObjectDao dataObjectDao;
+    private DataObjectDao dataObjectDao;
 
     /**
     * <p>
@@ -98,7 +100,7 @@ public class DCachePathResource
     * </p>
     * @param dataObjectDao
     */
-    public void setDataObjectDao(DCacheDataObjectDao dataObjectDao)
+    public void setDataObjectDao(DataObjectDao dataObjectDao)
     {
         this.dataObjectDao = dataObjectDao;
     }
@@ -187,11 +189,11 @@ public class DCachePathResource
         if (containerDao.isContainer(path)) {
           // if container build container browser page
           try {
-            DCacheContainer container = containerDao.findByPath(path);
+            Container container = containerDao.findByPath(path);
             if (container == null) {
               return Response.status(Response.Status.NOT_FOUND).build();
             } else {
-              String respStr = container.toJsonWithMetadata(false);
+              String respStr = container.toJson(false);
               return Response.ok(respStr).header(
                       "X-CDMI-Specification-Version", "1.0.2").build();
             }
@@ -203,13 +205,13 @@ public class DCachePathResource
           }
         }
         try {
-          DCacheDataObject dObj = dataObjectDao.findByPath(path);
+          DataObject dObj = dataObjectDao.findByPath(path);
           if (dObj == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
           } else {
             // make http response
             // build a JSON representation
-            String respStr = dObj.toJsonWithMetadata();
+            String respStr = dObj.toJson();
             return Response.ok(respStr).header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
@@ -286,11 +288,11 @@ public class DCachePathResource
         if (containerDao.isContainer(path)) {
             // if container build container browser page
             try {
-                DCacheContainer container = containerDao.findByPath(path);
+                Container container = containerDao.findByPath(path);
                 if (container == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
-                    String respStr = container.toJsonWithMetadata(false);
+                    String respStr = container.toJson(false);
                     return Response.ok(respStr).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 }
@@ -303,7 +305,7 @@ public class DCachePathResource
         } else {
             // if object, send out the object in it's native form
             try {
-                DCacheDataObject dObj = dataObjectDao.findByPath(path);
+                DataObject dObj = dataObjectDao.findByPath(path);
                 if (dObj == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
@@ -358,14 +360,14 @@ public class DCachePathResource
 
         try {
             containerRequest.fromJson(bytes, false);
-            DCacheContainer container = containerDao.createByPath(path,
+            Container container = containerDao.createByPath(path,
                     containerRequest);
             if (container == null) {
                 return Response.status(Response.Status.BAD_REQUEST).build();
             } else {
                 // make http response
                 // build a JSON representation
-                String respStr = container.toJsonWithMetadata(false);
+                String respStr = container.toJson(false);
                 ResponseBuilder builder = Response.created(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
@@ -409,7 +411,7 @@ public class DCachePathResource
         _log.debug("Path = " + path + "\n" + inBuffer);
 
         try {
-            DCacheDataObject dObj = dataObjectDao.findByPath(path);
+            DataObject dObj = dataObjectDao.findByPath(path);
             if (dObj == null) {
                 dObj = new DCacheDataObject();
 
@@ -421,7 +423,7 @@ public class DCachePathResource
                 }
                 dObj = dataObjectDao.createByPath(path, dObj);
                 // return representation
-                String respStr = dObj.toJsonWithMetadata();
+                String respStr = dObj.toJson();
                 // make http response
                 // build a JSON representation
                 ResponseBuilder builder = Response.created(new URI(path));
@@ -491,7 +493,7 @@ public class DCachePathResource
             String objectId = ObjectID.getObjectID(11);
             String objectPath = path + "/" + objectId;
 
-            DCacheDataObject dObj = new DCacheDataObject();
+            DataObject dObj = new DCacheDataObject();
             dObj.setObjectID(objectId);
             dObj.setObjectType(objectPath);
             dObj.setValue(inBuffer);

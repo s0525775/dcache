@@ -84,7 +84,7 @@ import org.springframework.web.context.ServletContextAware;
  * </p>
  */
 public class DCacheDataObjectDaoImpl extends AbstractCellComponent
-    implements DCacheDataObjectDao, ServletContextAware, CellLifeCycleAware
+    implements DataObjectDao, ServletContextAware, CellLifeCycleAware
 {
 
     //
