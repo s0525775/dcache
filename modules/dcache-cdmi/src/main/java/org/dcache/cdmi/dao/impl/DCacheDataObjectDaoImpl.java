@@ -48,8 +48,6 @@ import java.util.Map;
 import java.util.Set;
 import javax.security.auth.Subject;
 import javax.servlet.ServletContext;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.mover.DCacheDataTransfer;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
@@ -61,7 +59,6 @@ import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
-//import org.dcache.cdmi.dao.DCacheDataObjectDao;
 import org.dcache.cdmi.model.DCacheDataObject;
 import org.dcache.cdmi.tool.IDConverter;
 import org.dcache.cells.CellStub;
@@ -79,6 +76,7 @@ import org.snia.cdmiserver.dao.DataObjectDao;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.ConflictException;
 import org.snia.cdmiserver.model.DataObject;
+import org.springframework.web.context.ServletContextAware;
 
 /**
  * <p>
@@ -86,7 +84,7 @@ import org.snia.cdmiserver.model.DataObject;
  * </p>
  */
 public class DCacheDataObjectDaoImpl extends AbstractCellComponent
-    implements DCacheDataObjectDao, ServletContextListener, CellLifeCycleAware
+    implements DCacheDataObjectDao, ServletContextAware, CellLifeCycleAware
 {
 
     //
@@ -475,36 +473,6 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         baseDirectoryName = DCacheDataTransfer.getBaseDirectoryName2();
     }
 
-    //This function is necessary, otherwise the attributes and servletContext are not set.
-    //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
-    //In other words: contextInitialized() must be called before afterStart().
-    @Override
-    public void contextInitialized(ServletContextEvent servletContextEvent)
-    {
-        _log.debug("Init DCacheDataObjectDaoImpl...");
-        this.servletContext = servletContextEvent.getServletContext();
-        this.pnfsStub = getCellStubAttribute();
-        this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
-        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
-        this.poolStub = getPoolAttribute();
-        this.poolMgrStub = getPoolMgrAttribute();
-        this.billingStub = getBillingAttribute();
-        //Temp Helper Part
-        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName2(baseDirectoryName);
-        DCacheDataTransfer.setPnfsStub2(pnfsStub);
-        DCacheDataTransfer.setPnfsHandler2(pnfsHandler);
-        DCacheDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
-        DCacheDataTransfer.setPoolStub2(poolStub);
-        DCacheDataTransfer.setPoolMgrStub2(poolMgrStub);
-        DCacheDataTransfer.setBillingStub2(billingStub);
-    }
-
-    @Override
-    public void contextDestroyed(ServletContextEvent sce)
-    {
-    }
-
     @Override
     public void afterStart()
     {
@@ -722,6 +690,27 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
     public DCacheDataObject createById(String string, DataObject d)
     {
         throw new UnsupportedOperationException("DCacheDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public void setServletContext(ServletContext sContext) {
+        _log.debug("Init DCacheDataObjectDaoImpl...");
+        this.servletContext = sContext;
+        this.pnfsStub = getCellStubAttribute();
+        this.pnfsHandler = new PnfsHandler(pnfsStub);
+        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
+        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
+        this.poolStub = getPoolAttribute();
+        this.poolMgrStub = getPoolMgrAttribute();
+        this.billingStub = getBillingAttribute();
+        //Temp Helper Part
+        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName2(baseDirectoryName);
+        DCacheDataTransfer.setPnfsStub2(pnfsStub);
+        DCacheDataTransfer.setPnfsHandler2(pnfsHandler);
+        DCacheDataTransfer.setListDirectoryHandler2(listDirectoryHandler);
+        DCacheDataTransfer.setPoolStub2(poolStub);
+        DCacheDataTransfer.setPoolMgrStub2(poolMgrStub);
+        DCacheDataTransfer.setBillingStub2(billingStub);
     }
 
     private static class ListPrinter implements DirectoryListPrinter

@@ -48,8 +48,6 @@ import java.util.Map;
 import java.util.Set;
 import javax.security.auth.Subject;
 import javax.servlet.ServletContext;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.mover.DCacheDataTransfer;
 import dmg.cells.nucleus.CellLifeCycleAware;
@@ -76,9 +74,9 @@ import java.text.ParseException;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
-import org.dcache.cdmi.dao.DCacheContainerDao;
 import org.dcache.cdmi.model.DCacheContainer;
 import org.dcache.cdmi.tool.IDConverter;
+import org.springframework.web.context.ServletContextAware;
 
 /**
  * <p>
@@ -86,7 +84,7 @@ import org.dcache.cdmi.tool.IDConverter;
  * </p>
  */
 public class DCacheContainerDaoImpl extends AbstractCellComponent
-    implements DCacheContainerDao, ServletContextListener, CellLifeCycleAware
+    implements DCacheContainerDao, ServletContextAware, CellLifeCycleAware
 {
 
     //
@@ -799,36 +797,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
         baseDirectoryName = DCacheDataTransfer.getBaseDirectoryName();
     }
 
-    //This function is necessary, otherwise the attributes and servletContext are not set.
-    //It is called before afterStart() of the CellLifeCycleAware interface, which is wanted, too.
-    //In other words: contextInitialized() must be called before afterStart().
-    @Override
-    public void contextInitialized(ServletContextEvent servletContextEvent)
-    {
-        _log.debug("Init DCacheContainerDaoImpl...");
-        this.servletContext = servletContextEvent.getServletContext();
-        this.pnfsStub = getCellStubAttribute();
-        this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
-        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
-        this.poolStub = getPoolAttribute();
-        this.poolMgrStub = getPoolMgrAttribute();
-        this.billingStub = getBillingAttribute();
-        //Temp Helper Part
-        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName(baseDirectoryName);
-        DCacheDataTransfer.setPnfsStub(pnfsStub);
-        DCacheDataTransfer.setPnfsHandler(pnfsHandler);
-        DCacheDataTransfer.setListDirectoryHandler(listDirectoryHandler);
-        DCacheDataTransfer.setPoolStub(poolStub);
-        DCacheDataTransfer.setPoolMgrStub(poolMgrStub);
-        DCacheDataTransfer.setBillingStub(billingStub);
-    }
-
-    @Override
-    public void contextDestroyed(ServletContextEvent sce)
-    {
-    }
-
     @Override
     public void afterStart()
     {
@@ -1170,6 +1138,27 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
             }
         }
         return result;
+    }
+
+    @Override
+    public void setServletContext(ServletContext sContext) {
+        _log.debug("Init DCacheContainerDaoImpl...");
+        this.servletContext = sContext;
+        this.pnfsStub = getCellStubAttribute();
+        this.pnfsHandler = new PnfsHandler(pnfsStub);
+        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
+        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
+        this.poolStub = getPoolAttribute();
+        this.poolMgrStub = getPoolMgrAttribute();
+        this.billingStub = getBillingAttribute();
+        //Temp Helper Part
+        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName(baseDirectoryName);
+        DCacheDataTransfer.setPnfsStub(pnfsStub);
+        DCacheDataTransfer.setPnfsHandler(pnfsHandler);
+        DCacheDataTransfer.setListDirectoryHandler(listDirectoryHandler);
+        DCacheDataTransfer.setPoolStub(poolStub);
+        DCacheDataTransfer.setPoolMgrStub(poolMgrStub);
+        DCacheDataTransfer.setBillingStub(billingStub);
     }
 
     private static class ListPrinter implements DirectoryListPrinter
