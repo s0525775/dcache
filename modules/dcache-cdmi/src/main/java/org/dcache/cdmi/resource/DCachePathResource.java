@@ -498,7 +498,7 @@ public class DCachePathResource
             dObj.setObjectType(objectPath);
             dObj.setValue(inBuffer);
 
-            _log.debug("objectId = " + objectId + " objecctPath = " +
+            _log.debug("objectId = " + objectId + " objectPath = " +
                     objectPath);
 
             dObj = dataObjectDao.createByPath(objectPath, dObj);

@@ -46,7 +46,7 @@ import org.springframework.web.context.ServletContextAware;
  * store.
  * </p>
  */
-public class DCacheCapabilityDaoImpl implements CapabilityDao, ServletContextAware
+public class DCacheCapabilityDaoImpl implements CapabilityDao//, ServletContextAware
 {
 
     //
@@ -170,7 +170,7 @@ public class DCacheCapabilityDaoImpl implements CapabilityDao, ServletContextAwa
         return (capability);
     }
 
-    @Override
+    //@Override
     public void setServletContext(ServletContext sContext) {
         _log.debug("Init DCacheCapabilityDaoImpl...");
         this.servletContext = sContext;

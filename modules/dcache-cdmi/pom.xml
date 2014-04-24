@@ -36,7 +36,17 @@
     <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-frontend-jaxrs</artifactId>
-      <version>2.2.5</version>
+      <version>2.4.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-transports-http</artifactId>
+      <version>2.4.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-transports-http-jetty</artifactId>
+      <version>2.4.0</version>
     </dependency>
     <dependency>
       <groupId>org.springframework</groupId>
@@ -46,18 +56,19 @@
     <dependency>
       <groupId>org.codehaus.jackson</groupId>
       <artifactId>jackson-core-asl</artifactId>
-      <version>1.5.2</version>
+      <version>1.6.1</version>
+      <type>jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
-      <version>4.0.1</version>
+      <version>4.3</version>
       <scope>compile</scope>
    </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
-      <version>4.0.1</version>
+      <version>4.3</version>
       <scope>compile</scope>
    </dependency>
 
@@ -81,45 +92,51 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-        <groupId>io.milton</groupId>
-        <artifactId>milton-server-ce</artifactId>
+      <groupId>io.milton</groupId>
+      <artifactId>milton-server-ce</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-server</artifactId>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-servlets</artifactId>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-servlets</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-plus</artifactId>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-plus</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.eclipse.jetty</groupId>
-        <artifactId>jetty-security</artifactId>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-security</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.antlr</groupId>
-        <artifactId>ST4</artifactId>
+       <groupId>org.eclipse.jetty.orbit</groupId>
+       <artifactId>javax.servlet</artifactId>
+       <version>3.0.0.v201112011016</version>
+       <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.antlr</groupId>
+      <artifactId>ST4</artifactId>
     </dependency>
 
     <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-beans</artifactId>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-beans</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-context</artifactId>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-core</artifactId>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-core</artifactId>
     </dependency>
     <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-expression</artifactId>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-expression</artifactId>
     </dependency>
   </dependencies>
 </project>

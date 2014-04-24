@@ -84,7 +84,7 @@ import org.springframework.web.context.ServletContextAware;
  * </p>
  */
 public class DCacheDataObjectDaoImpl extends AbstractCellComponent
-    implements DataObjectDao, ServletContextAware, CellLifeCycleAware
+    implements DataObjectDao, CellLifeCycleAware//, ServletContextAware
 {
 
     //
@@ -692,7 +692,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         throw new UnsupportedOperationException("DCacheDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
-    @Override
+    //@Override
     public void setServletContext(ServletContext sContext) {
         _log.debug("Init DCacheDataObjectDaoImpl...");
         this.servletContext = sContext;
