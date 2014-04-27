@@ -124,11 +124,21 @@
     <bean id="containerDao" class="org.dcache.cdmi.dao.impl.DCacheContainerDaoImpl">
         <property name="baseDirectoryName" value="/disk"/>
         <property name="recreate" value="false"/>
+        <property name="pnfsStub" ref="pnfs-stub"/>
+        <property name="listDirectoryHandler" ref="list-handler"/>
+        <property name="poolMgrStub" ref="pool-manager-stub"/>
+        <property name="poolStub" ref="pool-stub"/>
+        <property name="billingStub" ref="billing-stub"/>
     </bean>
 
     <bean id="dataObjectDao" class="org.dcache.cdmi.dao.impl.DCacheDataObjectDaoImpl">
         <property name="baseDirectoryName" value="/disk"/>
         <property name="containerDao" ref="containerDao"/>
+        <property name="pnfsStub" ref="pnfs-stub"/>
+        <property name="listDirectoryHandler" ref="list-handler"/>
+        <property name="poolMgrStub" ref="pool-manager-stub"/>
+        <property name="poolStub" ref="pool-stub"/>
+        <property name="billingStub" ref="billing-stub"/>
     </bean>
 
     <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DCacheCapabilityDaoImpl"/>

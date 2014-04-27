@@ -129,6 +129,42 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         if (this.baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName2(this.baseDirectoryName);
     }
 
+    public void setPnfsStub(CellStub pnfsStub)
+    {
+        this.pnfsStub = pnfsStub;
+        if (this.pnfsStub == null) _log.error("DCacheDataObjectDaoImpl: PnfsStub is null!");
+        _log.debug("******* PnfsStub (O) = " + pnfsStub.toString());
+        this.pnfsHandler = new PnfsHandler(this.pnfsStub);
+    }
+
+    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
+    {
+        this.listDirectoryHandler = listDirectoryHandler;
+        if (this.listDirectoryHandler == null) _log.error("DCacheDataObjectDaoImpl: ListDirectoryHandler is null!");
+        _log.debug("******* ListDirectoryHandler (O) = " + listDirectoryHandler.toString());
+    }
+
+    public void setPoolStub(CellStub poolStub)
+    {
+        this.poolStub = poolStub;
+        if (this.poolStub == null) _log.error("DCacheDataObjectDaoImpl: PoolStub is null!");
+        _log.debug("******* PoolStub (O) = " + poolStub.toString());
+    }
+
+    public void setPoolMgrStub(CellStub poolMgrStub)
+    {
+        this.poolMgrStub = poolMgrStub;
+        if (this.poolMgrStub == null) _log.error("DCacheDataObjectDaoImpl: PoolMgrStub is null!");
+        _log.debug("******* PoolMgrStub (O) = " + poolMgrStub.toString());
+    }
+
+    public void setBillingStub(CellStub billingStub)
+    {
+        this.billingStub = billingStub;
+        if (this.billingStub == null) _log.error("DCacheDataObjectDaoImpl: BillingStub is null!");
+        _log.debug("******* BillingStub (O) = " + billingStub.toString());
+    }
+
     /**
      * <p>
      * Injected {@link ContainerDao} instance.
@@ -241,7 +277,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    _log.debug("CDMIDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                    _log.debug("DCacheDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
                     newDObj.setPnfsID(pnfsId.toIdString());
                     long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
                     long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
@@ -255,12 +291,12 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                     oacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     newDObj.setObjectID(objectID);
-                    _log.debug("CDMIDataObjectDao<Create>, setObjectID: " + objectID);
+                    _log.debug("DCacheDataObjectDao<Create>, setObjectID: " + objectID);
                 } else {
-                    _log.error("CDMIDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    _log.error("DCacheDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("CDMIDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
+                _log.error("DCacheDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
             }
 
             // Add metadata
@@ -320,7 +356,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         long nowAsLong = now.getTime();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-        _log.debug("In CDMIDataObjectDao.findByPath : " + path);
+        _log.debug("In DCacheDataObjectDao.findByPath : " + path);
         //
         String containerName = getcontainerName(path);
         //
@@ -376,7 +412,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    _log.debug("CDMIDataObjectDao<Read>, setPnfsID: " + pnfsId.toIdString());
+                    _log.debug("DCacheDataObjectDao<Read>, setPnfsID: " + pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
                     long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
                     long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
@@ -390,12 +426,12 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                     oacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
-                    _log.debug("CDMIDataObjectDao<Read>, setObjectID: " + objectID);
+                    _log.debug("DCacheDataObjectDao<Read>, setObjectID: " + objectID);
                 } else {
-                    _log.error("CDMIDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    _log.error("DCacheDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("CDMIDataObjectDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
+                _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
             }
 
             dObj.setMetadata("cdmi_acount", "0");
@@ -444,7 +480,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
             pnfsHandler.setFileAttributes(pnfsId, attr);
             dObj.setMetadata("cdmi_atime", sdf.format(now));
         } catch (CacheException ex) {
-            _log.error("CDMIDataObjectDao<Read>, Cannot update meta information for object with objectID " + dObj.getObjectID());
+            _log.error("DCacheDataObjectDao<Read>, Cannot update meta information for object with objectID " + dObj.getObjectID());
         }
 
         return dObj;

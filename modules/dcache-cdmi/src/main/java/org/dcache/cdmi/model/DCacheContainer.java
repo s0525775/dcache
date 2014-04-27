@@ -423,6 +423,9 @@ public class DCacheContainer extends Container
                 String value2 = jp.getText();
                 _log.debug("Key : " + key + " Val : " + value2);
                 this.setMove(value2);
+            } else if ("valuetransferencoding".equals(key)) { // ignore
+                jp.nextToken();
+                // Ignore, it's from the Python CDMI test client
             } else {
                 if (fromFile) { // accept rest of key-values
                     if ("objectID".equals(key)) { // process value

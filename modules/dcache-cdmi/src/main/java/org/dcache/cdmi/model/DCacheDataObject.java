@@ -421,6 +421,9 @@ public class DCacheDataObject extends DataObject
                 String value2 = jp.getText();
                 _log.debug("Key : " + key + " Val : " + value2);
                 this.setMimetype(value2);
+            } else if ("valuetransferencoding".equals(key)) { // ignore
+                jp.nextToken();
+                // Ignore, it's from the Python CDMI test client
             } else {
                 if (fromFile) { // accept rest of key-values
                     if ("objectType".equals(key)) {

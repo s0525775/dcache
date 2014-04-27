@@ -137,6 +137,42 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
         if (this.baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName(this.baseDirectoryName);
     }
 
+    public void setPnfsStub(CellStub pnfsStub)
+    {
+        this.pnfsStub = pnfsStub;
+        if (this.pnfsStub == null) _log.error("DCacheContainerDaoImpl: PnfsStub is null!");
+        _log.debug("******* PnfsStub (C) = " + pnfsStub.toString());
+        this.pnfsHandler = new PnfsHandler(this.pnfsStub);
+    }
+
+    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
+    {
+        this.listDirectoryHandler = listDirectoryHandler;
+        if (this.listDirectoryHandler == null) _log.error("DCacheContainerDaoImpl: ListDirectoryHandler is null!");
+        _log.debug("******* ListDirectoryHandler (C) = " + listDirectoryHandler.toString());
+    }
+
+    public void setPoolStub(CellStub poolStub)
+    {
+        this.poolStub = poolStub;
+        if (this.poolStub == null) _log.error("DCacheContainerDaoImpl: PoolStub is null!");
+        _log.debug("******* PoolStub (C) = " + poolStub.toString());
+    }
+
+    public void setPoolMgrStub(CellStub poolMgrStub)
+    {
+        this.poolMgrStub = poolMgrStub;
+        if (this.poolMgrStub == null) _log.error("DCacheContainerDaoImpl: PoolMgrStub is null!");
+        _log.debug("******* PoolMgrStub (C) = " + poolMgrStub.toString());
+    }
+
+    public void setBillingStub(CellStub billingStub)
+    {
+        this.billingStub = billingStub;
+        if (this.billingStub == null) _log.error("DCacheContainerDaoImpl: BillingStub is null!");
+        _log.debug("******* BillingStub (C) = " + billingStub.toString());
+    }
+
     private boolean recreate = true;
 
     public DCacheContainerDaoImpl()
@@ -209,7 +245,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                     pnfsId = attr.getPnfsId();
                     if (pnfsId != null) {
                         // update with real info
-                        _log.debug("CDMIContainerDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                        _log.debug("DCacheContainerDao<Create>, setPnfsID: " + pnfsId.toIdString());
                         newContainer.setPnfsID(pnfsId.toIdString());
                         newContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                         newContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
@@ -219,12 +255,12 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                         cacl = attr.getAcl();
                         objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                         newContainer.setObjectID(objectID);
-                        _log.debug("CDMIContainerDao<Create>, setObjectID: " + objectID);
+                        _log.debug("DCacheContainerDao<Create>, setObjectID: " + objectID);
                     } else {
-                        _log.error("CDMIContainerDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        _log.error("DCacheContainerDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
                     }
                 } else {
-                    _log.error("CDMIContainerDao<Create>, Cannot read meta information from directory: " + directory.getAbsolutePath());
+                    _log.error("DCacheContainerDao<Create>, Cannot read meta information from directory: " + directory.getAbsolutePath());
                 }
 
                 //
@@ -281,7 +317,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                     pnfsId = attr.getPnfsId();
                     if (pnfsId != null) {
                         // update with real info
-                        _log.debug("CDMIContainerDao<Update>, setPnfsID: " + pnfsId.toIdString());
+                        _log.debug("DCacheContainerDao<Update>, setPnfsID: " + pnfsId.toIdString());
                         currentContainer.setPnfsID(pnfsId.toIdString());
                         currentContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                         currentContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
@@ -291,12 +327,12 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                         cacl = attr.getAcl();
                         objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                         currentContainer.setObjectID(objectID);
-                        _log.debug("CDMIContainerDao<Update>, setObjectID: " + objectID);
+                        _log.debug("DCacheContainerDao<Update>, setObjectID: " + objectID);
                     } else {
-                        _log.error("CDMIContainerDao<Update>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        _log.error("DCacheContainerDao<Update>, Cannot read PnfsId from meta information, ObjectID will be empty");
                     }
                 } else {
-                    _log.error("CDMIContainerDao<Update>, Cannot read meta information from directory: " + directory.getAbsolutePath());
+                    _log.error("DCacheContainerDao<Update>, Cannot read meta information from directory: " + directory.getAbsolutePath());
                 }
 
                 currentContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
@@ -395,7 +431,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                 PnfsId id = new PnfsId(newContainer.getPnfsID());
                 pnfsHandler.setFileAttributes(id, attr);
             } catch (CacheException | ParseException ex) {
-                _log.error("CDMIContainerDao<Update>, Cannot update meta information for object with objectID " + newContainer.getObjectID());
+                _log.error("DCacheContainerDao<Update>, Cannot update meta information for object with objectID " + newContainer.getObjectID());
             }
 
             //
@@ -452,7 +488,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
             pnfsId = attr.getPnfsId();
             if (pnfsId != null) {
                 // update with real info
-                _log.debug("CDMIContainerDao<Delete>, setPnfsID: " + pnfsId.toIdString());
+                _log.debug("DCacheContainerDao<Delete>, setPnfsID: " + pnfsId.toIdString());
                 requestedContainer.setPnfsID(pnfsId.toIdString());
                 requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                 requestedContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
@@ -460,12 +496,12 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                 requestedContainer.setMetadata("cdmi_size", String.valueOf(attr.getSize()));
                 objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                 requestedContainer.setObjectID(objectID);
-                _log.debug("CDMIContainerDao<Delete>, setObjectID: " + objectID);
+                _log.debug("DCacheContainerDao<Delete>, setObjectID: " + objectID);
             } else {
-                _log.error("CDMIContainerDao<Delete>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                _log.error("DCacheContainerDao<Delete>, Cannot read PnfsId from meta information, ObjectID will be empty");
             }
         } else {
-            _log.error("CDMIContainerDao<Delete>, Cannot read meta information from directory or object: " + directoryOrFile.getAbsolutePath());
+            _log.error("DCacheContainerDao<Delete>, Cannot read meta information from directory or object: " + directoryOrFile.getAbsolutePath());
         }
 
         requestedContainer.setMetadata("cdmi_acount", "0");
@@ -546,7 +582,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    _log.debug("CDMIContainerDao<Read>, setPnfsID: " + pnfsId.toIdString());
+                    _log.debug("DCacheContainerDao<Read>, setPnfsID: " + pnfsId.toIdString());
                     requestedContainer.setPnfsID(pnfsId.toIdString());
                     requestedContainer.setMetadata("cdmi_ctime", sdf.format(attr.getCreationTime()));
                     requestedContainer.setMetadata("cdmi_atime", sdf.format(attr.getAccessTime()));
@@ -556,12 +592,12 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                     cacl = attr.getAcl();
                     objectID = new IDConverter().toObjectID(pnfsId.toIdString());
                     requestedContainer.setObjectID(objectID);
-                    _log.debug("CDMIContainerDao<Read>, setObjectID: " + objectID);
+                    _log.debug("DCacheContainerDao<Read>, setObjectID: " + objectID);
                 } else {
-                    _log.error("CDMIContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    _log.error("DCacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("CDMIContainerDao<Read>, Cannot read meta information from directory: " + directory.getAbsolutePath());
+                _log.error("DCacheContainerDao<Read>, Cannot read meta information from directory: " + directory.getAbsolutePath());
             }
 
             //
@@ -602,7 +638,7 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
                 pnfsHandler.setFileAttributes(pnfsId, attr2);
                 requestedContainer.setMetadata("cdmi_atime", sdf.format(now));
             } catch (CacheException ex) {
-                _log.error("CDMIContainerDao<Read>, Cannot update meta information for object with objectID " + requestedContainer.getObjectID());
+                _log.error("DCacheContainerDao<Read>, Cannot update meta information for object with objectID " + requestedContainer.getObjectID());
             }
 
         } else {
