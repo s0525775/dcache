@@ -76,7 +76,6 @@ import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
 import org.dcache.cdmi.model.DCacheContainer;
 import org.dcache.cdmi.tool.IDConverter;
-import org.springframework.web.context.ServletContextAware;
 
 /**
  * <p>
@@ -100,18 +99,12 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     //
     // Properties and Dependency Injection Methods by dCache
     //
-    private ServletContext servletContext = null;
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
     private ListDirectoryHandler listDirectoryHandler;
     private CellStub poolStub;
     private CellStub poolMgrStub;
     private CellStub billingStub;
-    private static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
-    private static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
-    private static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
-    private static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
-    private static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
     private PnfsId pnfsId;
     private long accessTime;
     private long creationTime;
@@ -133,8 +126,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     {
         this.baseDirectoryName = baseDirectoryName;
         _log.debug("******* Base Directory (C) = " + baseDirectoryName);
-        //Temp Helper Part
-        if (this.baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName(this.baseDirectoryName);
     }
 
     public void setPnfsStub(CellStub pnfsStub)
@@ -174,14 +165,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     }
 
     private boolean recreate = true;
-
-    public DCacheContainerDaoImpl()
-    {
-        _log.debug("Re-Init DCacheContainerDaoImpl...");
-        if (listDirectoryHandler == null) {
-            init();
-        }
-    }
 
     /**
      * <p>
@@ -539,11 +522,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     @Override
     public DCacheContainer findByPath(String path)
     {
-
-        if (listDirectoryHandler == null) {
-            init();
-        }
-
         _log.debug("In CDMIContainerDAO.findByPath : " + path);
 
         File directory = absoluteFile(path);
@@ -806,11 +784,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     @Override
     public boolean isContainer(String path)
     {
-
-        if (listDirectoryHandler == null) {
-            init();
-        }
-
         if (path == null || isDirectory(path)) {
             return true;
         } else {
@@ -821,18 +794,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     /**
      * DCache related stuff.
      */
-
-    // Temp Helper Function
-    private void init() {
-        pnfsStub = DCacheDataTransfer.getPnfsStub();
-        pnfsHandler = DCacheDataTransfer.getPnfsHandler();
-        listDirectoryHandler = DCacheDataTransfer.getListDirectoryHandler();
-        poolStub = DCacheDataTransfer.getPoolStub();
-        poolMgrStub = DCacheDataTransfer.getPoolMgrStub();
-        billingStub = DCacheDataTransfer.getBillingStub();
-        baseDirectoryName = DCacheDataTransfer.getBaseDirectoryName();
-    }
-
     @Override
     public void afterStart()
     {
@@ -842,81 +803,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
     @Override
     public void beforeStop()
     {
-    }
-
-    private CellStub getCellStubAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_PNFSSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private ListDirectoryHandler getListDirAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_LISTER);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not found");
-        }
-        if (!ListDirectoryHandler.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not of type " + ListDirectoryHandler.class);
-        }
-        return (ListDirectoryHandler) attribute;
-    }
-
-    private CellStub getPoolAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private CellStub getPoolMgrAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLMGRSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private CellStub getBillingAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_BILLINGSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
     }
 
     private String getParentDirectory(String path)
@@ -1006,19 +892,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
         Map<String, FileAttributes> listing = listDirectoriesFilesByPath(tmpPath);
         for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
             if (entry.getValue().getFileType() == DIR) {
-                result.add(entry.getKey());
-            }
-        }
-        return result;
-    }
-
-    private List<String> listFilesByPath(String path)
-    {
-        List<String> result = new ArrayList<>();
-        String tmpPath = addPrefixSlashToPath(path);
-        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(tmpPath);
-        for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
-            if (entry.getValue().getFileType() == REGULAR) {
                 result.add(entry.getKey());
             }
         }
@@ -1143,58 +1016,6 @@ public class DCacheContainerDaoImpl extends AbstractCellComponent
             }
         }
         return result;
-    }
-
-    private String addSuffixSlashToPath(String path)
-    {
-        String result = "";
-        if (path != null && path.length() > 0) {
-            if (!path.endsWith("/")) {
-                result = path + "/";
-            } else {
-                result = path;
-            }
-        }
-        return result;
-    }
-
-    private String removeSlashesFromPath(String path)
-    {
-        String result = "";
-        if (path != null && path.length() > 0) {
-            if (path.startsWith("/")) {
-                result = path.substring(1, path.length() - 1);
-            } else {
-                result = path;
-            }
-            if (result.endsWith("/")) {
-                result = result.substring(0, result.length() - 2);
-            } else {
-                result = path;
-            }
-        }
-        return result;
-    }
-
-    //@Override
-    public void setServletContext(ServletContext sContext) {
-        _log.debug("Init DCacheContainerDaoImpl...");
-        this.servletContext = sContext;
-        this.pnfsStub = getCellStubAttribute();
-        this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
-        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
-        this.poolStub = getPoolAttribute();
-        this.poolMgrStub = getPoolMgrAttribute();
-        this.billingStub = getBillingAttribute();
-        //Temp Helper Part
-        if (baseDirectoryName != null) DCacheDataTransfer.setBaseDirectoryName(baseDirectoryName);
-        DCacheDataTransfer.setPnfsStub(pnfsStub);
-        DCacheDataTransfer.setPnfsHandler(pnfsHandler);
-        DCacheDataTransfer.setListDirectoryHandler(listDirectoryHandler);
-        DCacheDataTransfer.setPoolStub(poolStub);
-        DCacheDataTransfer.setPoolMgrStub(poolMgrStub);
-        DCacheDataTransfer.setBillingStub(billingStub);
     }
 
     private static class ListPrinter implements DirectoryListPrinter

@@ -30,15 +30,10 @@
  */
 package org.dcache.cdmi.dao.impl;
 
-import diskCacheV111.util.PnfsHandler;
-import javax.servlet.ServletContext;
-import org.dcache.cells.CellStub;
-import org.dcache.util.list.ListDirectoryHandler;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
 import org.snia.cdmiserver.util.ObjectID;
-import org.springframework.web.context.ServletContextAware;
 
 /**
  * <p>
@@ -46,25 +41,13 @@ import org.springframework.web.context.ServletContextAware;
  * store.
  * </p>
  */
-public class DCacheCapabilityDaoImpl implements CapabilityDao//, ServletContextAware
+public class DCacheCapabilityDaoImpl implements CapabilityDao
 {
 
     //
     // Something important
     //
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheCapabilityDaoImpl.class);
-    private ServletContext servletContext = null;
-    private CellStub pnfsStub;
-    private PnfsHandler pnfsHandler;
-    private ListDirectoryHandler listDirectoryHandler;
-    private CellStub poolStub;
-    private CellStub poolMgrStub;
-    private CellStub billingStub;
-    private static final String ATTRIBUTE_NAME_PNFSSTUB = "org.dcache.cdmi.pnfsstub";
-    private static final String ATTRIBUTE_NAME_LISTER = "org.dcache.cdmi.lister";
-    private static final String ATTRIBUTE_NAME_POOLSTUB = "org.dcache.cdmi.poolstub";
-    private static final String ATTRIBUTE_NAME_POOLMGRSTUB = "org.dcache.cdmi.poolmgrstub";
-    private static final String ATTRIBUTE_NAME_BILLINGSTUB = "org.dcache.cdmi.billingstub";
 
     // -------------------------------------------------------------- Properties
     /**
@@ -168,94 +151,6 @@ public class DCacheCapabilityDaoImpl implements CapabilityDao//, ServletContextA
             capability.setParentID(ROOTobjectID);
         }
         return (capability);
-    }
-
-    //@Override
-    public void setServletContext(ServletContext sContext) {
-        _log.debug("Init DCacheCapabilityDaoImpl...");
-        this.servletContext = sContext;
-        this.pnfsStub = getCellStubAttribute();
-        this.pnfsHandler = new PnfsHandler(pnfsStub);
-        //this.listDirectoryHandler = new ListDirectoryHandler(pnfsHandler); //does not work, tested 100 times
-        this.listDirectoryHandler = getListDirAttribute(); //it only works in this way, tested 100 times
-        this.poolStub = getPoolAttribute();
-        this.poolMgrStub = getPoolMgrAttribute();
-        this.billingStub = getBillingAttribute();
-    }
-
-    private CellStub getCellStubAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_PNFSSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_PNFSSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private ListDirectoryHandler getListDirAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_LISTER);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not found");
-        }
-        if (!ListDirectoryHandler.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_LISTER + " not of type " + ListDirectoryHandler.class);
-        }
-        return (ListDirectoryHandler) attribute;
-    }
-
-    private CellStub getPoolAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private CellStub getPoolMgrAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_POOLMGRSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_POOLMGRSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
-    }
-
-    private CellStub getBillingAttribute()
-    {
-        if (servletContext == null) {
-            throw new RuntimeException("ServletContext is not set");
-        }
-        Object attribute = servletContext.getAttribute(ATTRIBUTE_NAME_BILLINGSTUB);
-        if (attribute == null) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not found");
-        }
-        if (!CellStub.class.isInstance(attribute)) {
-            throw new RuntimeException("Attribute " + ATTRIBUTE_NAME_BILLINGSTUB + " not of type " + CellStub.class);
-        }
-        return (CellStub) attribute;
     }
 
 }
