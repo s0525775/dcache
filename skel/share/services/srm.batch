@@ -6,6 +6,12 @@ onerror shutdown
 
 check -strong srm.cell.name
 check -strong srm.cell.export
+check -strong srm.cell.limits.message.threads.min
+check -strong srm.cell.limits.message.threads.max
+check -strong srm.cell.limits.message.threads.max-idle-time
+check -strong srm.cell.limits.message.threads.max-idle-time.unit
+check -strong srm.cell.limits.message.queue.max
+
 check -strong srm.net.port
 check -strong srm.net.ssl-port
 check -strong srm.net.host
@@ -23,10 +29,8 @@ check -strong srm.authn.hostcert.refresh.unit
 
 check -strong srm.client-transport
 
-check -strong srm.db.connections.partition-count
-check -strong srm.db.connections.min-per-partition
-check -strong srm.db.connections.max-per-partition
-check -strong srm.db.driver
+check -strong srm.db.connections.idle
+check -strong srm.db.connections.max
 check -strong srm.db.url
 check -strong srm.db.user
 check srm.db.password
@@ -187,8 +191,6 @@ check -strong srm.persistence.reserve-space.remove-expired-period.unit
 check -strong srm.limits.remove-batch-size
 
 check -strong srm.root
-check -strong srm.service.xrootd.root
-check -strong srm.service.webdav.root
 
 check -strong srm.service.gplazma
 check -strong srm.service.gplazma.timeout
@@ -209,6 +211,7 @@ check -strong srm.service.poolmanager
 check -strong srm.service.poolmanager.timeout
 check -strong srm.service.poolmanager.timeout.unit
 
+check -strong srm.service.billing
 
 check -strong srm.enable.advisory-delete
 check -strong srm.enable.client-dns-lookup
@@ -218,8 +221,6 @@ check -strong srm.enable.overwrite-by-default
 check -strong srm.enable.pin-online-files
 check -strong srm.enable.recursive-directory-creation
 check -strong srm.enable.space-reservation
-check -strong srm.enable.space-reservation.implicit
-check -strong srm.enable.space-reservation.strict
 
 check -strong srm.user.credentials.directory
 
@@ -246,7 +247,6 @@ check -strong dcache.paths.share
 # disabled.
 #
 define env srmSpaceManagerOff.exe endExe
-  set env srm.enable.space-reservation.implicit false
   set env srm.enable.space-reservation.strict false
   set env srm.enable.space-reservation false
 endExe
@@ -256,8 +256,7 @@ eval ${dcache.enable.space-reservation} true ==
 exec env srmSpaceManagerOff.exe -ifnotok
 onerror shutdown
 
-
-exec file:${dcache.paths.share}/cells/threadmanager.fragment
-
 create org.dcache.cells.UniversalSpringCell ${srm.cell.name} \
-   "classpath:diskCacheV111/srm/srm.xml -export=${srm.cell.export}"
+   "classpath:diskCacheV111/srm/srm.xml -export=${srm.cell.export} \
+       -messageExecutor=messageExecutor \
+   "

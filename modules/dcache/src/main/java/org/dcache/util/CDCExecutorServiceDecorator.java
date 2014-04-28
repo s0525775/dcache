@@ -23,18 +23,17 @@ import static com.google.common.collect.Iterables.transform;
  * The CDC of a task submitted to the ExecutorService will be initialized to
  * the CDC of the thread that submitted the task.
  */
-public class CDCExecutorServiceDecorator extends ForwardingExecutorService
+public class CDCExecutorServiceDecorator<E extends ExecutorService> extends ForwardingExecutorService
 {
-    private final ExecutorService _delegate;
+    private final E _delegate;
 
-    public CDCExecutorServiceDecorator(
-            ExecutorService delegate)
+    public CDCExecutorServiceDecorator(E delegate)
     {
         this._delegate = delegate;
     }
 
     @Override
-    protected ExecutorService delegate()
+    public E delegate()
     {
         return _delegate;
     }
@@ -93,7 +92,7 @@ public class CDCExecutorServiceDecorator extends ForwardingExecutorService
         _delegate.execute(wrap(command));
     }
 
-    private Runnable wrap(final Runnable task)
+    protected Runnable wrap(final Runnable task)
     {
         final CDC cdc = new CDC();
         return new Runnable()
@@ -101,8 +100,7 @@ public class CDCExecutorServiceDecorator extends ForwardingExecutorService
             @Override
             public void run()
             {
-                cdc.restore();
-                try {
+                try (CDC ignored = cdc.restore()) {
                     task.run();
                 } finally {
                     CDC.clear();
@@ -111,24 +109,21 @@ public class CDCExecutorServiceDecorator extends ForwardingExecutorService
         };
     }
 
-    private <T> Callable<T> wrap(final Callable<T> task)
+    protected <T> Callable<T> wrap(final Callable<T> task)
     {
         final CDC cdc = new CDC();
         return new Callable<T>() {
             @Override
             public T call() throws Exception
             {
-                cdc.restore();
-                try {
+                try (CDC ignored = cdc.restore()) {
                     return task.call();
-                } finally {
-                    cdc.clear();
                 }
             }
         };
     }
 
-    private <T> Collection<? extends Callable<T>> wrap(Collection<? extends Callable<T>> tasks)
+    protected <T> Collection<? extends Callable<T>> wrap(Collection<? extends Callable<T>> tasks)
     {
         return Lists.newArrayList(transform(tasks, new Function<Callable<T>, Callable<T>>()
                 {

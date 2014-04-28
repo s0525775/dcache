@@ -30,9 +30,9 @@ import diskCacheV111.vehicles.StorageInfo;
 
 import dmg.cells.nucleus.CellCommandListener;
 import dmg.cells.nucleus.CellSetupProvider;
-import dmg.util.Args;
 import dmg.util.CommandSyntaxException;
 
+import org.dcache.util.Args;
 import org.dcache.util.Glob;
 import org.dcache.vehicles.FileAttributes;
 
@@ -272,18 +272,6 @@ public class PoolSelectionUnitV2
                 pw.append("psu set linkGroup onlineAllowed ").append(
                         linkGroup.getName()).append(" ").println(
                         linkGroup.isOnlineAllowed());
-
-                for (Map.Entry<String, Set<String>> aAttribute : linkGroup
-                        .attributes().entrySet()) {
-
-                    String attributeName = aAttribute.getKey();
-                    for (String aAttributeValue : aAttribute.getValue()) {
-                        pw.append("psu set linkGroup attribute ").append(
-                                linkGroup.getName()).append(" ").append(
-                                attributeName).append("=").println(
-                                aAttributeValue);
-                    }
-                }
 
                 for (SelectionLink link : linkGroup.getLinks()) {
                     pw.append("psu addto linkGroup ").append(
@@ -2442,66 +2430,11 @@ public class PoolSelectionUnitV2
         return "";
     }
 
-    public final static String hh_psu_set_linkGroup_attribute = "<link group> [-r] attribute=value";
-
+    @Deprecated // Remove in 2.10
     public String ac_psu_set_linkGroup_attribute_$_2(Args args) {
-
-        _psuWriteLock.lock();
-
-        try {
-            String linkGroupName = args.argv(0);
-
-            LinkGroup linkGroup = _linkGroups.get(linkGroupName);
-            if (linkGroup == null) {
-                throw new IllegalArgumentException("LinkGroup not found : "
-                        + linkGroupName);
-            }
-
-            String[] attrKeyValue = args.argv(1).split("=");
-
-            if (attrKeyValue.length == 1 || attrKeyValue[1] == null
-                    || attrKeyValue[1].length() == 0) {
-                return "bad value";
-            }
-
-            linkGroup.attribute(attrKeyValue[0], attrKeyValue[1], args
-                    .hasOption("r"));
-
-        } finally {
-            _psuWriteLock.unlock();
-        }
-        return "";
+        return "psu set linkGroup attribute is obsolete.";
     }
 
-    public final static String hh_psu_remove_linkGroup_attribute = "<link group> attribute=value";
-
-    public String ac_psu_remove_linkGroup_attribute_$_2(Args args) {
-
-        _psuWriteLock.lock();
-
-        try {
-            String linkGroupName = args.argv(0);
-
-            LinkGroup linkGroup = _linkGroups.get(linkGroupName);
-            if (linkGroup == null) {
-                throw new IllegalArgumentException("LinkGroup not found : "
-                        + linkGroupName);
-            }
-
-            String[] attrKeyValue = args.argv(1).split("=");
-
-            if (attrKeyValue.length == 1 || attrKeyValue[1] == null
-                    || attrKeyValue[1].length() == 0) {
-                return "bad value";
-            }
-            // remove
-            linkGroup.removeAttribute(attrKeyValue[0], attrKeyValue[1]);
-
-        } finally {
-            _psuWriteLock.unlock();
-        }
-        return "";
-    }
 
     public final static String hh_psu_set_linkGroup_custodialAllowed = "<link group> <true|false>";
 

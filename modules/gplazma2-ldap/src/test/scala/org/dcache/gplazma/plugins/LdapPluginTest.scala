@@ -20,13 +20,12 @@ import org.dcache.auth.attributes.{ReadOnly, HomeDirectory, RootDirectory}
  *
  * The tests are all ignored by default because they depend on DESY infrastructure.
  */
-@RunWith(classOf[JUnitRunner])
+@RunWith(classOf[JUnitRunner]) @Ignore
 class LdapPluginTest extends FlatSpec with Matchers {
 
   val pluginProperties = {
     val properties = new Properties
-    properties.put(Ldap.LDAP_SERVER, "wof-dav.desy.de")
-    properties.put(Ldap.LDAP_PORT, "389")
+    properties.put(Ldap.LDAP_URL, "ldap://wof-dav.desy.de:389/")
     properties.put(Ldap.LDAP_ORG, "ou=NIS,o=DESY,c=DE")
     properties.put(Ldap.LDAP_USER_FILTER, "(uid=%s)")
     properties.put(Ldap.LDAP_PEOPLE_TREE, "People")

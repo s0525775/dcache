@@ -7,20 +7,21 @@
               http://www.springframework.org/schema/context
               http://www.springframework.org/schema/context/spring-context.xsd">
 
+  <context:property-placeholder/>
   <context:annotation-config/>
 
-  <bean id="properties" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
-    <description>Imported configuration data</description>
-    <property name="location" value="arguments:"/>
-  </bean>
-
-  <bean id="scheduled-executor"
-        class="java.util.concurrent.Executors"
-        factory-method="newScheduledThreadPool"
-        destroy-method="shutdown">
-    <description>Task scheduler</description>
-    <constructor-arg value="1"/>
-  </bean>
+    <bean id="executor"
+          class="org.dcache.util.BoundedExecutor"
+          destroy-method="shutdown">
+        <description>Thread pool for message processing</description>
+        <constructor-arg>
+            <bean class="java.util.concurrent.Executors"
+                  factory-method="newCachedThreadPool"
+                  destroy-method="shutdown">
+            </bean>
+        </constructor-arg>
+        <constructor-arg value="${spacemanager.limits.threads}"/>
+    </bean>
 
   <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
     <description>Pool manager communication stub</description>
@@ -29,10 +30,9 @@
     <property name="timeoutUnit" value="${srm.service.poolmanager.timeout.unit}"/>
   </bean>
 
-  <bean id="pool-monitor" class="org.dcache.poolmanager.RemotePoolMonitorFactoryBean" init-method="init">
+  <bean id="pool-monitor" class="org.dcache.poolmanager.RemotePoolMonitorFactoryBean">
     <description>Maintains runtime information about all pools</description>
     <property name="poolManagerStub" ref="pool-manager-stub"/>
-    <property name="executor" ref="scheduled-executor"/>
   </bean>
 
   <bean id="pnfs-stub" class="org.dcache.cells.CellStub">
@@ -48,45 +48,95 @@
     <constructor-arg ref="pnfs-stub"/>
   </bean>
 
-  <bean id="db-manager" class="diskCacheV111.util.DBManager"
-	factory-method="getInstance" lazy-init="false">
+    <bean id="data-source" class="com.zaxxer.hikari.HikariDataSource"
+            destroy-method="shutdown">
+        <constructor-arg>
+            <bean class="com.zaxxer.hikari.HikariConfig">
+                <constructor-arg type="java.util.Properties">
+                    <value>
+                        minimumIdle = ${spacemanager.db.connections.idle}
+                        maximumPoolSize = ${spacemanager.db.connections.max}
+                        autoCommit = true
+                        transactionIsolation = TRANSACTION_READ_COMMITTED
+                    </value>
+                </constructor-arg>
+                <property name="dataSource">
+                    <bean class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+                        <property name="url" value="${spacemanager.db.url}"/>
+                        <property name="username" value="${spacemanager.db.user}"/>
+                        <property name="password" value="#{ T(diskCacheV111.util.Pgpass).getPassword('${spacemanager.db.password.file}', '${spacemanager.db.url}', '${spacemanager.db.user}', '${spacemanager.db.password}') }"/>
+                    </bean>
+                </property>
+            </bean>
+        </constructor-arg>
+    </bean>
+
+    <bean id="liquibase" class="org.dcache.util.SpringLiquibase">
+        <description>Database schema manager</description>
+        <property name="dataSource" ref="data-source"/>
+        <property name="changeLog" value="classpath:${spacemanager.db.schema.changelog}"/>
+        <property name="shouldUpdate" value="${spacemanager.db.schema.auto}"/>
+    </bean>
+
+  <bean id="tx-manager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <description>Database transaction manager</description>
+    <property name="dataSource" ref="data-source"/>
+  </bean>
+
+  <bean class="org.dcache.util.aspects.PerInstanceAnnotationTransactionBeanPostProcessor">
+    <property name="transactionManager" ref="tx-manager"/>
   </bean>
 
   <bean id="authz-policy" class="diskCacheV111.services.space.SimpleSpaceManagerAuthorizationPolicy"/>
 
-  <bean id="spacemanager" class="diskCacheV111.services.space.Manager"
-         init-method="start" destroy-method="stop">
-    <description>SrmSpaceManager</description>
-    <property name="dbManager"        ref="db-manager" />
-    <property name="pnfsStub"         ref="pnfs-stub"/>
-    <property name="pnfsHandler"      ref="pnfs"/>
-    <property name="poolManagerStub"  ref="pool-manager-stub"/>
+  <bean id="database" class="diskCacheV111.services.space.JdbcSpaceManagerDatabase"
+        init-method="init" depends-on="liquibase">
+      <property name="dataSource" ref="data-source"/>
+  </bean>
+
+  <bean id="linkgroup-loader" class="diskCacheV111.services.space.LinkGroupLoader"
+      init-method="start" destroy-method="stop">
+    <property name="database" ref="database"/>
     <property name="poolMonitor" ref="pool-monitor"/>
-    <property name="jdbcUrl" value="${spacemanager.db.url}"/>
-    <property name="jdbcDriver" value="${spacemanager.db.driver}"/>
-    <property name="jdbcUser" value="${spacemanager.db.user}"/>
-    <property name="jdbcPassword" value="#{T(diskCacheV111.util.Pgpass).getPassword(
-					 '${spacemanager.db.password.file}',
-					 '${spacemanager.db.url}',
-					 '${spacemanager.db.user}',
-					 '${spacemanager.db.password}')}"/>
-    <property name="spaceManagerEnabled"
-              value="${dcache.enable.space-reservation}" />
     <property name="updateLinkGroupsPeriod"
               value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
-		     ${spacemanager.link-groups-update.period},
-		     '${spacemanager.link-groups-update.period.unit}')}" />
-    <property name="expireSpaceReservationsPeriod"
-              value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
-		     ${spacemanager.expire-space-reservation.period},
-		     '${spacemanager.expire-space-reservation.period.unit}')}" />
+                     ${spacemanager.link-groups-update.period},
+                    '${spacemanager.link-groups-update.period.unit}')}" />
+    <property name="authorizationFileName" value="${spacemanager.authz.link-group-file-name}" />
+  </bean>
+
+  <bean id="cli" class="diskCacheV111.services.space.SpaceManagerCommandLineInterface">
+    <property name="database" ref="database"/>
     <property name="defaultRetentionPolicy" value="#{T(diskCacheV111.util.RetentionPolicy).getRetentionPolicy('${spacemanager.default-retention-policy}')}" />
     <property name="defaultAccessLatency" value="#{T(diskCacheV111.util.AccessLatency).getAccessLatency('${spacemanager.default-access-latency}')}" />
-    <property name="reserveSpaceForNonSRMTransfers" value="${spacemanager.enable.reserve-space-for-non-srm-transfers}" />
-    <property name="deleteStoredFileRecord" value="false" />
-    <property name="cleanupExpiredSpaceFiles" value="true" />
-    <property name="returnFlushedSpaceToReservation" value="true" />
-    <property name="linkGroupAuthorizationFileName" value="${spacemanager.authz.link-group-file-name}" />
+    <property name="linkGroupLoader" ref="linkgroup-loader"/>
+    <property name="pnfs" ref="pnfs"/>
+    <property name="executor" ref="executor"/>
+  </bean>
+
+  <bean id="spacemanager" class="diskCacheV111.services.space.SpaceManagerService"
+         init-method="start" destroy-method="stop">
+    <description>SrmSpaceManager</description>
+    <property name="database" ref="database"/>
+    <property name="linkGroupLoader" ref="linkgroup-loader"/>
+    <property name="pnfsHandler" ref="pnfs"/>
+    <property name="poolManager" value="${srm.service.poolmanager}"/>
+    <property name="poolMonitor" ref="pool-monitor"/>
+    <property name="executor" ref="executor"/>
+    <property name="perishedSpacePurgeDelay"
+              value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
+                     ${spacemanager.perished-space-purge-delay},
+                     '${spacemanager.perished-space-purge-delay.unit}')}" />
+    <property name="spaceManagerEnabled"
+              value="${spacemanager.enable.space-reservation}" />
+    <property name="expireSpaceReservationsPeriod"
+              value="#{T(java.util.concurrent.TimeUnit).MILLISECONDS.convert(
+                     ${spacemanager.expire-space-reservation.period},
+                     '${spacemanager.expire-space-reservation.period.unit}')}" />
+    <property name="defaultAccessLatency" value="#{T(diskCacheV111.util.AccessLatency).getAccessLatency('${spacemanager.default-access-latency}')}" />
+    <property name="allowUnreservedUploadsToLinkGroups" value="${spacemanager.enable.unreserved-uploads-to-linkgroups}" />
+    <property name="shouldDeleteStoredFileRecord" value="false" />
+    <property name="shouldReturnFlushedSpaceToReservation" value="true" />
     <property name="authorizationPolicy" ref="authz-policy" />
   </bean>
 

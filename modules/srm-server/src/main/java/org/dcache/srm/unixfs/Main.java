@@ -13,12 +13,21 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 
-import dmg.util.Args;
 import dmg.util.CommandInterpreter;
 
 import org.dcache.srm.SRM;
 import org.dcache.srm.SRMAuthorization;
+import org.dcache.srm.request.BringOnlineFileRequest;
+import org.dcache.srm.request.GetFileRequest;
+import org.dcache.srm.request.Job;
+import org.dcache.srm.request.PutFileRequest;
+import org.dcache.srm.request.ReserveSpaceRequest;
+import org.dcache.srm.scheduler.Scheduler;
+import org.dcache.srm.scheduler.SchedulerContainer;
+import org.dcache.util.Args;
 
 /**
  *
@@ -65,15 +74,67 @@ public class Main extends CommandInterpreter implements  Runnable {
         config.setAuthorization(authorization);
         Storage storage =
             new Storage(gridftphost,gridftpport,config,stat,chown,out,err);
-        config.setStorage(storage);
 
-        srm = SRM.getSRM(config,name);
-         new Thread(this).start();
+        srm = new SRM(config, storage);
+        srm.setSchedulers(new SchedulerContainer(
+                buildRunningScheduler("get_" + name, GetFileRequest.class, "Get"),
+                buildRunningScheduler("ls_" + name, GetFileRequest.class, "Ls"),
+                buildRunningScheduler("bring_online_" + name,
+                        BringOnlineFileRequest.class, "BringOnline"),
+                buildRunningScheduler("put_" + name, PutFileRequest.class, "Put"),
+                buildRunningScheduler("reserve_space_" + name,
+                        ReserveSpaceRequest.class, "ReserveSpace"),
+                // COPY must be the last in the list
+                buildRunningScheduler("copy_" + name, Job.class, "Copy")));
+        srm.start();
 
-
-
+        new Thread(this).start();
     }
 
+    private Scheduler buildRunningScheduler(String name, Class<? extends Job> type,
+            String configPrefix)
+    {
+        Scheduler scheduler = new Scheduler(name, type);
+
+        scheduler.setMaxThreadQueueSize(getIntConfigValue(configPrefix, "ReqTQueueSize"));
+        scheduler.setThreadPoolSize(getIntConfigValue(configPrefix, "ThreadPoolSize"));
+        scheduler.setMaxWaitingJobNum(getIntConfigValue(configPrefix, "MaxWaitingRequests"));
+        scheduler.setMaxNumberOfRetries(getIntConfigValue(configPrefix, "MaxNumOfRetries"));
+        scheduler.setRetryTimeout(getLongConfigValue(configPrefix, "RetryTimeout"));
+        scheduler.setMaxRunningByOwner(getIntConfigValue(configPrefix, "MaxRunningBySameOwner"));
+        scheduler.setPriorityPolicyPlugin("DefaultJobAppraiser");
+
+        if (!configPrefix.equals("Copy")) {
+            scheduler.setMaxReadyQueueSize(getIntConfigValue(configPrefix, "ReadyQueueSize"));
+            scheduler.setMaxReadyJobs(getIntConfigValue(configPrefix, "MaxReadyJobs"));
+        }
+
+        scheduler.start();
+
+        return scheduler;
+    }
+
+    private int getIntConfigValue(String prefix, String suffix)
+    {
+        return (Integer) getConfigValue(prefix, suffix);
+    }
+
+    private long getLongConfigValue(String prefix, String suffix)
+    {
+        return (Long) getConfigValue(prefix, suffix);
+    }
+
+    private Object getConfigValue(String prefix, String suffix)
+    {
+        String name = "get" + prefix + suffix;
+        try {
+            Method getter = config.getClass().getMethod(name);
+            return getter.invoke(config);
+        } catch (NoSuchMethodException | IllegalAccessException |
+                IllegalArgumentException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Override
     public void run()

@@ -4,7 +4,7 @@
     <parent>
         <groupId>org.dcache</groupId>
         <artifactId>packaging</artifactId>
-        <version>2.8.0-SNAPSHOT</version>
+        <version>2.10.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>dcache-fhs</artifactId>
@@ -18,6 +18,9 @@
         <filtered-skel>${project.basedir}/target/filtered-skel</filtered-skel>
         <fhs.outputDirectory>${project.build.directory}</fhs.outputDirectory>
         <fhs.finalName>${project.build.finalName}</fhs.finalName>
+
+	<!-- Directory that has RPMS, SPECS, BUILD, etc -->
+	<rpm.baseDirectory>${project.build.directory}/rpmbuild</rpm.baseDirectory>
     </properties>
 
     <build>
@@ -178,17 +181,25 @@
                                     <finalName>${fhs.finalName}</finalName>
                                 </configuration>
                             </execution>
+
                             <execution>
-                                <id>specs</id>
+                                <id>rpm-environment</id>
                                 <phase>package</phase>
                                 <goals>
                                     <goal>single</goal>
                                 </goals>
                                 <configuration>
                                     <descriptors>
-                                        <descriptor>src/main/assembly/spec.xml</descriptor>
+                                        <descriptor>src/main/assembly/rpm-environment.xml</descriptor>
                                     </descriptors>
-                                    <finalName>SPECS</finalName>
+                                    <outputDirectory>${rpm.baseDirectory}</outputDirectory>
+				    <!-- Work-around for a bug in maven-assembly-plugin that
+				         it ignores an empty finalName, so we must provide a
+					 non-empty value:
+
+					 http://jira.codehaus.org/browse/MASSEMBLY-681
+				    -->
+				    <finalName>.</finalName>
                                 </configuration>
                             </execution>
                         </executions>
@@ -211,10 +222,10 @@
                             <arguments>
                                 <argument>-bb</argument>
                                 <argument>--define</argument>
-                                <argument>_topdir ${project.build.directory}</argument>
+                                <argument>_topdir ${rpm.baseDirectory}</argument>
                                 <argument>--buildroot</argument>
                                 <argument>${fhs.outputDirectory}/${fhs.finalName}</argument>
-                                <argument>SPECS/dcache-server.spec</argument>
+                                <argument>${rpm.baseDirectory}/SPECS/dcache-server.spec</argument>
                             </arguments>
                         </configuration>
                     </plugin>
@@ -228,9 +239,9 @@
             <properties>
                 <build.id>1</build.id>
                 <local.version />
-                <build.number>${build.id}${local.version}</build.number>
+                <revision>${build.id}${local.version}</revision>
 
-                <Version>${deb.version}-${build.number}</Version>
+                <Version>${deb.version}-${revision}</Version>
                 <MaintainerName>The dCache team</MaintainerName>
                 <MaintainerMail>support@dcache.org</MaintainerMail>
                 <PackageName>dcache</PackageName>
@@ -252,8 +263,8 @@
                                 <configuration>
                                     <name>deb.version</name>
                                     <value>${project.version}</value>
-                                    <regex>-</regex>
-                                    <replacement>~</replacement>
+                                    <regex>-SNAPSHOT</regex>
+                                    <replacement>~\${timestamp}</replacement>
                                     <failIfNoMatch>false</failIfNoMatch>
                                 </configuration>
                             </execution>
@@ -298,6 +309,91 @@
                                 <argument>-rfakeroot</argument>
                                 <argument>-uc</argument>
                                 <argument>-A</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>pkg</id>
+
+            <properties>
+                <build.id>1</build.id>
+                <local.version />
+                <build.number>${build.id}${local.version}</build.number>
+
+                <Timestamp>${maven.build.timestamp}</Timestamp>
+                <Version>${pkg.version}</Version>
+                <Release>${build.number}</Release>
+
+                <maven.build.timestamp.format>EEE MMM dd yyyy</maven.build.timestamp.format>
+            </properties>
+
+            <build>
+                <plugins>
+
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>regex-property</id>
+                                <goals>
+                                    <goal>regex-property</goal>
+                                </goals>
+                                <configuration>
+                                    <name>pkg.version</name>
+                                    <value>${project.version}</value>
+                                    <regex>-</regex>
+                                    <replacement/>
+                                    <failIfNoMatch>false</failIfNoMatch>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>pkg</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/pkg.xml</descriptor>
+                                    </descriptors>
+                                    <outputDirectory>${fhs.outputDirectory}</outputDirectory>
+                                    <finalName>${fhs.finalName}</finalName>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <executable>sh</executable>
+                            <workingDirectory>${project.build.directory}/${fhs.finalName}</workingDirectory>
+                            <arguments>
+                              <argument>${project.basedir}/src/main/solaris/mk-sol-pkg.sh</argument>
+                              <argument>${project.build.directory}/solaris-pkg</argument>
+                              <argument>${project.build.directory}</argument>
+                              <argument>${pkg.version}-${build.number}</argument>
+                              <argument>dcache</argument>
                             </arguments>
                         </configuration>
                     </plugin>

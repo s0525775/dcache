@@ -1,6 +1,3 @@
-// $Id: FileState.java,v 1.4 2007-08-03 15:46:03 timur Exp $
-// $Log: not supported by cvs2svn $
-
 /*
 COPYRIGHT STATUS:
   Dec 1st 2001, Fermi National Accelerator Laboratory (FNAL) documents and
@@ -67,120 +64,62 @@ COPYRIGHT STATUS:
   documents or software obtained from this server.
  */
 
-/*
- * FileState.java
- *
- * Created on March 19, 2004, 2:51 PM
- */
-
 package diskCacheV111.services.space;
 
-import java.io.Serializable;
+import com.google.common.base.Function;
 
-/**
- *
- * @author  timur
- */
-public final class FileState implements Serializable {
-
-    private static final long serialVersionUID = 5569202385370444308L;
-    private final String name;
-    private final int stateId;
-
-    public static final FileState RESERVED       = new FileState("Reserved",    0);
-    public static final FileState TRANSFERRING    = new FileState("Transferring", 1);
-    public static final FileState STORED         = new FileState("Stored",      2);
-    public static final FileState FLUSHED        = new FileState("Flushed",     3);
+public enum FileState
+{
+    /**
+     * TRANSFERRING file reservations are bound to a PNFS ID, thus the
+     * name space entry has been created, but the file has not finished
+     * uploading yet. The space is tracked as allocated in the space
+     * reservation.
+     */
+    TRANSFERRING(1),
 
     /**
-     * Creates a new instance of FileState
+     * The file has been completely uploaded to dCache and resides
+     * on disk. The space is tracked as used in the space reservation.
      */
-    private FileState(String name,int stateId) {
-        this.name = name;
+    STORED(2),
+
+    /**
+     * The file has been flushed to tape and purged from the space. The
+     * space is not tracked by the space reservation.
+     */
+    FLUSHED(3);
+
+    private final int stateId;
+
+
+    private FileState(int stateId)
+    {
         this.stateId = stateId;
     }
 
-    public static FileState[] getAllStates() {
-        return new FileState[] {
-         RESERVED,
-         TRANSFERRING,
-         STORED,
-         FLUSHED
-        };
-    }
-    public String toString() {
-        return name;
-    }
-
-    public int getStateId() {
+    public int getStateId()
+    {
         return stateId;
     }
-    /**
-     * this package visible method is used to restore the FileState from
-     * the database
-     */
-    public static FileState getState(String state) throws IllegalArgumentException {
-        if(state == null || state.equalsIgnoreCase("null")) {
-            throw new NullPointerException(" null state ");
-        }
 
-        if(RESERVED.name.equals(state)) {
-            return RESERVED;
-        }
-
-        if(TRANSFERRING.name.equals(state)) {
-            return TRANSFERRING;
-        }
-
-        if(STORED.name.equals(state)) {
-            return STORED;
-        }
-
-        if(FLUSHED.name.equals(state)) {
-            return FLUSHED;
-        }
-        try{
-            int stateId = Integer.parseInt(state);
-            return getState(stateId);
-        }
-        catch(Exception e) {
-            throw new IllegalArgumentException("Unknown State");
-        }
-    }
-
-    public static FileState getState(int stateId) throws IllegalArgumentException {
-
-        if(RESERVED.stateId == stateId) {
-            return RESERVED;
-        }
-
-        if(TRANSFERRING.stateId == stateId) {
-            return TRANSFERRING;
-        }
-
-        if(STORED.stateId == stateId) {
-            return STORED;
-        }
-
-        if(FLUSHED.stateId == stateId) {
-            return FLUSHED;
-        }
-
-        throw new IllegalArgumentException("Unknown State Id");
-    }
-
-    public static boolean isFinalState(FileState state) {
-        return state == FLUSHED;
-    }
-
-    // this is what we need to correctly implement
-    // serialization of the singleton
-    public Object readResolve()
+    public static FileState valueOf(int stateId) throws IllegalArgumentException
     {
-        return getState(stateId);
+        for (FileState state : values()) {
+            if (state.stateId == stateId) {
+                return state;
+            }
+        }
+        throw new IllegalArgumentException("Unknown state id: " + stateId);
     }
 
-    public int hashCode() {
-        return name.hashCode();
-    }
+    public static final Function<FileState, Integer> getStateId =
+            new Function<FileState, Integer>()
+            {
+                @Override
+                public Integer apply(FileState state)
+                {
+                    return state.getStateId();
+                }
+            };
 }

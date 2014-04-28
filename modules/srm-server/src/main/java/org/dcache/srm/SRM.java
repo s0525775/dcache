@@ -94,7 +94,6 @@ import java.util.regex.Pattern;
 
 import diskCacheV111.srm.FileMetaData;
 import diskCacheV111.srm.RequestStatus;
-import diskCacheV111.srm.StorageElementInfo;
 
 import org.dcache.commons.stats.MonitoringProxy;
 import org.dcache.commons.stats.RequestCounters;
@@ -124,13 +123,13 @@ import org.dcache.srm.request.sql.RequestsPropertyStorage;
 import org.dcache.srm.scheduler.IllegalStateTransition;
 import org.dcache.srm.scheduler.JobStorage;
 import org.dcache.srm.scheduler.JobStorageFactory;
-import org.dcache.srm.scheduler.Scheduler;
 import org.dcache.srm.scheduler.SchedulerContainer;
-import org.dcache.srm.scheduler.SchedulerFactory;
 import org.dcache.srm.scheduler.State;
 import org.dcache.srm.util.Configuration;
 import org.dcache.srm.v2_2.TFileStorageType;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.concat;
 import static java.util.Arrays.asList;
 
@@ -158,40 +157,36 @@ public class SRM {
     private RrdRequestExecutionTimeGauges<?> rrdSrmServerV2Gauges;
     private RrdRequestExecutionTimeGauges<?> rrdSrmServerV1Gauges;
     private RrdRequestExecutionTimeGauges<?> rrdAstractStorageElementGauges;
-    private final SchedulerContainer schedulers;
+    private SchedulerContainer schedulers;
+    private DatabaseJobStorageFactory databaseFactory;
 
     private static SRM srm;
+
     /**
      * Creates a new instance of SRM
      * @param config
      * @param name
      * @throws IOException
      * @throws InterruptedException
-     * @throws IllegalStateTransition
      * @throws DataAccessException
      */
-    private SRM(Configuration config, String name)
-            throws IOException,
-                   InterruptedException,
-                   IllegalStateTransition,
-                   DataAccessException
+    public SRM(Configuration config, AbstractStorageElement storage) throws IOException, InterruptedException,
+            DataAccessException
     {
         this.configuration = config;
         //First of all decorate the storage with counters and
         // gauges to measure the performance of storage operations
-        this.storage = config.getStorage();
         abstractStorageElementCounters=
                 new RequestCounters<>(
-                        this.storage.getClass().getName());
+                        storage.getClass().getName());
         abstractStorageElementGauges =
                 new RequestExecutionTimeGauges<>(
-                        this.storage.getClass().getName());
+                        storage.getClass().getName());
         this.storage = MonitoringProxy.decorateWithMonitoringProxy(
                 new Class[]{AbstractStorageElement.class},
-                this.storage,
+                storage,
                 abstractStorageElementCounters,
                 abstractStorageElementGauges);
-        config.setStorage(this.storage);
 
         srmServerV2Counters = new RequestCounters<>("SRMServerV2");
         srmServerV1Counters = new RequestCounters<>("SRMServerV1");
@@ -263,61 +258,57 @@ public class SRM {
         requestCredentialStorage = new DatabaseRequestCredentialStorage(config);
         RequestCredential.registerRequestCredentialStorage(requestCredentialStorage);
 
-        schedulers = new SchedulerContainer();
-        SchedulerFactory factory = new SchedulerFactory(config, name);
-        schedulers.add(factory.buildBringOnlineScheduler());
-        schedulers.add(factory.buildCopyScheduler());
-        schedulers.add(factory.buildGetScheduler());
-        schedulers.add(factory.buildLsScheduler());
-        schedulers.add(factory.buildPutScheduler());
-        schedulers.add(factory.buildReserveSpaceScheduler());
-        schedulers.start();
-
-        DatabaseJobStorageFactory afactory = new DatabaseJobStorageFactory(configuration);
-        afactory.setSchedulerContainer(schedulers);
-        JobStorageFactory.initJobStorageFactory(afactory);
-        afactory.init();
-
         host = InetAddress.getLocalHost();
 
         configuration.addSrmHost(host.getCanonicalHostName());
         logger.debug("srm started :\n\t" + configuration.toString());
     }
 
-    /**
-     * SRM is now a singleton, this will return an instance of
-     * will create a new SRM if it does not exist
-     * @param configuration
-     * @param name
-     * @return SRM
-     * @throws IOException
-     * @throws InterruptedException
-     * @throws IllegalStateTransition
-     * @throws DataAccessException
-     */
-    public static final synchronized SRM getSRM(Configuration configuration, String name)
-            throws IOException,
-                   InterruptedException,
-                   IllegalStateTransition,
-                   DataAccessException
+    public void setSchedulers(SchedulerContainer schedulers)
     {
-        if (srm == null) {
-            srm = new SRM(configuration, name);
-            SRM.class.notifyAll();
+        this.schedulers = checkNotNull(schedulers);
+    }
+
+    public static final synchronized void setSRM(SRM srm)
+    {
+        SRM.srm = srm;
+        SRM.class.notifyAll();
+    }
+
+    public static final synchronized SRM getSRM()
+    {
+        while (srm == null) {
+            try {
+                SRM.class.wait();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException("SRM has not been instantiated yet.");
+            }
         }
         return srm;
     }
 
-    /**
-     *
-     * @return instance of SRM if it was created or null if it was not
-     */
-    public static synchronized final SRM getSRM() {
-        return srm;
+    public void start() throws IllegalStateException, IOException
+    {
+        checkState(schedulers != null, "Cannot start SRM with no schedulers");
+        setSRM(this);
+        databaseFactory = new DatabaseJobStorageFactory(configuration);
+        try {
+            JobStorageFactory.initJobStorageFactory(databaseFactory);
+            databaseFactory.init();
+            databaseFactory.restoreJobsOnSrmStart(schedulers);
+        } catch (RuntimeException e) {
+            try {
+                databaseFactory.shutdown();
+            } catch (Exception suppressed) {
+                e.addSuppressed(suppressed);
+            }
+            throw e;
+        }
     }
 
-    public void stop() {
-        schedulers.stop();
+    public void stop() throws InterruptedException
+    {
+        databaseFactory.shutdown();
     }
 
     /**
@@ -671,7 +662,7 @@ public class SRM {
                             configuration.getGetMaxNumOfRetries(),
                             null,
                             client_host);
-            schedulers.schedule(r);
+            schedule(r);
             // RequestScheduler will take care of the rest
             //getGetRequestScheduler().add(r);
             // Return the request status
@@ -832,7 +823,7 @@ public class SRM {
             RequestCredential credential,
             String[] sources,
             String[] dests,
-            long[] sizes,
+            Long[] sizes,
             boolean[] wantPerm,
             String[] protocols,
             String clientHost) {
@@ -900,7 +891,7 @@ public class SRM {
                     null,
                     null,
                     null);
-            schedulers.schedule(r);
+            schedule(r);
             // return status
             return r.getRequestStatus();
         } catch (Exception e) {
@@ -933,7 +924,7 @@ public class SRM {
             int requestId, int fileRequestId, String state) {
         try {
             logger.debug(" setFileStatus(" + requestId + "," + fileRequestId + "," + state + ");");
-            if (!state.equalsIgnoreCase("done") && !state.equalsIgnoreCase("running")) {
+            if (!state.equalsIgnoreCase("done") && !state.equalsIgnoreCase("running") && !state.equalsIgnoreCase("failed")) {
                 return createFailedRequestStatus("setFileStatus(): incorrect state " + state);
             }
 
@@ -957,27 +948,8 @@ public class SRM {
                 if (s.isFinal()) {
                     logger.debug("can not set status, the file status is already " + s);
                 } else {
-                    if (state.equalsIgnoreCase("done") && fr instanceof PutFileRequest &&
-                            (s == State.READY || s == State.RUNNING)) {
-                        PutFileRequest pfr = (PutFileRequest) fr;
-                        if (pfr.getTurlString() != null) {
-                            try {
-                                if (storage.exists(user, pfr.getSurl())) {
-                                    fr.setStatus(state);
-                                } else {
-                                    pfr.setState(State.FAILED, "File transfer was not performed on SURL.");
-                                }
-                            } catch (SRMException srme) {
-                                pfr.setState(State.FAILED, "File transfer was not performed on SURL.");
-                            }
-                        }
-
-                    } else {
-
-                        // process request
-                        logger.debug(" calling fr.setStatus(\"" + state + "\")");
-                        fr.setStatus(state);
-                    }
+                    logger.debug(" calling fr.setStatus(\"" + state + "\")");
+                    fr.setStatus(user, state);
                 }
             }
 
@@ -1024,12 +996,6 @@ public class SRM {
         rs.errorMessage = error;
         rs.state = "Failed";
         return rs;
-    }
-
-    public StorageElementInfo getStorageElementInfo(
-            SRMUser user,
-            RequestCredential credential) throws SRMException {
-        return storage.getStorageElementInfo(user);
     }
 
     public void listGetRequests(StringBuilder sb) throws DataAccessException {
@@ -1197,7 +1163,7 @@ public class SRM {
     public double getLoad() {
         return (schedulers.getLoad(CopyRequest.class) +
                 schedulers.getLoad(GetFileRequest.class) +
-                schedulers.getLoad(PutFileRequest.class))/3;
+                schedulers.getLoad(PutFileRequest.class)) / 3.0d;
     }
 
     public void listRequest(StringBuilder sb, long requestId, boolean longformat)

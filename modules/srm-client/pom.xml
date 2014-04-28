@@ -4,7 +4,7 @@
     <parent>
         <groupId>org.dcache</groupId>
         <artifactId>dcache-parent</artifactId>
-        <version>2.8.0-SNAPSHOT</version>
+        <version>2.10.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -44,9 +44,13 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>org.dcache</groupId>
+            <artifactId>common-cli</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>${bouncycastle.bcprov}</artifactId>
-            <scope>runtime</scope>
         </dependency>
     </dependencies>
 
@@ -103,6 +107,9 @@
                 <Timestamp>${maven.build.timestamp}</Timestamp>
                 <Release>${build.number}</Release>
                 <maven.build.timestamp.format>EEE MMM dd yyyy</maven.build.timestamp.format>
+
+                <!-- Directory that has RPMS, SPECS, BUILD, etc -->
+                <rpm.baseDirectory>${project.build.directory}/rpmbuild</rpm.baseDirectory>
             </properties>
 
             <build>
@@ -127,24 +134,31 @@
                         </executions>
                     </plugin>
 
+
                     <plugin>
                         <artifactId>maven-assembly-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>spec</id>
+                                <id>rpm-environment</id>
                                 <phase>package</phase>
                                 <goals>
                                     <goal>single</goal>
                                 </goals>
                                 <configuration>
                                   <descriptors>
-                                    <descriptor>src/main/assembly/spec.xml</descriptor>
+                                    <descriptor>src/main/assembly/rpm-environment.xml</descriptor>
                                   </descriptors>
                                   <formats>
                                     <format>dir</format>
                                   </formats>
-                                  <outputDirectory>${project.build.directory}</outputDirectory>
-                                  <finalName>SPECS</finalName>
+                                  <outputDirectory>${rpm.baseDirectory}</outputDirectory>
+                                  <!-- Work-around for a bug in maven-assembly-plugin that
+                                       it ignores an empty finalName, so we must provide a
+                                       non-empty value:
+
+                                       http://jira.codehaus.org/browse/MASSEMBLY-681
+                                  -->
+                                  <finalName>.</finalName>
                                   <appendAssemblyId>false</appendAssemblyId>
                                 </configuration>
                             </execution>
@@ -168,10 +182,10 @@
                             <arguments>
                                 <argument>-bb</argument>
                                 <argument>--define</argument>
-                                <argument>_topdir ${project.build.directory}</argument>
+                                <argument>_topdir ${rpm.baseDirectory}</argument>
                                 <argument>--buildroot</argument>
                                 <argument>${project.build.directory}/${project.build.finalName}</argument>
-                                <argument>SPECS/dcache-srmclient.spec</argument>
+                                <argument>${rpm.baseDirectory}/SPECS/dcache-srmclient.spec</argument>
                             </arguments>
                         </configuration>
                     </plugin>

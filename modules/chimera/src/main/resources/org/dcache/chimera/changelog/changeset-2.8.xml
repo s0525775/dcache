@@ -3,35 +3,45 @@
         xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
-     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
 
-    <changeSet author="tigran" id="14">
+    <changeSet author="behrmann" id="15.2" dbms="postgresql">
+        <comment>Prepare t_inodes for whole table update</comment>
+        <sql>ALTER TABLE t_inodes SET (fillfactor=45)</sql>
+        <rollback>
+            <sql>ALTER TABLE t_inodes SET (fillfactor=75)</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="tigran" id="15.3">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not adding icrtime column as it already exists (this is not an error)">
+            <not>
+                <columnExists tableName="t_inodes" columnName="icrtime"/>
+            </not>
+        </preConditions>
+
+        <comment>Add creation time column</comment>
+
         <addColumn tableName="t_inodes">
-            <column name="icrtime" type="DATETIME" remarks="file/directory creation timestamp"/>
+            <column name="icrtime" type="DATETIME" remarks="file/directory creation timestamp" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
         </addColumn>
+
+        <sql>UPDATE t_inodes SET icrtime = LEAST(icrtime, imtime, ictime, iatime)</sql>
+
+        <rollback>
+            <dropColumn tableName="t_inodes" columnName="icrtime"/>
+        </rollback>
     </changeSet>
 
-    <changeSet author="tigran" id="15">
-        <sql stripComments="true">
-            UPDATE t_inodes SET icrtime = (
-                SELECT
-                    CASE
-                        WHEN ictime &lt;= imtime and ictime &lt;= iatime THEN ictime
-                        WHEN imtime &lt;= ictime and imtime &lt;= iatime THEN imtime
-                        ELSE iatime
-                    END AS icrtime
-                FROM t_inodes AS p WHERE p.ipnfsid = t_inodes.ipnfsid
-            )
-        </sql>
+    <changeSet author="tigran" id="15.4" dbms="postgresql">
+        <comment>Restore t_inodes fillfactor to reasonable value</comment>
+        <sql>ALTER TABLE t_inodes SET (fillfactor=75)</sql>
+        <rollback/>
     </changeSet>
 
-    <changeSet author="tigran" id="16">
-        <addNotNullConstraint columnDataType="DATETIME"
-                      columnName="icrtime"
-                      tableName="t_inodes"/>
-    </changeSet>
-
-    <changeSet author="litvinse" id="17" dbms="postgresql">
+    <changeSet author="litvinse" id="17.1" dbms="postgresql">
        <createProcedure>
 	 ---  RFC 2396 :  http://www.ietf.org/rfc/rfc2396.txt
 	 ---        unreserved = alpha num | mark
@@ -119,6 +129,7 @@
 	  $$
 	  LANGUAGE 'plpgsql';
        </createProcedure>
+        <rollback/>
     </changeSet>
 
 </databaseChangeLog>

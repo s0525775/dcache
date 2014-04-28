@@ -1,5 +1,6 @@
 package org.dcache.ftp.door;
 
+import com.google.common.collect.Lists;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -9,14 +10,16 @@ import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.slf4j.Logger;
 
 import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.net.InetSocketAddress;
+import java.net.InterfaceAddress;
 import java.net.UnknownHostException;
 import java.util.EnumSet;
+import java.util.List;
 
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FileExistsCacheException;
@@ -57,7 +60,8 @@ public class AbstractFtpDoorV1Test {
     public void setUp()
     {
         MockitoAnnotations.initMocks(this);
-        door._pathRoot = new FsPath("pathRoot");
+        door._userRootPath = new FsPath("pathRoot");
+        door._doorRootPath = new FsPath("pathRoot");
         door._cwd = "/cwd";
         door._pnfs = pnfs;
     }
@@ -65,6 +69,13 @@ public class AbstractFtpDoorV1Test {
     @After
     public void tearDown() {
         door = null;
+    }
+
+    private InterfaceAddress mockInterfaceAddress(String address)
+    {
+        InterfaceAddress mock = mock(InterfaceAddress.class);
+        Mockito.when(mock.getAddress()).thenReturn(forString(address));
+        return mock;
     }
 
     public static class ExpectedFtpCommandException implements TestRule {
@@ -164,82 +175,90 @@ public class AbstractFtpDoorV1Test {
     @Test
     public void EPRTshouldReply200ForValidIP4Arg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
-            doCallRealMethod().when(door).ok(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ok(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            door.ftp_eprt("|1|127.0.0.1|22|");
+        door.ftp_eprt("|1|127.0.0.1|22|");
 
-            verify(door).reply(startsWith("200"));
-        }
+        verify(door).reply(startsWith("200"));
+    }
 
     @Test
     public void EPRTshouldReply200ForValidIP6Arg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
-            doCallRealMethod().when(door).ok(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ok(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            door.ftp_eprt("|2|::1|22|");
+        door.ftp_eprt("|2|::1|22|");
 
-            verify(door).reply(startsWith("200"));
-        }
+        verify(door).reply(startsWith("200"));
+    }
 
     @Test
     public void EPRTshouldReply501ForInvalidIP4Arg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(501);
-            door.ftp_eprt("|1|999.0.0.0|22|");
-        }
+        thrown.expectCode(501);
+        door.ftp_eprt("|1|999.0.0.0|22|");
+    }
 
     @Test
     public void EPRTshouldReply501ForInvalidIP6Arg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(501);
-            door.ftp_eprt("|2|:999999::1|22|");
-        }
+        thrown.expectCode(501);
+        door.ftp_eprt("|2|:999999::1|22|");
+    }
 
     @Test
     public void EPRTshouldReply522ForMissingProtocolArg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(501);
-            door.ftp_eprt("|127.0.0.1|22|");
-        }
+        thrown.expectCode(501);
+        door.ftp_eprt("|127.0.0.1|22|");
+    }
 
     @Test
     public void EPRTshouldReply522ForEmptyProtocolArg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(522);
-            door.ftp_eprt("||127.0.0.1|22|");
-        }
+        thrown.expectCode(522);
+        door.ftp_eprt("||127.0.0.1|22|");
+    }
 
     @Test
     public void EPRTshouldReply501ForMissingArg()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(501);
-            door.ftp_eprt("");
-        }
+        thrown.expectCode(501);
+        door.ftp_eprt("");
+    }
 
     @Test
     public void EPRTshouldReply501ForTooManyArgs()
             throws FTPCommandException {
         doCallRealMethod().when(door).ftp_eprt(anyString());
         doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
         thrown.expectCode(501);
         door.ftp_eprt("||||1|||127.0.0.1||22||||");
@@ -248,45 +267,49 @@ public class AbstractFtpDoorV1Test {
     @Test
     public void EPRTshouldReply522ForUnsupportedProtocol()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).getExtendedAddressOf(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(522);
-            door.ftp_eprt("|3|127.0.0.1|22|");
-        }
+        thrown.expectCode(522);
+        door.ftp_eprt("|3|127.0.0.1|22|");
+    }
 
     @Test
     public void EPSVshouldReply200WhenConnectionEstablished()
             throws FTPCommandException, UnknownHostException {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            door.ftp_epsv("");
+        door.ftp_epsv("");
 
-            verify(door).reply(startsWith("229"));
-        }
+        verify(door).reply(startsWith("229"));
+    }
 
     @Test
     public void EPSVshouldReply522WhenRequestingInvalidProtocol()
             throws FTPCommandException, UnknownHostException {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            thrown.expectCode(522);
-            door.ftp_epsv("3");
-        }
+        thrown.expectCode(522);
+        door.ftp_epsv("3");
+    }
 
     @Test
     public void EPSVshouldReply200WhenRequestingAll()
             throws FTPCommandException, UnknownHostException
     {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).ok(anyString());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).ok(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            door.ftp_epsv("all");
+        door.ftp_epsv("all");
 
-            verify(door).reply(startsWith("200"));
+        verify(door).reply(startsWith("200"));
     }
 
     @Test
@@ -295,6 +318,7 @@ public class AbstractFtpDoorV1Test {
     {
         doCallRealMethod().when(door).ftp_epsv(anyString());
         doCallRealMethod().when(door).ok(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
         when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
         door.ftp_epsv("all");
@@ -308,82 +332,92 @@ public class AbstractFtpDoorV1Test {
     public void PASVshouldBeRejectedAfterEPSVallCall()
             throws FTPCommandException, UnknownHostException
     {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).ftp_pasv(anyString());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).ftp_pasv(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            door.ftp_epsv("all");
-            thrown.expectCode(503);
-            door.ftp_pasv("192,168,1,1,6666");
-        }
+        door.ftp_epsv("all");
+        thrown.expectCode(503);
+        door.ftp_pasv("192,168,1,1,6666");
+    }
 
     @Test
     public void PORTshouldBeRejectedAfterEPSVallCall()
             throws FTPCommandException, UnknownHostException
     {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).ftp_port(anyString());
-            doCallRealMethod().when(door).setActive((InetSocketAddress)any());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).ftp_port(anyString());
+        doCallRealMethod().when(door).setActive((InetSocketAddress)any());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            door.ftp_epsv("all");
-            thrown.expectCode(503);
-            door.ftp_port("192,168,1,1,0,20");
-        }
+        door.ftp_epsv("all");
+        thrown.expectCode(503);
+        door.ftp_port("192,168,1,1,0,20");
+    }
 
     @Test
     public void EPRTshouldBeRejectedAfterEPSVallCall()
             throws FTPCommandException, UnknownHostException
     {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).ftp_eprt(anyString());
-            doCallRealMethod().when(door).setActive((InetSocketAddress)any());
-            when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        doCallRealMethod().when(door).setActive((InetSocketAddress)any());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        when(door.setPassive()).thenReturn(new InetSocketAddress(forString("::1"), 20));
 
-            door.ftp_epsv("all");
-            thrown.expectCode(503);
-            door.ftp_eprt("|3|127.0.0.1|22|");
-        }
-
-    @Test
-    public void EPSVshouldRebindIpWhenRequestedIPv6Protocol()
-            throws Exception {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).setPassive();
-            door._localAddress = new InetSocketAddress(forString("127.0.0.1"), 22);
-
-            door._passiveModePortRange = new PortRange(0);
-
-            door.ftp_epsv("2");
-            door.ftp_epsv("");
-
-            assertThat(door._preferredProtocol, is(AbstractFtpDoorV1.Protocol.IPV6));
-            assertEquals(Inet6Address.class, ((InetSocketAddress)door._passiveModeServerSocket.getLocalAddress()).getAddress().getClass());
-        }
+        door.ftp_epsv("all");
+        thrown.expectCode(503);
+        door.ftp_eprt("|3|127.0.0.1|22|");
+    }
 
     @Test
     public void EPSVshouldRebindIpWhenRequestedIPv4Protocol()
             throws Exception {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
-            doCallRealMethod().when(door).setPassive();
-            door._localAddress = new InetSocketAddress(forString("::1"), 22);
-            door._passiveModePortRange = new PortRange(0);
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).setPassive();
+        List<InterfaceAddress> addresses = Lists.newArrayList(
+                mockInterfaceAddress("::1"), mockInterfaceAddress("127.0.0.1"));
+        when(door.getLocalAddressInterfaces()).thenReturn(addresses);
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
+        door._passiveModePortRange = new PortRange(0);
 
-            door.ftp_epsv("1");
-            door.ftp_epsv("");
+        door.ftp_epsv("1");
+        door.ftp_epsv("");
 
-            assertThat(door._preferredProtocol, is(AbstractFtpDoorV1.Protocol.IPV4));
-            assertEquals(Inet4Address.class, ((InetSocketAddress)door._passiveModeServerSocket.getLocalAddress()).getAddress().getClass());
-        }
+        assertThat(door._preferredProtocol, is(AbstractFtpDoorV1.Protocol.IPV4));
+        assertEquals(Inet4Address.class, ((InetSocketAddress)door._passiveModeServerSocket.getLocalAddress()).getAddress().getClass());
+    }
 
     @Test
     public void EPSVshouldReply522WhenRequestedUnsupportedProtocol()
             throws FTPCommandException {
-            doCallRealMethod().when(door).ftp_epsv(anyString());
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        door._localAddress = new InetSocketAddress(forString("::1"), 21);
 
-            thrown.expectCode(522);
-            door.ftp_epsv("3");
-        }
+        thrown.expectCode(522);
+        door.ftp_epsv("3");
+    }
+
+    @Test
+    public void EPSVshouldReply500WhenRequestedOnIpV4()
+            throws FTPCommandException {
+        doCallRealMethod().when(door).ftp_epsv(anyString());
+        door._localAddress = new InetSocketAddress(forString("127.0.0.1"), 21);
+        thrown.expectCode(502);
+        door.ftp_epsv("1");
+    }
+
+    @Test
+    public void EPRTshouldReply500WhenRequestedOnIpV4()
+            throws FTPCommandException {
+        doCallRealMethod().when(door).ftp_eprt(anyString());
+        door._localAddress = new InetSocketAddress(forString("127.0.0.1"), 21);
+        thrown.expectCode(502);
+        door.ftp_eprt("|3|127.0.0.1|22|");
+    }
+
     @Test
     public void whenMkdSuccessfulReply257() throws Exception {
         doCallRealMethod().when(door).ftp_mkd(anyString());

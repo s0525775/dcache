@@ -1,34 +1,21 @@
-/*
- * File.java
- *
- * Created on July 18, 2006, 1:39 PM
- */
-
 package diskCacheV111.services.space;
+
+import com.google.common.base.Function;
 
 import java.io.Serializable;
 
 import diskCacheV111.util.PnfsId;
 
-/**
- * @author timur
- */
 public class File implements Serializable {
         private static final long serialVersionUID = 1231338433325990419L;
         private long id;
 	private String voGroup;
 	private String voRole;
-	private long spaceId;
+	private final long spaceId;
 	private long sizeInBytes;
     private long creationTime;
-	private long lifetime;
-	private String pnfsPath;
 	private PnfsId pnfsId;
 	private FileState state;
-	private int deleted;
-
-	public File() {
-	}
 
 	public File(
 		long id,
@@ -37,35 +24,6 @@ public class File implements Serializable {
 		long spaceId,
 		long sizeInBytes,
 		long creationTime,
-		long lifetime,
-		String pnfsPath,
-		PnfsId pnfsId,
-		FileState state,
-		int isDeleted
-		) {
-		this.id = id;
-		this.voGroup = voGroup;
-		this.voRole = voRole;
-		this.spaceId = spaceId;
-		this.sizeInBytes = sizeInBytes;
-		this.creationTime = creationTime;
-		this.lifetime = lifetime;
-		this.pnfsPath = pnfsPath;
-		this.pnfsId = pnfsId;
-		this.state = state;
-		this.deleted= isDeleted;
-	}
-
-
-	public File(
-		long id,
-		String voGroup,
-		String voRole,
-		long spaceId,
-		long sizeInBytes,
-		long creationTime,
-		long lifetime,
-		String pnfsPath,
 		PnfsId pnfsId,
 		FileState state
 		) {
@@ -75,14 +33,9 @@ public class File implements Serializable {
 		this.spaceId = spaceId;
 		this.sizeInBytes = sizeInBytes;
 		this.creationTime = creationTime;
-		this.lifetime = lifetime;
-		this.pnfsPath = pnfsPath;
 		this.pnfsId = pnfsId;
 		this.state = state;
-		this.deleted=0;
 	}
-
-
 
 	public FileState getState() {
 		return state;
@@ -105,10 +58,6 @@ public class File implements Serializable {
 		return spaceId;
 	}
 
-	public void setSpaceId(long spaceId) {
-		this.spaceId = spaceId;
-	}
-
 	public long getSizeInBytes() {
 		return sizeInBytes;
 	}
@@ -125,22 +74,6 @@ public class File implements Serializable {
 		this.creationTime = creationTime;
 	}
 
-	public long getLifetime() {
-		return lifetime;
-	}
-
-	public void setLifetime(long lifetime) {
-		this.lifetime = lifetime;
-	}
-
-	public String getPnfsPath() {
-		return pnfsPath;
-	}
-
-	public void setPnfsPath(String pnfsPath) {
-		this.pnfsPath = pnfsPath;
-	}
-
 	public PnfsId getPnfsId() {
 		return pnfsId;
 	}
@@ -155,12 +88,8 @@ public class File implements Serializable {
 			spaceId+" "+
 			sizeInBytes+" "+
 			creationTime+" "+
-			lifetime+" "+
-			pnfsPath+" "+
 			pnfsId+" "+
-			state+" "+
-			deleted+" ";
-
+			state;
 	}
 
 	public String getVoGroup() {
@@ -179,11 +108,13 @@ public class File implements Serializable {
 		this.voRole = voRole;
 	}
 
-	public void setDeleted(int yes) {
-		this.deleted=yes;
-	}
-
-	public int isDeleted() {
-		return this.deleted;
-	}
+    public static Function<File, Long> getSpaceToken =
+            new Function<File, Long>()
+            {
+                @Override
+                public Long apply(File file)
+                {
+                    return file.getSpaceId();
+                }
+            };
 }

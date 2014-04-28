@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.dcache</groupId>
-    <version>2.8.0-SNAPSHOT</version>
+    <version>2.10.0-SNAPSHOT</version>
     <artifactId>dcache-parent</artifactId>
     <packaging>pom</packaging>
 
@@ -24,15 +24,18 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <version.slf4j>1.7.5</version.slf4j>
+        <source.version>1.7</source.version>
+        <target.version>1.7</target.version>
+
+        <version.slf4j>1.7.6</version.slf4j>
         <version.milton>2.3.0.7</version.milton>
-        <version.spring>4.0.0.RELEASE</version.spring>
-        <version.aspectj>1.7.3</version.aspectj>
+        <version.spring>4.0.3.RELEASE</version.spring>
+        <version.aspectj>1.7.4</version.aspectj>
         <version.smc>6.1.0</version.smc>
-        <version.xerces>2.9.1</version.xerces>
-        <version.jetty>8.1.13.v20130916</version.jetty>
-        <version.wicket>6.9.1</version.wicket>
-        <version.xrootd4j>1.2.2</version.xrootd4j>
+        <version.xerces>2.10.0</version.xerces>
+        <version.jetty>8.1.14.v20131031</version.jetty>
+        <version.wicket>6.14.0</version.wicket>
+        <version.xrootd4j>1.3.2</version.xrootd4j>
         <version.jglobus>2.0.6-rc5.d</version.jglobus>
         <version.openmq>4.5.2</version.openmq>
 
@@ -62,17 +65,21 @@
                1.43     bcprov-jdk16    JDK v1.6; used by JGlobus-1.8.x
          -->
         <bouncycastle.bcprov>bcprov-jdk16</bouncycastle.bcprov>
-        <bouncycastle.version>1.43</bouncycastle.version>
-        <datanucleus-core.version>3.2.10</datanucleus-core.version>
-        <datanucleus.plugin.version>3.3.1</datanucleus.plugin.version>
+        <bouncycastle.version>1.45</bouncycastle.version>
+        <datanucleus-core.version>3.2.11</datanucleus-core.version>
+        <datanucleus.plugin.version>3.3.2</datanucleus.plugin.version>
     </properties>
+
+    <prerequisites>
+        <maven>3.0.3</maven>
+    </prerequisites>
 
     <scm>
         <connection>scm:git:https://github.com/dCache/dcache.git</connection>
         <developerConnection>scm:git:git@github.com:dCache/dcache.git</developerConnection>
         <url>https://github.com/dCache/dcache.git</url>
-      <tag>2.7</tag>
-  </scm>
+        <tag>2.7</tag>
+    </scm>
 
     <repositories>
         <repository>
@@ -123,10 +130,14 @@
             <dependency>
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
-                <!-- 1.0.13 breaks remote logging; until this is
-                     better understood, we should not move past 1.0.12.
-                     Remember to update modules/logback-test-config/pom.xml
+                <!-- Remember to update modules/logback-test-config/pom.xml
                      when upgrading logback. -->
+                <!-- There are two issues with 1.1.1:
+                     http://jira.qos.ch/browse/LOGBACK-959
+                     http://jira.qos.ch/browse/LOGBACK-961;
+                     while we have put a workaround for the first
+                     in place, the second still affects
+                     dcache alarm send (it hangs after sending) -->
                 <version>1.0.12</version>
             </dependency>
             <dependency>
@@ -137,18 +148,18 @@
             <dependency>
                 <groupId>com.google.code.findbugs</groupId>
                 <artifactId>annotations</artifactId>
-                <version>2.0.0</version>
+                <version>2.0.3</version>
                 <scope>compile</scope>
             </dependency>
             <dependency>
                 <groupId>org.rrd4j</groupId>
                 <artifactId>rrd4j</artifactId>
-                <version>2.1.1</version>
+                <version>2.2</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>15.0</version>
+                <version>16.0.1</version>
             </dependency>
             <dependency>
                 <groupId>eu.emi</groupId>
@@ -211,22 +222,26 @@
                 <artifactId>jna</artifactId>
                 <version>3.4.0</version>
             </dependency>
+            <!-- xacml client incompatible with the newer opensaml library -->
             <dependency>
                 <groupId>org.opensaml</groupId>
                 <artifactId>opensaml</artifactId>
-                <version>2.2.0</version>
+                <version>2.4.1</version>
                 <exclusions>
                     <exclusion>
                         <!-- We manually pull in a different variant -->
                         <groupId>org.bouncycastle</groupId>
-                        <artifactId>bcprov-ext-jdk15</artifactId>
+                        <artifactId>bcprov-jdk15</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>commons-logging</groupId>
+                        <artifactId>commons-logging</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>xalan</groupId>
+                        <artifactId>xalan</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.opensaml</groupId>
-                <artifactId>opensaml1</artifactId>
-                <version>1.1</version>
             </dependency>
             <dependency>
                 <groupId>javax.xml</groupId>
@@ -271,14 +286,14 @@
                 <version>1.1</version>
             </dependency>
             <dependency>
-                <groupId>com.jolbox</groupId>
-                <artifactId>bonecp</artifactId>
-                <version>0.8.0-dcache1</version>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>1.3.5</version>
             </dependency>
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
-                <version>9.2-1003-jdbc4</version>
+                <version>9.3-1101-jdbc41</version>
             </dependency>
             <dependency>
                 <groupId>io.milton</groupId>
@@ -302,7 +317,7 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty</artifactId>
-                <version>3.6.5.Final</version>
+                <version>3.9.0.Final</version>
             </dependency>
             <dependency>
                 <groupId>org.glassfish.grizzly</groupId>
@@ -312,7 +327,7 @@
             <dependency>
                 <groupId>com.sleepycat</groupId>
                 <artifactId>je</artifactId>
-                <version>5.0.97</version>
+                <version>5.0.103</version>
             </dependency>
             <dependency>
                 <groupId>org.glassfish.mq</groupId>
@@ -337,7 +352,7 @@
             <dependency>
                 <groupId>org.parboiled</groupId>
                 <artifactId>parboiled-java</artifactId>
-                <version>1.1.4</version>
+                <version>1.1.6</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
@@ -347,23 +362,24 @@
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-cache</artifactId>
-                <version>3.1.2</version>
+                <version>3.1.3</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-api-jdo</artifactId>
-                <version>3.2.6</version>
+                <version>3.2.7</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-api-jpa</artifactId>
-                <version>3.3.5</version>
+                <version>3.3.6</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-rdbms</artifactId>
-                <version>3.2.9</version>
+                <version>3.2.10</version>
             </dependency>
+            <!-- 3.2.1 has a saxon/XSLT bug -->
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-xml</artifactId>
@@ -414,13 +430,15 @@
             <dependency>
                 <groupId>org.apache.sshd</groupId>
                 <artifactId>sshd-core</artifactId>
+                <!-- Version 0.9.0 contains a bug that prevents upgrade (see
+                     https://issues.apache.org/jira/browse/SSHD-258?jql=project%20%3D%20SSHD%20AND%20issuetype%20%3D%20Bug%20AND%20text%20~%20%220.9.0%22)-->
                 <version>0.8.0</version>
             </dependency>
 
             <dependency>
                 <groupId>org.liquibase</groupId>
                 <artifactId>liquibase-core</artifactId>
-                <version>3.0.8</version>
+                <version>3.1.1</version>
             </dependency>
             <dependency>
                 <groupId>com.mattbertolini</groupId>
@@ -484,7 +502,6 @@
                 <groupId>org.aspectj</groupId>
                 <artifactId>aspectjrt</artifactId>
                 <version>${version.aspectj}</version>
-                <scope>runtime</scope>
             </dependency>
             <dependency>
                 <groupId>org.aspectj</groupId>
@@ -532,10 +549,11 @@
             <dependency>
                 <groupId>com.h2database</groupId>
                 <artifactId>h2</artifactId>
-                <version>1.3.174</version>
+                <version>1.3.175</version>
             </dependency>
 
             <dependency>
+                <!-- https://sourceforge.net/p/hsqldb/bugs/1341/ prevents updating to 2.3.2 -->
                 <groupId>org.hsqldb</groupId>
                 <artifactId>hsqldb</artifactId>
                 <version>2.3.1</version>
@@ -556,7 +574,7 @@
             <dependency>
                 <groupId>org.json</groupId>
                 <artifactId>json</artifactId>
-                <version>20090211</version>
+                <version>20131018</version>
             </dependency>
 
             <dependency>
@@ -619,23 +637,8 @@
             </dependency>
 
             <dependency>
-                <groupId>org.apache.xerces</groupId>
-                <artifactId>xml-apis</artifactId>
-                <version>${version.xerces}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.xerces</groupId>
+                <groupId>xerces</groupId>
                 <artifactId>xercesImpl</artifactId>
-                <version>${version.xerces}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.xerces</groupId>
-                <artifactId>resolver</artifactId>
-                <version>${version.xerces}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.xerces</groupId>
-                <artifactId>serializer</artifactId>
                 <version>${version.xerces}</version>
             </dependency>
 
@@ -704,7 +707,7 @@
             <dependency>
                 <groupId>org.freehep</groupId>
                 <artifactId>freehep-jaida</artifactId>
-                <version>3.4.1</version>
+                <version>3.4.6</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.freehep</groupId>
@@ -771,7 +774,7 @@
             <dependency>
               <groupId>org.apache.commons</groupId>
               <artifactId>commons-compress</artifactId>
-              <version>1.5</version>
+              <version>1.8</version>
             </dependency>
 
             <dependency>
@@ -782,7 +785,7 @@
         <dependency>
             <groupId>org.dcache</groupId>
             <artifactId>nfs4j-core</artifactId>
-            <version>0.6.3</version>
+            <version>0.8.0</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.dcache.chimera</groupId>
@@ -815,7 +818,7 @@
         <dependency>
            <groupId>org.powermock</groupId>
             <artifactId>powermock-api-mockito</artifactId>
-            <version>1.5.1</version>
+            <version>1.5.2</version>
             <scope>test</scope>
             <exclusions>
                 <!-- powermock-api-mockito depends on mockito-all,
@@ -852,7 +855,7 @@
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
-            <version>1.5.1</version>
+            <version>1.5.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -883,9 +886,40 @@
                     <version>3.1</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>aspectj-maven-plugin</artifactId>
+                    <version>1.5</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.aspectj</groupId>
+                            <artifactId>aspectjtools</artifactId>
+                            <version>${version.aspectj}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                        <XterminateAfterCompilation>true</XterminateAfterCompilation>
+                        <source>${source.version}</source>
+                        <target>${target.version}</target>
+                        <complianceLevel>${source.version}</complianceLevel>
+                        <XhasMember>true</XhasMember>
+                        <sources>
+                            <source>
+                                <basedir>${project.basedir}/src/main/aspect</basedir>
+                            </source>
+                        </sources>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>compile</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
                     <groupId>net.alchim31.maven</groupId>
                     <artifactId>scala-maven-plugin</artifactId>
-                    <version>3.0.1</version>
+                    <version>3.1.6</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -925,17 +959,17 @@
                     <artifactId>buildnumber-maven-plugin</artifactId>
                     <version>1.2</version>
                 </plugin>
-		<plugin>
-		  <groupId>org.codehaus.mojo</groupId>
-		  <artifactId>build-helper-maven-plugin</artifactId>
-		  <version>1.8</version>
-		</plugin>
-		<plugin>
-		  <groupId>org.codehaus.mojo</groupId>
-		  <artifactId>exec-maven-plugin</artifactId>
-		  <version>1.2.1</version>
-		</plugin>
-		<plugin>
+                <plugin>
+                  <groupId>org.codehaus.mojo</groupId>
+                  <artifactId>build-helper-maven-plugin</artifactId>
+                  <version>1.8</version>
+                </plugin>
+                <plugin>
+                  <groupId>org.codehaus.mojo</groupId>
+                  <artifactId>exec-maven-plugin</artifactId>
+                  <version>1.2.1</version>
+                </plugin>
+                <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>2.16</version>
@@ -943,12 +977,22 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-release-plugin</artifactId>
-                    <version>2.4.1</version>
+                    <version>2.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>2.8.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>2.5.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>findbugs-maven-plugin</artifactId>
-                    <version>2.5.2</version>
+                    <version>2.5.3</version>
                 </plugin>
                 <plugin>
                     <groupId>org.datanucleus</groupId>
@@ -990,8 +1034,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
+                    <source>${source.version}</source>
+                    <target>${target.version}</target>
                 </configuration>
             </plugin>
 
@@ -1112,7 +1156,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>findbugs-maven-plugin</artifactId>
-                <version>2.5.2</version>
+                <version>2.5.3</version>
                 <configuration>
                     <omitVisitors>FindDeadLocalStores,UnreadFields,Naming,FindUncalledPrivateMethods</omitVisitors>
                 </configuration>
@@ -1134,6 +1178,7 @@
         <module>modules/logback-test-config</module>
         <module>modules/logback-console-config</module>
         <module>modules/common</module>
+        <module>modules/common-cli</module>
         <module>modules/cells</module>
         <module>modules/gplazma2</module>
         <module>modules/gplazma2-argus</module>
@@ -1159,6 +1204,7 @@
         <module>modules/dcache-gplazma</module>
         <module>modules/dcache-jms</module>
         <module>modules/dcache-webadmin</module>
+        <module>modules/dcache-nfs</module>
         <module>modules/srm-common</module>
         <module>modules/srm-server</module>
         <module>modules/srm-client</module>

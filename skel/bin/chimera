@@ -1,0 +1,21 @@
+#!/bin/sh
+
+@DCACHE_LOAD_CONFIG@
+
+lib="$(getProperty dcache.paths.share.lib)"
+. ${lib}/utils.sh
+. ${lib}/services.sh
+
+classpath=$(printLimitedClassPath chimera HikariCP javassist \
+    guava jline common-cli dcache-common acl dcache-chimera \
+    slf4j-api logback-classic logback-core logback-console-config \
+    $(getProperty chimera.db.jar))
+
+CLASSPATH="$classpath" quickJava -Dlog=${DCACHE_LOG:-warn} \
+    org.dcache.chimera.cli.Shell \
+    "$(getProperty chimera.db.url)" \
+    "$(getProperty chimera.db.dialect)" \
+    "$(getProperty chimera.db.user)" \
+    "$(getProperty chimera.db.password)" \
+    "$@"
+

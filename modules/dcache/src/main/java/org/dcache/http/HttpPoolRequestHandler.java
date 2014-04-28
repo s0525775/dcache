@@ -51,6 +51,7 @@ import org.dcache.vehicles.FileAttributes;
 
 import static java.util.Arrays.asList;
 import static org.dcache.util.Checksums.TO_RFC3230;
+import static org.dcache.http.HttpRequestHandler.CRLF;
 import static org.dcache.util.StringMarkup.percentEncode;
 import static org.dcache.util.StringMarkup.quotedString;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.Names.*;
@@ -136,12 +137,13 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
     }
 
     private static ChannelFuture sendMultipartHeader(
-            ChannelHandlerContext context, String digest)
+            ChannelHandlerContext context, String digest, long totalBytes)
     {
         HttpResponse response =
                 new DefaultHttpResponse(HTTP_1_1, PARTIAL_CONTENT);
 
         response.setHeader(ACCEPT_RANGES, BYTES);
+        response.setHeader(CONTENT_LENGTH, totalBytes);
         response.setHeader(CONTENT_TYPE, MULTIPART_TYPE);
         if(!digest.isEmpty()) {
             response.setHeader(DIGEST, digest);
@@ -149,16 +151,10 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
         return context.getChannel().write(response);
     }
 
-    private static ChannelFuture sendMultipartFragment(
-            ChannelHandlerContext context,
-            long lower,
-            long upper,
-            long total)
-    {
+    private static CharSequence generateMultipartFragmentMarker(long lower, long upper, long total, String boundary) {
         StringBuilder sb = new StringBuilder(64);
         sb.append(CRLF);
-        sb.append("--").append(BOUNDARY).append(CRLF);
-        sb.append(CONTENT_LENGTH).append(": ").append((upper - lower) + 1).append(CRLF);
+        sb.append("--").append(boundary).append(CRLF);
         sb.append(CONTENT_RANGE).append(": ")
                 .append(BYTES)
                 .append(RANGE_SP)
@@ -169,9 +165,19 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
                 .append(total)
                 .append(CRLF);
         sb.append(CRLF);
+        return sb;
+    }
 
+    private static ChannelFuture sendMultipartFragment(
+            ChannelHandlerContext context,
+            long lower,
+            long upper,
+            long total)
+    {
+
+        CharSequence marker = generateMultipartFragmentMarker(lower, upper, total, BOUNDARY);
         ChannelBuffer buffer = ChannelBuffers
-                .copiedBuffer(sb, CharsetUtil.UTF_8);
+                .copiedBuffer(marker, CharsetUtil.UTF_8);
         return context.getChannel().write(buffer);
     }
 
@@ -192,6 +198,7 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
         FsPath path = new FsPath(file.getProtocolInfo().getPath());
 
         HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
+        response.headers().add(ACCEPT_RANGES, BYTES);
         response.setHeader(CONTENT_LENGTH, file.size());
         String digest = buildDigest(file);
         if(!digest.isEmpty()) {
@@ -201,6 +208,27 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
                 .getName()));
         if (file.getProtocolInfo().getLocation() != null) {
             response.setHeader(CONTENT_LOCATION, file.getProtocolInfo().getLocation());
+        }
+
+        return context.getChannel().write(response);
+    }
+
+    private static ChannelFuture sendHeadResponse(ChannelHandlerContext context,
+            MoverChannel<HttpProtocolInfo> file)
+            throws IOException {
+        FsPath path = new FsPath(file.getProtocolInfo().getPath());
+
+        HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
+        response.headers().add(ACCEPT_RANGES, BYTES);
+        response.headers().add(CONTENT_LENGTH, file.size());
+        String digest = buildDigest(file);
+        if (!digest.isEmpty()) {
+            response.headers().add(DIGEST, digest);
+        }
+        response.headers().add("Content-Disposition", contentDisposition(path
+                .getName()));
+        if (file.getProtocolInfo().getLocation() != null) {
+            response.headers().add(CONTENT_LOCATION, file.getProtocolInfo().getLocation());
         }
 
         return context.getChannel().write(response);
@@ -419,7 +447,21 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
                 /*
                  * GET for multiple ranges
                  */
-                future = sendMultipartHeader(context, buildDigest(file));
+
+                /*
+                 * calculate responce size
+                 */
+                long totalLen = 0;
+                for (HttpByteRange range : ranges) {
+                    long upper = range.getUpper();
+                    long lower = range.getLower();
+                    totalLen += upper - lower + 1;
+                    CharSequence marker = generateMultipartFragmentMarker(lower, upper, fileSize, BOUNDARY);
+                    totalLen += marker.length();
+                }
+                totalLen += 2 + BOUNDARY.length() + CRLF.length();
+
+                future = sendMultipartHeader(context, buildDigest(file), totalLen);
                 for(HttpByteRange range: ranges) {
                     responseContent = read(file,
                                            range.getLower(),
@@ -558,6 +600,32 @@ public class HttpPoolRequestHandler extends HttpRequestHandler
                 if (future != null && (!isKeepAlive() || !chunk.isLast())) {
                     future.addListener(ChannelFutureListener.CLOSE);
                 }
+            }
+        }
+    }
+
+    @Override
+    protected void doOnHead(ChannelHandlerContext context,
+            MessageEvent event,
+            HttpRequest request) {
+        ChannelFuture future = null;
+        MoverChannel<HttpProtocolInfo> file;
+
+        try {
+            file = open(request, false);
+            future = sendHeadResponse(context, file);
+        } catch (IOException | IllegalArgumentException e) {
+            future = conditionalSendError(context, request.getMethod(),
+                    future, BAD_REQUEST, e.getMessage());
+        } catch (URISyntaxException e) {
+            future = conditionalSendError(context, request.getMethod(),
+                    future, BAD_REQUEST, "URI not valid: " + e.getMessage());
+        } catch (RuntimeException e) {
+            future = conditionalSendError(context, request.getMethod(),
+                    future, INTERNAL_SERVER_ERROR, e.getMessage());
+        } finally {
+            if (future != null && !isKeepAlive()) {
+                future.addListener(ChannelFutureListener.CLOSE);
             }
         }
     }

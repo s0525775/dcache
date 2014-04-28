@@ -3,6 +3,7 @@ package org.dcache.services.info.gathers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.Set;
 
@@ -43,9 +44,9 @@ public class SrmSpaceDetailsMsgHandler implements MessageHandler {
 
 		GetSpaceTokensMessage msg = (GetSpaceTokensMessage) messagePayload;
 
-		Set<Space> spaces = msg.getSpaceTokenSet();
+		Collection<Space> spaces = msg.getSpaceTokenSet();
 
-		if( spaces.size() == 0) {
+		if( spaces.isEmpty()) {
 			_log.info( "received GetSpaceTokensMessage with no spaces listed");
 			return true;
 		}
@@ -76,10 +77,10 @@ public class SrmSpaceDetailsMsgHandler implements MessageHandler {
 			update.appendUpdate( thisSpacePath.newChild( "id"), new StringStateValue( String.valueOf( space.getId()), metricLifetime));
 			update.appendUpdate( thisSpacePath.newChild( "state"), new StringStateValue( space.getState().toString(), metricLifetime));
 
-			long spaceLifetime = space.getLifetime();
-			if( spaceLifetime > 0) {
+			Long expirationTime = space.getExpirationTime();
+			if (expirationTime != null) {
                             update.appendUpdate(thisSpacePath
-                                    .newChild("lifetime"), new IntegerStateValue(spaceLifetime, metricLifetime));
+                                    .newChild("lifetime"), new IntegerStateValue(expirationTime - space.getCreationTime(), metricLifetime));
                         }
 
 			addLinkgroup( update, thisSpacePath, String.valueOf( space.getLinkGroupId()), String.valueOf(space.getId()), metricLifetime);

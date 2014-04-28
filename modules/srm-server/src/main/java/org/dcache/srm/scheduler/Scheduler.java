@@ -68,8 +68,6 @@ package org.dcache.srm.scheduler;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
-import com.google.common.util.concurrent.AbstractService;
-import com.google.common.util.concurrent.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,7 +90,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-public final class Scheduler
+public final class Scheduler <T extends Job>
 {
     private static final Logger LOGGER =
             LoggerFactory.getLogger(Scheduler.class);
@@ -148,10 +146,6 @@ public final class Scheduler
     private final CountByCreator retryWaitJobsNum =
             new CountByCreator();
 
-    // retry wait state related variables
-    private final CountByCreator restoredJobsNum =
-            new CountByCreator();
-
 
     private final String id;
     private volatile boolean running;
@@ -194,7 +188,7 @@ public final class Scheduler
                 .build();
     }
 
-    public Scheduler(String id, Class<? extends Job> type)
+    public Scheduler(String id, Class<T> type)
     {
         this.id = checkNotNull(id);
         checkArgument(!id.isEmpty(), "need non-empty string as an id");
@@ -213,16 +207,22 @@ public final class Scheduler
         addScheduler(id, this);
     }
 
-    public synchronized void start() throws IllegalStateException
+    public void start() throws IllegalStateException
     {
-        checkState(!running, "Scheduler is running.");
-        running = true;
+        synchronized (this) {
+            checkState(!running, "Scheduler is running.");
+            running = true;
+        }
         workSupplyService.startAsync().awaitRunning();
     }
 
-    public synchronized void stop()
+    public void stop()
     {
-        running = false;
+        synchronized (this) {
+            checkState(running, "Scheduler is not running.");
+            running = false;
+        }
+
         workSupplyService.stopAsync().awaitTerminated();
         retryTimer.cancel();
         pooledExecutor.shutdownNow();
@@ -230,8 +230,7 @@ public final class Scheduler
 
 
     public void schedule(Job job)
-            throws IllegalStateException,
-                   InterruptedException,
+            throws IllegalStateException, IllegalArgumentException,
                    IllegalStateTransition
     {
         checkState(running, "scheduler is not running");
@@ -242,8 +241,6 @@ public final class Scheduler
             switch (job.getState()) {
             case PENDING:
                 job.setScheduler(this.id, timeStamp);
-                // fall through
-            case RESTORED:
                 if (getTotalTQueued() >= getMaxThreadQueueSize()) {
                     job.setState(State.FAILED, "Too many jobs in the queue.");
                     return;
@@ -254,9 +251,12 @@ public final class Scheduler
                     job.setState(State.FAILED, "Site busy: too many queued requests.");
                 }
                 break;
+            case RESTORED:
             case ASYNCWAIT:
             case RETRYWAIT:
             case RUNNINGWITHOUTTHREAD:
+                checkArgument(id.equals(job.getSchedulerId()),
+                        "job assigned to wrong scheduler");
                 LOGGER.trace("putting job in a priority thread queue, job#{}", job.getId());
                 job.setState(State.PRIORITYTQUEUED, "queued for execution");
                 if (!priorityQueue(job)) {
@@ -271,6 +271,41 @@ public final class Scheduler
             job.wunlock();
         }
     }
+
+    /**
+     * Add a job that requires no scheduling.  This is called during SRM
+     * restart.
+     *
+     * REVISIT: should this be merged with schedule or non-scheduled job handling
+     * moved outside of Scheduler.
+     */
+    public void add(Job job) throws IllegalStateException
+    {
+        job.wlock();
+        try {
+            switch (job.getState()) {
+            case RQUEUED:
+                increaseNumberOfReadyQueued(job);
+                break;
+
+            case READY:
+                // NB. this may increase number of READY jobs beyond the
+                // accepted limit (i.e., the limit was decreased during SRM
+                // restart); however, there's not much we can do about this
+                // as the client already knows about this TURL, so we cannot
+                // reduce the number of active TURLs.
+                increaseNumberOfReady(job);
+                break;
+
+            default:
+                throw new IllegalStateException("cannot accept job in state " +
+                        job.getState());
+            }
+        } finally {
+            job.wunlock();
+        }
+    }
+
 
     private void increaseNumberOfRunningState(Job job)
     {
@@ -412,26 +447,6 @@ public final class Scheduler
         return readyJobsNum.getTotal();
     }
 
-    private void increaseNumberOfRestored(Job job)
-    {
-        restoredJobsNum.increment(job.getSubmitterId());
-    }
-
-    private void decreaseNumberOfRestored(Job job)
-    {
-        restoredJobsNum.decrement(job.getSubmitterId());
-    }
-
-    public int getRestoredByCreator(Job job)
-    {
-        return restoredJobsNum.getValue(job.getSubmitterId());
-    }
-
-    public int getTotalRestored()
-    {
-        return restoredJobsNum.getTotal();
-    }
-
     private void increaseNumberOfAsyncWait(Job job)
     {
         asyncWaitJobsNum.increment(job.getSubmitterId());
@@ -471,7 +486,6 @@ public final class Scheduler
     {
         return retryWaitJobsNum.getTotal();
     }
-
 
     public void tryToReadyJob(Job job)
     {
@@ -856,9 +870,8 @@ public final class Scheduler
                         case RETRYWAIT:
                             try {
                                 LOGGER.debug("Scheduler(id={}) changing job state to running", getId());
-                                job.setState(State.RUNNING, "Processing request", false);
+                                job.setState(State.RUNNING, "Processing request");
                                 started();
-                                job.saveJob();
                             } catch (IllegalStateTransition ist) {
                                 LOGGER.error("Illegal State Transition : " + ist.getMessage());
                                 return;
@@ -1014,9 +1027,6 @@ public final class Scheduler
         }
 
         switch (oldState) {
-        case RESTORED:
-            decreaseNumberOfRestored(job);
-            break;
         case TQUEUED:
             threadQueue.remove(job);
             decreaseNumberOfTQueued(job);
@@ -1262,8 +1272,6 @@ public final class Scheduler
                 .append('\n');
         sb.append("          maxNumberOfRetries=").append(maxNumberOfRetries)
                 .append('\n');
-        sb.append("          number of restored but not scheduled=").
-                append(getTotalRestored()).append('\n');
         sb.append("          restorePolicy");
         switch (restorePolicy) {
         case ON_RESTART_FAIL_REQUEST: {
@@ -1348,9 +1356,9 @@ public final class Scheduler
         return priorityPolicyPlugin;
     }
 
-    public Class<? extends Job> getType()
+    public Class<T> getType()
     {
-        return threadQueue.getType();
+        return (Class<T>) threadQueue.getType();
     }
 }
 

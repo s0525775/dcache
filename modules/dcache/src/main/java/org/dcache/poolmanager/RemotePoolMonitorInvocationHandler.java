@@ -1,53 +1,46 @@
 package org.dcache.poolmanager;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Required;
+import com.google.common.base.Function;
+import com.google.common.base.Throwables;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.CacheStats;
+import com.google.common.cache.LoadingCache;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import org.springframework.aop.target.dynamic.Refreshable;
+import org.springframework.remoting.RemoteConnectFailureException;
+import org.springframework.remoting.RemoteInvocationFailureException;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
 
 import diskCacheV111.util.CacheException;
+import diskCacheV111.util.TimeoutCacheException;
 import diskCacheV111.vehicles.PoolManagerGetPoolMonitor;
 
-import org.dcache.cells.AbstractMessageCallback;
 import org.dcache.cells.CellStub;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.concurrent.TimeUnit.*;
 
 /**
  * InvocationHandler to access a cached PoolMonitor that is periodically imported from pool manager.
  */
-public class RemotePoolMonitorInvocationHandler implements InvocationHandler
+public class RemotePoolMonitorInvocationHandler implements InvocationHandler, Refreshable
 {
-    private final static Logger _log = LoggerFactory
-            .getLogger(RemotePoolMonitorInvocationHandler.class);
-
-    /**
-     * The delay we use after transient failures during initialization.
-     * Adding a small delay prevents tight retry loops.
-     */
-    private final static long INIT_DELAY = MILLISECONDS.toMillis(10);
+    /* Fake key to register the pool monitor in a cache. */
+    private static final String KEY = "key";
 
     private long _refreshDelay = SECONDS.toMillis(20);
+    private volatile long _lastRefreshTime;
     private CellStub _poolManagerStub;
-    private ScheduledExecutorService _executor;
 
-    private PoolMonitor _poolMonitor;
+    private LoadingCache<String,PoolMonitor> _poolMonitor;
 
-    @Required
     public void setPoolManagerStub(CellStub stub)
     {
         _poolManagerStub = stub;
-    }
-
-    @Required
-    public void setExecutor(ScheduledExecutorService executor)
-    {
-        _executor = executor;
     }
 
     public long getRefreshDelay()
@@ -64,76 +57,91 @@ public class RemotePoolMonitorInvocationHandler implements InvocationHandler
         _refreshDelay = refreshDelay;
     }
 
-    private synchronized void setPoolMonitor(PoolMonitor poolMonitor)
-    {
-        _poolMonitor = poolMonitor;
-        notify();
-    }
-
-    private synchronized PoolMonitor getPoolMonitor()
+    private PoolMonitor getPoolMonitor()
             throws InterruptedException
     {
-        while (_poolMonitor == null) {
-            wait();
+        try {
+            return _poolMonitor.get(KEY);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            Throwables.propagateIfInstanceOf(cause, InterruptedException.class);
+            if (cause instanceof TimeoutCacheException) {
+                throw new RemoteConnectFailureException("Failed to fetch pool monitor: " + cause.getMessage(), cause);
+            }
+            throw new RemoteInvocationFailureException("Failed to fetch pool monitor: " + cause.getMessage(), cause);
         }
-        return _poolMonitor;
+    }
+
+    public CacheStats getStats()
+    {
+        return _poolMonitor.stats();
+    }
+
+    @Override
+    public void refresh()
+    {
+        _poolMonitor.refresh(KEY);
+    }
+
+    @Override
+    public long getRefreshCount()
+    {
+        return _poolMonitor.stats().loadCount();
+    }
+
+    @Override
+    public long getLastRefreshTime()
+    {
+        return _lastRefreshTime;
     }
 
     public void init()
-            throws InterruptedException
     {
-        initPoolMonitor();
-        scheduleUpdateTask();
-    }
-
-    private void initPoolMonitor() throws InterruptedException
-    {
-        while (true) {
-            try {
-                setPoolMonitor(_poolManagerStub.sendAndWait(new PoolManagerGetPoolMonitor()).getPoolMonitor());
-                break;
-            } catch (CacheException e) {
-                _log.error(e.toString());
-                Thread.sleep(INIT_DELAY);
-            }
-        }
-    }
-
-    private void scheduleUpdateTask()
-    {
-        _executor.scheduleWithFixedDelay(new UpdatePoolMonitorTask(),
-                _refreshDelay / 2, _refreshDelay,
-                TimeUnit.MILLISECONDS);
+        _poolMonitor =
+                CacheBuilder.newBuilder()
+                        .maximumSize(1)
+                        .expireAfterWrite(10, MINUTES)
+                        .refreshAfterWrite(_refreshDelay, MILLISECONDS)
+                        .build(new PoolMonitorCacheLoader());
     }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args)
             throws Throwable
     {
+        if (method.getDeclaringClass() == Refreshable.class) {
+            return method.invoke(this, args);
+        }
         return method.invoke(getPoolMonitor(), args);
     }
 
-    private class UpdatePoolMonitorTask
-            extends AbstractMessageCallback<PoolManagerGetPoolMonitor>
-            implements Runnable
+    private class PoolMonitorCacheLoader extends CacheLoader<String, PoolMonitor>
     {
         @Override
-        public void run()
+        public PoolMonitor load(String ignored)
+                throws InterruptedException, CacheException
         {
-            _poolManagerStub.send(new PoolManagerGetPoolMonitor(),
-                    PoolManagerGetPoolMonitor.class, this);
+            PoolManagerGetPoolMonitor reply =
+                    _poolManagerStub.sendAndWait(new PoolManagerGetPoolMonitor());
+            _lastRefreshTime = System.currentTimeMillis();
+            return reply.getPoolMonitor();
         }
 
         @Override
-        public void success(PoolManagerGetPoolMonitor message)
+        public ListenableFuture<PoolMonitor> reload(String ignored, PoolMonitor oldValue)
         {
-            setPoolMonitor(message.getPoolMonitor());
-        }
-
-        @Override
-        public void failure(int rc, Object error)
-        {
-            _log.warn("Failed to update pool monitor: {} [{}]", error, rc);
+            return Futures.transform(
+                    _poolManagerStub.send(new PoolManagerGetPoolMonitor()),
+                    new Function<PoolManagerGetPoolMonitor, PoolMonitor>()
+                    {
+                        @Override
+                        public PoolMonitor apply(PoolManagerGetPoolMonitor reply)
+                        {
+                            _lastRefreshTime = System.currentTimeMillis();
+                            return reply.getPoolMonitor();
+                        }
+                    }
+            );
         }
     }
 }

@@ -18,6 +18,8 @@ package org.dcache.chimera;
 
 import java.io.Closeable;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import diskCacheV111.util.AccessLatency;
 import diskCacheV111.util.RetentionPolicy;
@@ -25,6 +27,7 @@ import diskCacheV111.util.RetentionPolicy;
 import org.dcache.acl.ACE;
 import org.dcache.chimera.posix.Stat;
 import org.dcache.chimera.store.InodeStorageInformation;
+import org.dcache.util.Checksum;
 
 public interface FileSystemProvider extends Closeable {
 
@@ -105,6 +108,24 @@ public interface FileSystemProvider extends Closeable {
 
     public abstract FsInode mkdir(FsInode parent, String name, int owner,
             int group, int mode) throws ChimeraFsException;
+
+    /**
+     * Create a new directory.
+     *
+     * In contrast to the other mkdir calls, the new directory does not inherit
+     * the parent tags. Instead the new directory is initialized with {@code tags}.
+     *
+     * @param parent Inode of parent directory
+     * @param name Name of new directory
+     * @param owner UID of owner
+     * @param group GID of group
+     * @param mode Permissions
+     * @param tags Tags to set on new directory
+     * @return Inode of newly created directory
+     * @throws ChimeraFsException
+     */
+    FsInode mkdir(FsInode parent, String name, int owner, int group, int mode, Map<String,byte[]> tags)
+            throws ChimeraFsException;
 
     public abstract FsInode path2inode(String path) throws ChimeraFsException;
 
@@ -201,11 +222,30 @@ public interface FileSystemProvider extends Closeable {
 
     public abstract boolean move(String source, String dest);
 
+    /**
+     * Move filesystem object from one directory into an other. If {@code source}
+     * and {@code dest} both refer to the  same  existing  file, the move performs no action.
+     * If destination object exists, then source object must be the same type.
+     *
+     * @param srcDir inode of the source directory
+     * @param source name of the file in srcDir
+     * @param destDir inode of the destination directory
+     * @param dest name of the new file in destDir
+     * @return true it underlying filesystem has been changed.
+     * @throws FileNotFoundHimeraFsException if source file does not exists
+     * @throws FileExistsChimeraFsException if destination exists and it not the
+     *	    same type as source
+     * @throws DirNotEmptyHimeraFsException if destination exists, is a directory
+     *	    and not empty
+     */
     public abstract boolean move(FsInode srcDir, String source,
             FsInode destDir, String dest) throws ChimeraFsException;
 
     public abstract List<StorageLocatable> getInodeLocations(FsInode inode,
             int type) throws ChimeraFsException;
+
+    public abstract List<StorageLocatable> getInodeLocations(FsInode inode)
+            throws ChimeraFsException;
 
     public abstract void addInodeLocation(FsInode inode, int type,
             String location) throws ChimeraFsException;
@@ -214,6 +254,8 @@ public interface FileSystemProvider extends Closeable {
             String location) throws ChimeraFsException;
 
     public abstract String[] tags(FsInode inode) throws ChimeraFsException;
+
+    Map<String, byte[]> getAllTags(FsInode inode) throws ChimeraFsException;
 
     public abstract void createTag(FsInode inode, String name)
             throws ChimeraFsException;
@@ -276,6 +318,9 @@ public interface FileSystemProvider extends Closeable {
     public abstract String getInodeChecksum(FsInode inode, int type)
             throws ChimeraFsException;
 
+    public abstract Set<Checksum> getInodeChecksums(FsInode inode)
+                    throws ChimeraFsException;
+
     public abstract String getInfo();
 
     /**
@@ -317,4 +362,28 @@ public interface FileSystemProvider extends Closeable {
      */
     public byte[] inodeToBytes(FsInode inode) throws ChimeraFsException;
 
+    /**
+     * Query the PoolManager for live locality information.
+     * @param node
+     * @return
+     * @throws ChimeraFsException
+     */
+    public String getFileLocality(FsInode_PLOC node) throws ChimeraFsException;
+
+    /**
+     * Implementation-specific.  Can be NOP.
+     *
+     * @param pnfsid
+     * @param lifetime
+     * @throws ChimeraFsException
+     */
+    public void pin(String pnfsid, long lifetime) throws ChimeraFsException;
+
+    /**
+     * Implementation-specific.  Can be NOP.
+     *
+     * @param pnfsid
+     * @throws ChimeraFsException
+     */
+    public void unpin(String pnfsid) throws ChimeraFsException;
 }

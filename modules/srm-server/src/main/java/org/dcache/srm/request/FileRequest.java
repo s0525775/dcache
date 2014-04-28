@@ -232,7 +232,7 @@ public abstract class FileRequest<R extends ContainerRequest> extends Job {
         return (int) (getId() ^ getId() >> 32);
     }
 
-    public void setStatus(String status) throws SRMException {
+    public void setStatus(SRMUser user, String status) throws SRMException {
         logger.debug("("+status+")");
         try {
             wlock();
@@ -252,6 +252,9 @@ public abstract class FileRequest<R extends ContainerRequest> extends Job {
                 }
                 else if(status.equalsIgnoreCase("Running")) {
                     setState(State.TRANSFERRING, "SRM client set state to Running.");
+                }
+                else if(status.equalsIgnoreCase("Failed")) {
+                    setState(State.FAILED, "SRM client set state to Failed.");
                 }
                 else {
                     String error =  "Can't set Status to "+status;
@@ -281,7 +284,7 @@ public abstract class FileRequest<R extends ContainerRequest> extends Job {
         }
     }
 
-    public void abort() throws IllegalStateTransition
+    public void abort() throws IllegalStateTransition, SRMException
     {
         wlock();
         try {
@@ -428,4 +431,11 @@ public abstract class FileRequest<R extends ContainerRequest> extends Job {
     {
         return any(asList(protocols), in(asList(getStorage().supportedGetProtocols())));
     }
+
+    @Override
+    public void toString(StringBuilder sb, boolean longformat) {
+        toString(sb, "", longformat);
+    }
+
+    abstract void toString(StringBuilder sb, String padding, boolean longformat);
 }

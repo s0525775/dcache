@@ -1,0 +1,859 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+				       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+    <changeSet id="1" author="behrmann">
+        <preConditions onFailMessage="Cannot upgrade directly from versions older than 1.9.5">
+            <or>
+                <not><tableExists tableName="srmspacemanagerschemaversion"/></not>
+                <sqlCheck expectedResult="3">SELECT version FROM srmspacemanagerschemaversion</sqlCheck>
+                <sqlCheck expectedResult="4">SELECT version FROM srmspacemanagerschemaversion</sqlCheck>
+            </or>
+        </preConditions>
+        <comment>Ensure that we only upgrade from schema version 3 or 4</comment>
+    </changeSet>
+
+    <changeSet id="2" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not creating space manager schema as it already exists (this is not an error)">
+            <not><tableExists tableName="srmspacemanagerschemaversion"/></not>
+        </preConditions>
+        <comment>Create base schema</comment>
+
+        <createTable tableName="srmspacemanagernextid">
+            <column name="nexttoken" type="bigint"/>
+        </createTable>
+
+        <insert tableName="srmspacemanagernextid">
+            <column name="nexttoken" value="0"/>
+        </insert>
+
+        <createTable tableName="srmlinkgroup">
+            <column name="id" type="bigint"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="name" type="varchar(32672)"/>
+            <column name="freespaceinbytes" type="bigint"/>
+            <column name="lastupdatetime" type="bigint"/>
+            <column name="onlineallowed" type="int"/>
+            <column name="nearlineallowed" type="int"/>
+            <column name="replicaallowed" type="int"/>
+            <column name="outputallowed" type="int"/>
+            <column name="custodialallowed" type="int"/>
+            <column name="reservedspaceinbytes" type="bigint"/>
+        </createTable>
+
+        <createTable tableName="srmlinkgroupvos">
+            <column name="vogroup" type="varchar(32672)"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="vorole" type="varchar(32672)"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="linkgroupid" type="bigint">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseColumnNames="linkgroupid"
+                                 baseTableName="srmlinkgroupvos"
+                                 constraintName="fk_srmlinkgroupvos_l"
+                                 onDelete="RESTRICT"
+                                 referencedColumnNames="id"
+                                 referencedTableName="srmlinkgroup"/>
+
+        <createTable tableName="srmretentionpolicy">
+            <column name="id" type="int"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="name" type="varchar(32672)"/>
+        </createTable>
+
+        <createTable tableName="srmaccesslatency">
+            <column name="id" type="int"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="name" type="varchar(32672)"/>
+        </createTable>
+
+        <createTable tableName="srmspace">
+            <column name="id" type="bigint"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="vogroup" type="varchar(32672)"/>
+            <column name="vorole" type="varchar(32672)"/>
+            <column name="retentionpolicy" type="int"/>
+            <column name="accesslatency" type="int"/>
+            <column name="linkgroupid" type="bigint"/>
+            <column name="sizeinbytes" type="bigint"/>
+            <column name="creationtime" type="bigint"/>
+            <column name="lifetime" type="bigint"/>
+            <column name="description" type="varchar(32672)"/>
+            <column name="state" type="int"/>
+            <column name="usedspaceinbytes" type="bigint"/>
+            <column name="allocatedspaceinbytes" type="bigint"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseColumnNames="linkgroupid"
+                                 baseTableName="srmspace"
+                                 constraintName="fk_srmspace_l"
+                                 referencedColumnNames="id"
+                                 referencedTableName="srmlinkgroup"/>
+
+        <addForeignKeyConstraint baseColumnNames="accesslatency"
+                                 baseTableName="srmspace"
+                                 constraintName="fk_srmspace_a"
+                                 referencedColumnNames="id"
+                                 referencedTableName="srmaccesslatency"/>
+
+        <addForeignKeyConstraint baseColumnNames="retentionpolicy"
+                                 baseTableName="srmspace"
+                                 constraintName="fk_srmspace_r"
+                                 referencedColumnNames="id"
+                                 referencedTableName="srmretentionpolicy"/>
+
+        <createIndex tableName="srmspace" indexName="srmspace_linkgroupid_idx">
+            <column name="linkgroupid"/>
+        </createIndex>
+
+        <createIndex tableName="srmspace" indexName="srmspace_state_idx">
+            <column name="state"/>
+        </createIndex>
+
+        <createIndex tableName="srmspace" indexName="srmspace_description_idx">
+            <column name="description"/>
+        </createIndex>
+
+        <createIndex tableName="srmspace" indexName="srmspace_lifetime_idx">
+            <column name="lifetime"/>
+        </createIndex>
+
+        <createIndex tableName="srmspace" indexName="srmspace_creationtime_idx">
+            <column name="creationtime"/>
+        </createIndex>
+
+        <createTable tableName="srmspacefile">
+            <column name="id" type="bigint"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="vogroup" type="varchar(32672)"/>
+            <column name="vorole" type="varchar(32672)"/>
+            <column name="spacereservationid" type="bigint"/>
+            <column name="sizeinbytes" type="bigint"/>
+            <column name="creationtime" type="bigint"/>
+            <column name="lifetime" type="bigint"/>
+            <column name="pnfspath" type="varchar(32672)"/>
+            <column name="pnfsid" type="varchar(32672)"/>
+            <column name="state" type="int"/>
+            <column name="deleted" type="int"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseColumnNames="spacereservationid"
+                                 baseTableName="srmspacefile"
+                                 constraintName="fk_srmspacefile_l"
+                                 referencedColumnNames="id"
+                                 referencedTableName="srmspace"/>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_spaceresrevationid_idx">
+            <column name="spacereservationid"/>
+        </createIndex>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_state_idx">
+            <column name="state"/>
+        </createIndex>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_idx">
+            <column name="pnfspath"/>
+        </createIndex>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfsid_idx">
+            <column name="pnfsid"/>
+        </createIndex>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_creationtime_idx">
+            <column name="creationtime"/>
+        </createIndex>
+
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_lifetime_idx">
+            <column name="lifetime"/>
+        </createIndex>
+
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="3" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not creating srmspacefile_pnfspath_state_idx as it already exists (this is not an error)">
+            <not><indexExists indexName="srmspacefile_pnfspath_state_idx"/></not>
+        </preConditions>
+        <comment>Create compound index on pnfspath and state field</comment>
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_state_idx">
+            <column name="pnfspath"/>
+            <column name="state"/>
+        </createIndex>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="4" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacemanagerschemaversion table as it does not exist (this is not an error)">
+            <tableExists tableName="srmspacemanagerschemaversion"/>
+        </preConditions>
+        <comment>Drop old schema management table</comment>
+        <dropTable tableName="srmspacemanagerschemaversion"/>
+        <rollback>
+            <createTable tableName="srmspacemanagerschemaversion">
+                <column name="version" type="int"/>
+            </createTable>
+            <insert tableName="srmspacemanagerschemaversion">
+                <column name="version" value="4"/>
+            </insert>
+        </rollback>
+    </changeSet>
+
+    <!-- The above change sets correspond to the schema of space manager before dCache 2.8 -->
+
+    <changeSet id="6" author="behrmann">
+        <comment>Use auto-increment primary keys</comment>
+        <addAutoIncrement tableName="srmlinkgroup" columnName="id" columnDataType="bigint"/>
+        <addAutoIncrement tableName="srmspace" columnName="id" columnDataType="bigint"/>
+        <addAutoIncrement tableName="srmspacefile" columnName="id" columnDataType="bigint"/>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="7.1" author="behrmann" dbms="postgresql">
+        <!-- A workaround to https://liquibase.jira.com/browse/CORE-1705 -->
+        <comment>Postgresql specific auto increment sequences initialization</comment>
+
+        <sql>
+            SELECT setval('srmlinkgroup_id_seq', (SELECT greatest(max(id), 1) FROM srmlinkgroup));
+            SELECT setval('srmspace_id_seq', (SELECT greatest(max(id), 1) FROM srmspace));
+            SELECT setval('srmspacefile_id_seq', (SELECT greatest(max(id), 1) FROM srmspacefile));
+        </sql>
+
+        <!-- This rollback really belongs to changeset 6. It is however postgresql
+             specific, so we put it here. -->
+        <rollback>
+            DROP SEQUENCE srmlinkgroup_id_seq CASCADE;
+            DROP SEQUENCE srmspace_id_seq CASCADE;
+            DROP SEQUENCE srmspacefile_id_seq CASCADE;
+        </rollback>
+    </changeSet>
+
+    <changeSet id="8" author="behrmann">
+        <comment>Drop sequence table</comment>
+        <dropTable tableName="srmspacemanagernextid"/>
+        <rollback>
+            <createTable tableName="srmspacemanagernextid">
+                <column name="nexttoken" type="bigint"/>
+            </createTable>
+            <insert tableName="srmspacemanagernextid">
+                <column name="nexttoken" value="0"/>
+            </insert>
+
+            <sql>
+                UPDATE srmspacemanagernextid SET nexttoken =
+                    GREATEST(nexttoken,
+                             GREATEST(COALESCE((SELECT max(id) FROM srmlinkgroup), 0),
+                                      COALESCE((SELECT max(id) FROM srmspace), 0),
+                                      COALESCE((SELECT max(id) FROM srmspacefile), 0)) + 1)
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="14.1" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacefile_pnfspath_idx as it does not exist (this is not an error)">
+            <indexExists indexName="srmspacefile_pnfspath_idx"/>
+        </preConditions>
+
+        <comment>Drop index on pnfspath column</comment>
+        <dropIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_idx"/>
+        <rollback>
+            <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_idx">
+                <column name="pnfspath"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="14.2" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacefile_pnfspath_state_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspacefile_pnfspath_state_idx"/>
+        </preConditions>
+
+        <comment>Drop index on (pnfspath,state) columns</comment>
+        <dropIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_state_idx"/>
+        <rollback>
+            <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfspath_state_idx">
+                <column name="pnfspath"/>
+                <column name="state"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="9.1" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacefile_pnfsid_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspacefile_pnfsid_idx"/>
+        </preConditions>
+
+        <comment>Drop index on pnfsid column</comment>
+        <dropIndex tableName="srmspacefile" indexName="srmspacefile_pnfsid_idx"/>
+        <rollback>
+            <createIndex tableName="srmspacefile" indexName="srmspacefile_pnfsid_idx">
+                <column name="pnfsid"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="17" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspace_lifetime_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspace_lifetime_idx"/>
+        </preConditions>
+
+        <comment>Drop index on lifetime column</comment>
+        <dropIndex tableName="srmspace" indexName="srmspace_lifetime_idx"/>
+        <rollback>
+            <createIndex tableName="srmspace" indexName="srmspace_lifetime_idx">
+                <column name="lifetime"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="18" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacefile_lifetime_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspacefile_lifetime_idx"/>
+        </preConditions>
+
+        <comment>Drop index on lifetime column</comment>
+        <dropIndex tableName="srmspacefile" indexName="srmspacefile_lifetime_idx"/>
+        <rollback>
+            <createIndex tableName="srmspacefile" indexName="srmspacefile_lifetime_idx">
+                <column name="lifetime"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="19" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspacefile_creationtime_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspacefile_creationtime_idx"/>
+        </preConditions>
+
+        <comment>Drop index on creationtime column</comment>
+        <dropIndex tableName="srmspacefile" indexName="srmspacefile_creationtime_idx"/>
+        <rollback>
+            <createIndex tableName="srmspacefile" indexName="srmspacefile_creationtime_idx">
+                <column name="creationtime"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20" author="behrmann">
+        <preConditions onFail="MARK_RAN" onFailMessage="Not dropping srmspace_creationtime_idx as it does not exists (this is not an error)">
+            <indexExists indexName="srmspace_creationtime_idx"/>
+        </preConditions>
+
+        <comment>Drop index on creationtime column</comment>
+        <dropIndex tableName="srmspace" indexName="srmspace_creationtime_idx"/>
+        <rollback>
+            <createIndex tableName="srmspace" indexName="srmspace_creationtime_idx">
+                <column name="creationtime"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="hsqldb.trigger.1" author="behrmann" dbms="hsqldb">
+        <comment>Not used any more</comment>
+        <sql>DROP TRIGGER tgr_srmlinkgroup_update IF EXISTS</sql>
+        <rollback>
+            <sql>DROP TRIGGER tgr_srmlinkgroup_update IF EXISTS</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="hsqldb.trigger.2" author="behrmann" dbms="hsqldb">
+        <comment>Create srmspace triggers for maintaining accumulated fields</comment>
+        <sql>DROP TRIGGER tgr_srmspace_insert IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspace_insert AFTER INSERT ON srmspace
+                REFERENCING NEW ROW AS space
+                FOR EACH ROW
+                BEGIN ATOMIC
+                    IF space.usedspaceinbytes &lt;&gt; 0 OR space.allocatedspaceinbytes &lt;&gt; 0 THEN
+                        SIGNAL SQLSTATE '23D02' SET MESSAGE_TEXT = 'Space reservations must be created empty.';
+                    END IF;
+                    IF space.state = 0 THEN
+                        UPDATE srmlinkgroup
+                            SET reservedspaceinbytes = reservedspaceinbytes + space.sizeinbytes
+                            WHERE id = space.linkgroupid AND space.sizeinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+                        IF DIAGNOSTICS(ROW_COUNT) = 0 THEN
+                            SIGNAL SQLSTATE '23D01' SET MESSAGE_TEXT = 'Not enough free space in link group.';
+                        END IF;
+                    END IF;
+                END;
+        </createProcedure>
+
+        <sql>DROP TRIGGER tgr_srmspace_delete IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspace_delete AFTER DELETE ON srmspace
+                REFERENCING OLD ROW AS space
+                FOR EACH ROW WHEN (space.state = 0)
+                UPDATE srmlinkgroup
+                    SET reservedspaceinbytes = reservedspaceinbytes - (space.sizeinbytes - space.usedspaceinbytes)
+                    WHERE id = space.linkgroupid;
+        </createProcedure>
+
+        <sql>DROP TRIGGER tgr_srmspace_update IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspace_update AFTER UPDATE ON srmspace
+                REFERENCING OLD ROW AS old NEW ROW AS new
+                FOR EACH ROW
+                BEGIN ATOMIC
+                    IF old.linkgroupid &lt;&gt; new.linkgroupid THEN
+                        SIGNAL SQLSTATE '23D03' SET MESSAGE_TEXT = 'Cannot move reservations between link groups.';
+                    END IF;
+
+                    IF old.state = 0 AND new.state = 0 THEN
+                        IF old.sizeinbytes &lt;&gt; new.sizeinbytes OR old.usedspaceinbytes &lt;&gt; new.usedspaceinbytes THEN
+                            IF old.sizeinbytes >= new.sizeinbytes THEN
+                                -- Size is unchanged or downsized, always okay
+                                UPDATE srmlinkgroup
+                                    SET reservedspaceinbytes = reservedspaceinbytes + (new.sizeinbytes - new.usedspaceinbytes) - (old.sizeinbytes - old.usedspaceinbytes),
+                                        freespaceinbytes = GREATEST(LEAST(freespaceinbytes, freespaceinbytes - new.usedspaceinbytes + old.usedspaceinbytes), 0)
+                                    WHERE id = old.linkgroupid;
+                            ELSE
+                                -- Increased reservation, okay if space is available
+                                UPDATE srmlinkgroup
+                                    SET reservedspaceinbytes = reservedspaceinbytes + (new.sizeinbytes - new.usedspaceinbytes) - (old.sizeinbytes - old.usedspaceinbytes),
+                                        freespaceinbytes = GREATEST(LEAST(freespaceinbytes, freespaceinbytes - new.usedspaceinbytes + old.usedspaceinbytes), 0)
+                                    WHERE id = old.linkgroupid AND new.sizeinbytes - old.sizeinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+                                IF DIAGNOSTICS(ROW_COUNT) = 0 THEN
+                                    SIGNAL SQLSTATE '23D01' SET MESSAGE_TEXT = 'Not enough free space in link group.';
+                                END IF;
+                            END IF;
+                        END IF;
+                    ELSEIF old.state = 0 AND new.state &lt;&gt; 0 THEN
+                        UPDATE srmlinkgroup
+                            SET reservedspaceinbytes = reservedspaceinbytes - (old.sizeinBytes - old.usedspaceinbytes)
+                            WHERE id = old.linkgroupid;
+                    ELSEIF old.state &lt;&gt; 0 AND new.state = 0 THEN
+                        UPDATE srmlinkgroup
+                            SET reservedspaceinbytes = reservedspaceinbytes + (new.sizeinbytes - new.usedspaceinbytes),
+                                freespaceinbytes = GREATEST(freespaceinbytes - new.usedspaceinbytes, 0)
+                            WHERE id = new.linkgroupid AND new.sizeinbytes - new.usedspaceinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+                        IF DIAGNOSTICS(ROW_COUNT) = 0 THEN
+                            SIGNAL SQLSTATE '23D01' SET MESSAGE_TEXT = 'Not enough free space in link group.';
+                        END IF;
+                    END IF;
+                END;
+        </createProcedure>
+
+        <rollback>
+            <sql>DROP TRIGGER tgr_srmspace_insert IF EXISTS</sql>
+            <sql>DROP TRIGGER tgr_srmspace_update IF EXISTS</sql>
+            <sql>DROP TRIGGER tgr_srmspace_delete IF EXISTS</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="hsqldb.trigger.3" author="behrmann" dbms="hsqldb">
+        <!-- Comment taken from old Java code: Idea below is questionable. We resize space reservation
+             to fit this file. This way we attempt to guarantee that there is no negative numbers in
+             LinkGroup. -->
+        <comment>Create srmspace trigger to enlarge space to fit its files</comment>
+        <sql>DROP TRIGGER tgr_srmspace_increase_size IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspace_increase_size BEFORE UPDATE ON srmspace
+                REFERENCING OLD ROW AS old NEW ROW as new
+                FOR EACH ROW WHEN (new.allocatedspaceinbytes + new.usedspaceinbytes > new.sizeinbytes)
+                SET new.sizeinbytes = new.allocatedspaceinbytes + new.usedspaceinbytes;
+        </createProcedure>
+        <rollback>
+            <sql>DROP TRIGGER tgr_srmspace_increase_size IF EXISTS</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="hsqldb.trigger.4" author="behrmann" dbms="hsqldb">
+        <comment>Create srmspacefile triggers for maintaining accumulated fields</comment>
+        <sql>DROP TRIGGER tgr_srmspacefile_insert IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspacefile_insert AFTER INSERT ON srmspacefile
+                REFERENCING NEW ROW AS new
+                FOR EACH ROW
+                BEGIN ATOMIC
+                    IF new.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes + new.sizeinbytes WHERE id = new.spacereservationid;
+                    ELSEIF new.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes + new.sizeinbytes WHERE id = new.spacereservationid;
+                    END IF;
+                END;
+        </createProcedure>
+
+        <sql>DROP TRIGGER tgr_srmspacefile_update IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspacefile_update AFTER UPDATE ON srmspacefile
+            REFERENCING OLD ROW AS old NEW ROW AS new
+            FOR EACH ROW
+            BEGIN ATOMIC
+                DECLARE allocatedDelta BIGINT;
+                DECLARE usedDelta BIGINT;
+                IF old.spaceReservationId = new.spaceReservationId THEN
+                    SET allocatedDelta =
+                              CASE WHEN new.state IN (0, 1) THEN new.sizeinbytes ELSE 0 END
+                              -
+                              CASE WHEN old.state IN (0, 1) THEN old.sizeinbytes ELSE 0 END;
+                    SET usedDelta =
+                              CASE WHEN new.state = 2 THEN new.sizeinbytes ELSE 0 END
+                              -
+                              CASE WHEN old.state = 2 THEN old.sizeinbytes ELSE 0 END;
+                    IF allocatedDelta &lt;&gt; 0 OR usedDelta &lt;&gt; 0 THEN
+                        UPDATE srmspace
+                            SET allocatedspaceinbytes = allocatedspaceinbytes + allocatedDelta,
+                                usedspaceinbytes = usedspaceinbytes + usedDelta
+                            WHERE id = old.spaceReservationId;
+                    END IF;
+                ELSE
+                    IF old.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes - old.sizeinbytes WHERE id = old.spacereservationid;
+                    ELSEIF old.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes - old.sizeinbytes WHERE id = old.spacereservationid;
+                    END IF;
+                    IF new.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes + new.sizeinbytes WHERE id = new.spacereservationid;
+                    ELSEIF new.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes + new.sizeinbytes WHERE id = new.spacereservationid;
+                    END IF;
+                END IF;
+            END;
+        </createProcedure>
+
+        <sql>DROP TRIGGER tgr_srmspacefile_delete IF EXISTS</sql>
+        <createProcedure>
+            CREATE TRIGGER tgr_srmspacefile_delete AFTER DELETE ON srmspacefile
+                REFERENCING OLD ROW AS old
+                FOR EACH ROW
+                BEGIN ATOMIC
+                    IF old.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes - old.sizeinbytes WHERE id = old.spacereservationid;
+                    ELSEIF old.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes - old.sizeinbytes WHERE id = old.spacereservationid;
+                    END IF;
+                END;
+        </createProcedure>
+
+        <rollback>
+            <sql>DROP TRIGGER tgr_srmspacefile_insert IF EXISTS</sql>
+            <sql>DROP TRIGGER tgr_srmspacefile_update IF EXISTS</sql>
+            <sql>DROP TRIGGER tgr_srmspacefile_delete IF EXISTS</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="postgresql.trigger.0" author="behrmann" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onFailMessage="plpgsql language already exists (this is not an error)">
+            <sqlCheck expectedResult="f">
+                SELECT 'plpgsql' IN (SELECT lanname FROM pg_language)
+            </sqlCheck>
+        </preConditions>
+        <comment>Install plpgsql procedural language</comment>
+        <sql>CREATE LANGUAGE plpgsql</sql>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="postgresql.trigger.1" author="behrmann" dbms="postgresql">
+        <comment>Not used any more</comment>
+        <createProcedure>
+            DROP TRIGGER IF EXISTS tgr_linkgroup_update ON srmlinkgroup;
+            DROP FUNCTION IF EXISTS f_linkgroup_on_update();
+        </createProcedure>
+        <rollback>
+            DROP TRIGGER IF EXISTS tgr_linkgroup_update ON srmlinkgroup;
+            DROP FUNCTION IF EXISTS f_linkgroup_on_update();
+        </rollback>
+    </changeSet>
+
+    <changeSet id="postgresql.trigger.2" author="behrmann" dbms="postgresql">
+        <comment>Create srmspace triggers for maintaining accumulated fields</comment>
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspace_on_insert() RETURNS TRIGGER AS  $$
+            BEGIN
+                IF NEW.usedspaceinbytes != 0 OR NEW.allocatedspaceinbytes != 0 THEN
+                    RAISE SQLSTATE '23D02' USING MESSAGE = 'Space reservation must be empty at time of creation.';
+                END IF;
+                IF NEW.state = 0 THEN
+                    UPDATE srmlinkgroup
+                        SET reservedspaceinbytes = reservedspaceinbytes + NEW.sizeinbytes
+                        WHERE id = NEW.linkgroupid AND NEW.sizeinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+
+                    IF NOT FOUND THEN
+                        RAISE SQLSTATE '23D01' USING MESSAGE = 'Not enough free space in link group.';
+                    END IF;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspace_insert ON srmspace;
+            CREATE TRIGGER tgr_srmspace_insert AFTER INSERT ON srmspace FOR EACH ROW EXECUTE PROCEDURE f_srmspace_on_insert();
+        </createProcedure>
+
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspace_on_update() RETURNS TRIGGER AS  $$
+            BEGIN
+                IF old.linkgroupid != new.linkgroupid THEN
+                    RAISE SQLSTATE '23D03' USING MESSAGE = 'Cannot move reservations between link groups.';
+                END IF;
+
+                IF OLD.state = 0 AND NEW.state = 0 THEN
+                    IF OLD.sizeinbytes != NEW.sizeinbytes OR OLD.usedspaceinbytes != NEW.usedspaceinbytes THEN
+                        IF OLD.sizeinbytes >= NEW.sizeinbytes THEN
+                            -- Size is unchanged or downsized, always okay
+                            UPDATE srmlinkgroup
+                                SET reservedspaceinbytes = reservedspaceinbytes + (NEW.sizeinbytes - NEW.usedspaceinbytes) - (OLD.sizeinbytes - OLD.usedspaceinbytes),
+                                    freespaceinbytes = GREATEST(LEAST(freespaceinbytes, freespaceinbytes - NEW.usedspaceinbytes + OLD.usedspaceinbytes), 0)
+                                WHERE id = OLD.linkgroupid;
+                        ELSE
+                            -- Increased reservation, okay if space is available
+                            UPDATE srmlinkgroup
+                                SET reservedspaceinbytes = reservedspaceinbytes + (NEW.sizeinbytes - NEW.usedspaceinbytes) - (OLD.sizeinbytes - OLD.usedspaceinbytes),
+                                    freespaceinbytes = GREATEST(LEAST(freespaceinbytes, freespaceinbytes - NEW.usedspaceinbytes + OLD.usedspaceinbytes), 0)
+                                WHERE id = OLD.linkgroupid AND NEW.sizeinbytes - OLD.sizeinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+                            IF NOT FOUND THEN
+                                RAISE SQLSTATE '23D01' USING MESSAGE = 'Not enough free space in link group.';
+                            END IF;
+                        END IF;
+                    END IF;
+                ELSEIF OLD.state = 0 AND NEW.state != 0 THEN
+                    UPDATE srmlinkgroup
+                        SET reservedspaceinbytes = reservedspaceinbytes - (OLD.sizeinBytes - OLD.usedspaceinbytes)
+                        WHERE id = OLD.linkgroupid;
+                ELSEIF OLD.state != 0 AND NEW.state = 0 THEN
+                    UPDATE srmlinkgroup
+                        SET reservedspaceinbytes = reservedspaceinbytes + (NEW.sizeinbytes - NEW.usedspaceinbytes),
+                            freespaceinbytes = GREATEST(freespaceinbytes - NEW.usedspaceinbytes, 0)
+                        WHERE id = NEW.linkgroupid AND NEW.sizeinbytes - NEW.usedspaceinbytes &lt;= freespaceinbytes - reservedspaceinbytes;
+                    IF NOT FOUND THEN
+                        RAISE SQLSTATE '23D01' USING MESSAGE = 'Not enough free space in link group.';
+                    END IF;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspace_update ON srmspace;
+            CREATE TRIGGER tgr_srmspace_update AFTER UPDATE ON srmspace FOR EACH ROW EXECUTE PROCEDURE f_srmspace_on_update();
+        </createProcedure>
+
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspace_on_delete() RETURNS TRIGGER AS  $$
+            BEGIN
+                IF OLD.state = 0 THEN
+                    UPDATE srmlinkgroup SET reservedspaceinbytes = reservedspaceinbytes - OLD.sizeinbytes + OLD.usedspaceinbytes WHERE id = OLD.linkgroupid;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspace_delete ON srmspace;
+            CREATE TRIGGER tgr_srmspace_delete AFTER DELETE ON srmspace FOR EACH ROW EXECUTE PROCEDURE f_srmspace_on_delete();
+        </createProcedure>
+
+        <rollback>
+            DROP TRIGGER tgr_srmspace_delete ON srmspace;
+            DROP FUNCTION f_srmspace_on_delete();
+            DROP TRIGGER tgr_srmspace_update ON srmspace;
+            DROP FUNCTION f_srmspace_on_update();
+            DROP TRIGGER tgr_srmspace_insert ON srmspace;
+            DROP FUNCTION f_srmspace_on_insert();
+        </rollback>
+    </changeSet>
+
+    <changeSet id="postgresql.trigger.3" author="behrmann" dbms="postgresql">
+        <comment>Create srmspace trigger to enlarge space to fit its files</comment>
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspace_check_size() RETURNS TRIGGER AS $$
+            BEGIN
+                IF NEW.allocatedspaceinbytes + NEW.usedspaceinbytes > NEW.sizeinbytes THEN
+                    NEW.sizeinbytes := NEW.allocatedspaceinbytes + NEW.usedspaceinbytes;
+                END IF;
+                RETURN NEW;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspace_before_update ON srmspace;
+            CREATE TRIGGER tgr_srmspace_before_update BEFORE UPDATE ON srmspace FOR EACH ROW EXECUTE PROCEDURE f_srmspace_check_size();
+        </createProcedure>
+
+        <rollback>
+            DROP TRIGGER tgr_srmspace_before_update ON srmspace;
+            DROP FUNCTION f_srmspace_check_size();
+        </rollback>
+    </changeSet>
+
+    <changeSet id="postgresql.trigger.4" author="behrmann" dbms="postgresql">
+        <comment>Create srmspacefile triggers for maintaining accumulated fields</comment>
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspacefile_on_insert() RETURNS TRIGGER AS  $$
+            BEGIN
+                IF NEW.state IN (0, 1) THEN
+                    UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes + NEW.sizeinbytes WHERE id = NEW.spacereservationid;
+                ELSEIF NEW.state = 2 THEN
+                    UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes + NEW.sizeinbytes WHERE id = NEW.spacereservationid;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspacefile_insert ON srmspacefile;
+            CREATE TRIGGER tgr_srmspacefile_insert AFTER INSERT ON srmspacefile FOR EACH ROW EXECUTE PROCEDURE f_srmspacefile_on_insert();
+        </createProcedure>
+
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspacefile_on_update() RETURNS TRIGGER AS  $$
+            DECLARE
+                allocatedDelta bigint;
+                usedDelta bigint;
+            BEGIN
+                IF OLD.spaceReservationId = NEW.spaceReservationId THEN
+                    allocatedDelta :=
+                              CASE WHEN NEW.state IN (0, 1) THEN NEW.sizeinbytes ELSE 0 END
+                              -
+                              CASE WHEN OLD.state IN (0, 1) THEN OLD.sizeinbytes ELSE 0 END;
+                    usedDelta :=
+                              CASE WHEN NEW.state = 2 THEN NEW.sizeinbytes ELSE 0 END
+                              -
+                              CASE WHEN OLD.state = 2 THEN OLD.sizeinbytes ELSE 0 END;
+                    IF allocatedDelta != 0 OR usedDelta != 0 THEN
+                        UPDATE srmspace
+                            SET allocatedspaceinbytes = allocatedspaceinbytes + allocatedDelta,
+                                usedspaceinbytes = usedspaceinbytes + usedDelta
+                            WHERE id = OLD.spaceReservationId;
+                    END IF;
+                ELSE
+                    IF OLD.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes - OLD.sizeinbytes WHERE id = OLD.spacereservationid;
+                    ELSEIF OLD.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes - OLD.sizeinbytes WHERE id = OLD.spacereservationid;
+                    END IF;
+                    IF NEW.state IN (0, 1) THEN
+                        UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes + NEW.sizeinbytes WHERE id = NEW.spacereservationid;
+                    ELSEIF NEW.state = 2 THEN
+                        UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes + NEW.sizeinbytes WHERE id = NEW.spacereservationid;
+                    END IF;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspacefile_update ON srmspacefile;
+            CREATE TRIGGER tgr_srmspacefile_update AFTER UPDATE ON srmspacefile FOR EACH ROW EXECUTE PROCEDURE f_srmspacefile_on_update();
+        </createProcedure>
+
+        <createProcedure>
+            CREATE OR REPLACE FUNCTION f_srmspacefile_on_delete() RETURNS TRIGGER AS  $$
+            BEGIN
+                IF OLD.state IN (0, 1) THEN
+                    UPDATE srmspace SET allocatedspaceinbytes = allocatedspaceinbytes - OLD.sizeinbytes WHERE id = OLD.spacereservationid;
+                ELSEIF OLD.state = 2 THEN
+                    UPDATE srmspace SET usedspaceinbytes = usedspaceinbytes - OLD.sizeinbytes WHERE id = OLD.spacereservationid;
+                END IF;
+                RETURN NULL;
+            END;
+            $$
+            LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS tgr_srmspacefile_delete ON srmspacefile;
+            CREATE TRIGGER tgr_srmspacefile_delete AFTER DELETE ON srmspacefile FOR EACH ROW EXECUTE PROCEDURE f_srmspacefile_on_delete();
+        </createProcedure>
+
+        <rollback>
+            DROP TRIGGER tgr_srmspacefile_insert ON srmspacefile;
+            DROP FUNCTION f_srmspacefile_on_insert();
+            DROP TRIGGER tgr_srmspacefile_update ON srmspacefile;
+            DROP FUNCTION f_srmspacefile_on_update();
+            DROP TRIGGER tgr_srmspacefile_delete ON srmspacefile;
+            DROP FUNCTION f_srmspacefile_on_delete();
+        </rollback>
+    </changeSet>
+
+    <changeSet id="12" author="behrmann">
+        <comment>Remove deleted flushed files</comment>
+        <sql>DELETE FROM srmspacefile WHERE state = 3 AND deleted = 1</sql>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="15" author="behrmann">
+        <comment>Clear pnfspath on deleted, stored and flushed files</comment>
+        <sql>UPDATE srmspacefile SET pnfspath = NULL WHERE deleted = 1 OR state IN (2,3)</sql>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="10" author="behrmann">
+        <comment>Change pnfsid column to VARCHAR(36)</comment>
+        <modifyDataType tableName="srmspacefile" columnName="pnfsid" newDataType="varchar(36)"/>
+        <rollback>
+            <modifyDataType tableName="srmspacefile" columnName="pnfsid" newDataType="varchar(32672)"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="21" author="behrmann">
+        <comment>Convert lifetime to expirationtime</comment>
+
+        <renameColumn tableName="srmspace" oldColumnName="lifetime" newColumnName="expirationtime" columnDataType="bigint"/>
+        <sql>UPDATE srmspace SET expirationtime = CASE WHEN expirationtime = -1 THEN NULL ELSE creationtime + expirationtime END</sql>
+
+        <rollback>
+            <renameColumn tableName="srmspace" oldColumnName="expirationtime" newColumnName="lifetime" columnDataType="bigint"/>
+            <sql>UPDATE srmspace SET lifetime = CASE WHEN lifetime IS NULL THEN -1 ELSE lifetime - creationtime END</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="22" author="behrmann">
+        <comment>Convert lifetime to expirationtime</comment>
+
+        <renameColumn tableName="srmspacefile" oldColumnName="lifetime" newColumnName="expirationtime" columnDataType="bigint"/>
+        <sql>UPDATE srmspacefile SET expirationtime = CASE WHEN expirationtime = -1 THEN NULL ELSE creationtime + expirationtime END</sql>
+
+        <rollback>
+            <renameColumn tableName="srmspacefile" oldColumnName="expirationtime" newColumnName="lifetime" columnDataType="bigint"/>
+            <sql>UPDATE srmspacefile SET lifetime = CASE WHEN lifetime IS NULL THEN -1 ELSE lifetime - creationtime END</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="11" author="behrmann">
+        <comment>Add unique constraint (and thus index) on pnfsid column</comment>
+        <addUniqueConstraint tableName="srmspacefile" columnNames="pnfsid" constraintName="srmspacefile_pnfsid_unique"/>
+    </changeSet>
+
+    <changeSet id="16" author="behrmann">
+        <comment>Add unique constraint (and thus index) on pnfspath column</comment>
+        <addUniqueConstraint tableName="srmspacefile" columnNames="pnfspath" constraintName="srmspacefile_pnfspath_unique"/>
+    </changeSet>
+
+    <changeSet id="5" author="behrmann">
+        <comment>Add non-null constraints to required fields</comment>
+        <addNotNullConstraint tableName="srmlinkgroup" columnName="freespaceinbytes"/>
+        <addNotNullConstraint tableName="srmlinkgroup" columnName="reservedspaceinbytes"/>
+        <addNotNullConstraint tableName="srmspace" columnName="sizeinbytes"/>
+        <addNotNullConstraint tableName="srmspace" columnName="usedspaceinbytes"/>
+        <addNotNullConstraint tableName="srmspace" columnName="allocatedspaceinbytes"/>
+        <addNotNullConstraint tableName="srmspace" columnName="linkgroupid"/>
+        <addNotNullConstraint tableName="srmspace" columnName="state"/>
+        <addNotNullConstraint tableName="srmspacefile" columnName="sizeinbytes"/>
+        <addNotNullConstraint tableName="srmspacefile" columnName="spacereservationid"/>
+        <addNotNullConstraint tableName="srmspacefile" columnName="state"/>
+    </changeSet>
+
+    <changeSet id="13" author="behrmann">
+        <comment>Add not-null and uniqueness constraints to linkgroup name</comment>
+        <addNotNullConstraint tableName="srmlinkgroup" columnName="name"/>
+        <addUniqueConstraint tableName="srmlinkgroup" columnNames="name" constraintName="srmlinkgroup_name_unique"/>
+    </changeSet>
+
+    <changeSet id="23" author="behrmann">
+        <comment>Add not-null constraints to creationtime</comment>
+        <addNotNullConstraint tableName="srmspace" columnName="creationtime"/>
+        <addNotNullConstraint tableName="srmspacefile" columnName="creationtime"/>
+    </changeSet>
+
+    <changeSet id="24" author="behrmann">
+        <comment>Create index on expirationtime</comment>
+        <createIndex tableName="srmspace" indexName="srmspace_expirationtime_idx">
+            <column name="expirationtime"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="25" author="behrmann">
+        <comment>Create index on expirationtime</comment>
+        <createIndex tableName="srmspacefile" indexName="srmspacefile_expirationtime_idx">
+            <column name="expirationtime"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

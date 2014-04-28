@@ -199,7 +199,7 @@ public final class AccessLatency implements Serializable {
             return NEARLINE;
         }
 
-        throw new IllegalArgumentException("Unknown State Id");
+        throw new IllegalArgumentException("Unknown AccessLatency Id");
     }
 
     public boolean equals(Object obj) {
@@ -208,6 +208,10 @@ public final class AccessLatency implements Serializable {
 
     public int hashCode() {
         return _name.hashCode();
+    }
+
+    public static AccessLatency valueOf(String value) {
+        return getAccessLatency(value);
     }
 
     public Object readResolve() throws ObjectStreamException {

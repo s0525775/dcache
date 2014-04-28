@@ -28,11 +28,14 @@ import dmg.cells.nucleus.DelayedReply;
 
 import org.dcache.pool.repository.AbstractStateChangeListener;
 import org.dcache.pool.repository.CacheEntry;
+import org.dcache.pool.repository.EntryChangeEvent;
 import org.dcache.pool.repository.EntryState;
 import org.dcache.pool.repository.IllegalTransitionException;
 import org.dcache.pool.repository.Repository;
 import org.dcache.pool.repository.StateChangeEvent;
+import org.dcache.pool.repository.StickyChangeEvent;
 import org.dcache.pool.repository.StickyRecord;
+import org.dcache.util.FireAndForgetTask;
 import org.dcache.util.expression.Expression;
 
 /**
@@ -79,13 +82,13 @@ public class Job
     enum State { INITIALIZING, RUNNING, SLEEPING, PAUSED, SUSPENDED,
             STOPPING, CANCELLING, CANCELLED, FINISHED, FAILED }
 
-    private final static Logger _log = LoggerFactory.getLogger(Job.class);
+    private static final Logger _log = LoggerFactory.getLogger(Job.class);
 
-    private final Set<PnfsId> _queued = new LinkedHashSet();
-    private final Map<PnfsId,Long> _sizes = new HashMap();
-    private final Map<PnfsId,Task> _running = new HashMap();
+    private final Set<PnfsId> _queued = new LinkedHashSet<>();
+    private final Map<PnfsId,Long> _sizes = new HashMap<>();
+    private final Map<PnfsId,Task> _running = new HashMap<>();
     private final Future<?> _refreshTask;
-    private final BlockingQueue<Error> _errors = new ArrayBlockingQueue(15);
+    private final BlockingQueue<Error> _errors = new ArrayBlockingQueue<>(15);
     private final Map<PoolMigrationJobCancelMessage,DelayedReply> _cancelRequests =
         new HashMap<>();
 
@@ -107,7 +110,7 @@ public class Job
         _state = State.INITIALIZING;
 
         _refreshTask =
-            executor.scheduleWithFixedDelay(new LoggingTask(new Runnable() {
+            executor.scheduleWithFixedDelay(new FireAndForgetTask(new Runnable() {
                     @Override
                     public void run()
                     {
@@ -116,7 +119,7 @@ public class Job
                     }
                 }), 0, refreshPeriod, TimeUnit.MILLISECONDS);
 
-        executor.submit(new LoggingTask(new Runnable() {
+        executor.submit(new FireAndForgetTask(new Runnable() {
                 @Override
                 public void run()
                 {
@@ -201,7 +204,7 @@ public class Job
 
         pw.println("Concurrency: " + _concurrency);
         pw.println("Running tasks:");
-        List<Task> tasks = new ArrayList(_running.values());
+        List<Task> tasks = new ArrayList<>(_running.values());
         Collections.sort(tasks, new Comparator<Task>() {
                 @Override
                 public int compare(Task t1, Task t2)
@@ -365,7 +368,7 @@ public class Job
                 break;
 
             case SLEEPING:
-                _context.getExecutor().schedule(new LoggingTask(new Runnable() {
+                _context.getExecutor().schedule(new FireAndForgetTask(new Runnable() {
                         @Override
                         public void run()
                         {
@@ -379,7 +382,7 @@ public class Job
                 break;
 
             case PAUSED:
-                _context.getExecutor().schedule(new LoggingTask(new Runnable() {
+                _context.getExecutor().schedule(new FireAndForgetTask(new Runnable() {
                         @Override
                         public void run()
                         {
@@ -546,7 +549,10 @@ public class Job
         if (event.getNewState() == EntryState.REMOVED) {
             remove(pnfsId);
         } else {
-            CacheEntry entry = event.getEntry();
+            // We don't call entryChanged because during repository
+            // initialization stateChanged is called and we want to
+            // add the file to the job even if the state didn't change.
+            CacheEntry entry = event.getNewEntry();
             if (!accept(entry)) {
                 synchronized (this) {
                     if (!_running.containsKey(pnfsId)) {
@@ -556,6 +562,33 @@ public class Job
             } else if (_definition.isPermanent) {
                 add(entry);
             }
+        }
+    }
+
+    @Override
+    public void accessTimeChanged(EntryChangeEvent event)
+    {
+        entryChanged(event);
+    }
+
+    @Override
+    public void stickyChanged(StickyChangeEvent event)
+    {
+        entryChanged(event);
+    }
+
+    private void entryChanged(EntryChangeEvent event)
+    {
+        PnfsId pnfsId = event.getPnfsId();
+        CacheEntry entry = event.getNewEntry();
+        if (!accept(entry)) {
+            synchronized (this) {
+                if (!_running.containsKey(pnfsId)) {
+                    remove(pnfsId);
+                }
+            }
+        } else if (_definition.isPermanent && !accept(event.getOldEntry())) {
+            add(entry);
         }
     }
 
@@ -756,26 +789,6 @@ public class Job
         symbols.put(MigrationModule.CONSTANT_TARGETS,
                     _definition.poolList.getPools().size());
         return expression.evaluateBoolean(symbols);
-    }
-
-    protected class LoggingTask implements Runnable
-    {
-        private final Runnable _inner;
-
-        public LoggingTask(Runnable r)
-        {
-            _inner = r;
-        }
-
-        @Override
-        public void run()
-        {
-            try {
-                _inner.run();
-            } catch (Exception e) {
-                _log.error(e.toString(), e);
-            }
-        }
     }
 
     protected class Error

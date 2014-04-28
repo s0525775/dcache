@@ -17,6 +17,8 @@
 package org.dcache.chimera;
 
 import com.google.common.collect.Lists;
+import com.google.common.io.ByteStreams;
+import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +33,10 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import diskCacheV111.util.AccessLatency;
@@ -44,6 +49,8 @@ import org.dcache.acl.enums.Who;
 import org.dcache.chimera.posix.Stat;
 import org.dcache.chimera.store.InodeStorageInformation;
 import org.dcache.commons.util.SqlHelper;
+import org.dcache.util.Checksum;
+import org.dcache.util.ChecksumType;
 
 /**
  * SQL driver
@@ -182,7 +189,6 @@ class FsSqlDriver {
         createInode(dbConnection, inode, type, owner, group, mode, 1);
         createEntryInParent(dbConnection, parent, name, inode);
         incNlink(dbConnection, parent);
-        setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
 
         return inode;
     }
@@ -284,7 +290,6 @@ class FsSqlDriver {
 
         removeEntryInParent(dbConnection, parent, name);
         decNlink(dbConnection, parent);
-        setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
 
         removeInode(dbConnection, inode);
     }
@@ -306,7 +311,6 @@ class FsSqlDriver {
          * in which the directory inode is locked by the database.
          */
         decNlink(dbConnection, parent);
-        setFileMTime(dbConnection, parent, 0, System.currentTimeMillis());
     }
 
     void remove(Connection dbConnection, FsInode parent, FsInode inode) throws ChimeraFsException, SQLException {
@@ -347,7 +351,7 @@ class FsSqlDriver {
     public Stat stat(Connection dbConnection, FsInode inode) throws SQLException {
         return stat(dbConnection, inode, 0);
     }
-    private static final String sqlStat = "SELECT isize,inlink,itype,imode,iuid,igid,iatime,ictime,imtime,icrtime FROM t_inodes WHERE ipnfsid=?";
+    private static final String sqlStat = "SELECT isize,inlink,itype,imode,iuid,igid,iatime,ictime,imtime,icrtime,igeneration FROM t_inodes WHERE ipnfsid=?";
 
     public Stat stat(Connection dbConnection, FsInode inode, int level) throws SQLException {
 
@@ -373,9 +377,11 @@ class FsSqlDriver {
                 if (level == 0) {
                     inodeType = statResult.getInt("itype");
                     ret.setCrTime(statResult.getTimestamp("icrtime").getTime());
+                    ret.setGeneration(statResult.getLong("igeneration"));
                 } else {
                     inodeType = UnixPermission.S_IFREG;
                     ret.setCrTime(statResult.getTimestamp("imtime").getTime());
+                    ret.setGeneration(0);
                 }
 
                 ret.setSize(statResult.getLong("isize"));
@@ -439,6 +445,16 @@ class FsSqlDriver {
 
         return inode;
     }
+
+    FsInode mkdir(Connection dbConnection, FsInode parent, String name, int owner, int group, int mode,
+                  Map<String,byte[]> tags) throws ChimeraFsException, SQLException
+    {
+        FsInode inode = mkdir(dbConnection, parent, name, owner, group, mode);
+        createTags(dbConnection, inode, owner, group, mode & 0666, tags);
+        return inode;
+    }
+
+
     private static final String sqlMove = "UPDATE t_dirs SET iparent=?, iname=? WHERE iparent=? AND iname=?";
     private static final String sqlSetParent = "UPDATE t_dirs SET ipnfsid=? WHERE iparent=? AND iname='..'";
 
@@ -460,21 +476,7 @@ class FsSqlDriver {
 
         try {
 
-            FsInode destInode = inodeOf(dbConnection, destDir, dest);
             FsInode srcInode = inodeOf(dbConnection, srcDir, source);
-
-            if (destInode != null) {
-
-                if (destInode.equals(srcInode)) {
-                    // according to POSIX, we are done
-                    return;
-                }
-
-                // remove old entry if exist
-                remove(dbConnection, destDir, dest);
-            }
-            incNlink(dbConnection, destDir);
-
             stMove = dbConnection.prepareStatement(sqlMove);
 
             stMove.setString(1, destDir.toString());
@@ -487,14 +489,12 @@ class FsSqlDriver {
              * if moving a directory, point '..' to the new parent
              */
             Stat stat = stat(dbConnection, srcInode);
-            if ( (stat.getMode() & UnixPermission.S_IFDIR) != 0) {
+            if ( (stat.getMode() & UnixPermission.F_TYPE) == UnixPermission.S_IFDIR) {
                 stParentMove = dbConnection.prepareStatement(sqlSetParent);
                 stParentMove.setString(1, destDir.toString());
                 stParentMove.setString(2, srcInode.toString());
                 stParentMove.executeUpdate();
             }
-
-            decNlink(dbConnection, srcDir);
 
         } finally {
             SqlHelper.tryToClose(stMove);
@@ -559,9 +559,12 @@ class FsSqlDriver {
      */
     String inode2path(Connection dbConnection, FsInode inode, FsInode startFrom, boolean inclusive) throws SQLException {
 
+        if (inode.equals(startFrom)) {
+            return "/";
+        }
+
         String path = null;
         PreparedStatement ps = null;
-
         try {
 
             List<String> pList = new ArrayList<>();
@@ -616,7 +619,7 @@ class FsSqlDriver {
 
         return path;
     }
-    private static final String sqlCreateInode = "INSERT INTO t_inodes VALUES(?,?,?,?,?,?,?,?,?,?,?,?)";
+    private static final String sqlCreateInode = "INSERT INTO t_inodes VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     /**
      *
@@ -656,6 +659,7 @@ class FsSqlDriver {
             stCreateInode.setTimestamp(10, now);
             stCreateInode.setTimestamp(11, now);
             stCreateInode.setTimestamp(12, now);
+            stCreateInode.setLong(13, 0);
 
             stCreateInode.executeUpdate();
 
@@ -752,7 +756,7 @@ class FsSqlDriver {
     void incNlink(Connection dbConnection, FsInode inode) throws SQLException {
         incNlink(dbConnection, inode, 1);
     }
-    private static final String sqlIncNlink = "UPDATE t_inodes SET inlink=inlink +?,imtime=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlIncNlink = "UPDATE t_inodes SET inlink=inlink +?,imtime=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     /**
      * increases the reference count of the inode by delta
@@ -765,13 +769,13 @@ class FsSqlDriver {
     void incNlink(Connection dbConnection, FsInode inode, int delta) throws SQLException {
 
         PreparedStatement stIncNlinkCount = null; // increase nlink count of the inode
-
+        Timestamp now = new Timestamp(System.currentTimeMillis());
         try {
             stIncNlinkCount = dbConnection.prepareStatement(sqlIncNlink);
 
             stIncNlinkCount.setInt(1, delta);
-            stIncNlinkCount.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
-            stIncNlinkCount.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+            stIncNlinkCount.setTimestamp(2, now);
+            stIncNlinkCount.setTimestamp(3, now);
             stIncNlinkCount.setString(4, inode.toString());
 
             stIncNlinkCount.executeUpdate();
@@ -793,7 +797,7 @@ class FsSqlDriver {
     void decNlink(Connection dbConnection, FsInode inode) throws SQLException {
         decNlink(dbConnection, inode, 1);
     }
-    private static final String sqlDecNlink = "UPDATE t_inodes SET inlink=inlink -?,imtime=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlDecNlink = "UPDATE t_inodes SET inlink=inlink -?,imtime=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     /**
      * decreases inode reference count by delta
@@ -806,13 +810,13 @@ class FsSqlDriver {
     void decNlink(Connection dbConnection, FsInode inode, int delta) throws SQLException {
 
         PreparedStatement stDecNlinkCount = null; // decrease nlink count of the inode
-
+        Timestamp now = new Timestamp(System.currentTimeMillis());
         try {
 
             stDecNlinkCount = dbConnection.prepareStatement(sqlDecNlink);
             stDecNlinkCount.setInt(1, delta);
-            stDecNlinkCount.setTimestamp(2, new Timestamp(System.currentTimeMillis()));
-            stDecNlinkCount.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+            stDecNlinkCount.setTimestamp(2, now);
+            stDecNlinkCount.setTimestamp(3, now);
             stDecNlinkCount.setString(4, inode.toString());
 
             stDecNlinkCount.executeUpdate();
@@ -990,7 +994,7 @@ class FsSqlDriver {
 
         return name;
     }
-    private static final String sqlSetFileSize = "UPDATE t_inodes SET isize=?,imtime=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileSize = "UPDATE t_inodes SET isize=?,imtime=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileSize(Connection dbConnection, FsInode inode, long newSize) throws SQLException {
 
@@ -1010,7 +1014,7 @@ class FsSqlDriver {
             SqlHelper.tryToClose(ps);
         }
     }
-    private static final String sqlSetFileOwner = "UPDATE t_inodes SET iuid=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileOwner = "UPDATE t_inodes SET iuid=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileOwner(Connection dbConnection, FsInode inode, int level, int newOwner) throws SQLException {
 
@@ -1045,20 +1049,6 @@ class FsSqlDriver {
 
         try {
 
-            FsInode destInode = inodeOf(dbConnection, dir, newName);
-            FsInode srcInode = inodeOf(dbConnection, dir, oldName);
-
-            if (destInode != null) {
-
-                if (destInode.equals(srcInode)) {
-                    // according to POSIX, we are done
-                    return;
-                }
-
-                // remove old entry if exist
-                remove(dbConnection, dir, newName);
-            }
-
             ps = dbConnection.prepareStatement(sqlSetFileName);
 
             ps.setString(1, newName);
@@ -1066,14 +1056,11 @@ class FsSqlDriver {
             ps.setString(3, dir.toString());
             ps.executeUpdate();
 
-            // update parent modification time
-            setFileMTime(dbConnection, dir, 0, System.currentTimeMillis());
-
         } finally {
             SqlHelper.tryToClose(ps);
         }
     }
-    private static final String sqlSetInodeAttributes = "UPDATE t_inodes SET iatime=?, imtime=?, ictime=?, isize=?, iuid=?, igid=?, imode=?, itype=? WHERE ipnfsid=?";
+    private static final String sqlSetInodeAttributes = "UPDATE t_inodes SET iatime=?, imtime=?, ictime=?, icrtime=?, isize=?, iuid=?, igid=?, imode=?, itype=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setInodeAttributes(Connection dbConnection, FsInode inode, int level, Stat stat) throws SQLException {
 
@@ -1093,12 +1080,13 @@ class FsSqlDriver {
                 ps.setTimestamp(1, new Timestamp(stat.getATime()));
                 ps.setTimestamp(2, new Timestamp(stat.getMTime()));
                 ps.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
-                ps.setLong(4, stat.getSize());
-                ps.setInt(5, stat.getUid());
-                ps.setInt(6, stat.getGid());
-                ps.setInt(7, stat.getMode() & UnixPermission.S_PERMS);
-                ps.setInt(8, stat.getMode() & UnixPermission.S_TYPE);
-                ps.setString(9, inode.toString());
+                ps.setTimestamp(4, new Timestamp(stat.getCrTime()));
+                ps.setLong(5, stat.getSize());
+                ps.setInt(6, stat.getUid());
+                ps.setInt(7, stat.getGid());
+                ps.setInt(8, stat.getMode() & UnixPermission.S_PERMS);
+                ps.setInt(9, stat.getMode() & UnixPermission.S_TYPE);
+                ps.setString(10, inode.toString());
             } else {
                 String fileSetModeQuery = "UPDATE t_level_" + level
                         + " SET iatime=?, imtime=?, iuid=?, igid=?, imode=? WHERE ipnfsid=?";
@@ -1118,7 +1106,7 @@ class FsSqlDriver {
             SqlHelper.tryToClose(ps);
         }
     }
-    private static final String sqlSetFileATime = "UPDATE t_inodes SET iatime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileATime = "UPDATE t_inodes SET iatime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileATime(Connection dbConnection, FsInode inode, int level, long atime) throws SQLException {
 
@@ -1141,7 +1129,7 @@ class FsSqlDriver {
             SqlHelper.tryToClose(ps);
         }
     }
-    private static final String sqlSetFileCTime = "UPDATE t_inodes SET ictime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileCTime = "UPDATE t_inodes SET ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileCTime(Connection dbConnection, FsInode inode, int level, long ctime) throws SQLException {
 
@@ -1165,7 +1153,7 @@ class FsSqlDriver {
         }
 
     }
-    private static final String sqlSetFileMTime = "UPDATE t_inodes SET imtime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileMTime = "UPDATE t_inodes SET imtime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileMTime(Connection dbConnection, FsInode inode, int level, long mtime) throws SQLException {
 
@@ -1188,7 +1176,7 @@ class FsSqlDriver {
         }
 
     }
-    private static final String sqlSetFileGroup = "UPDATE t_inodes SET igid=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileGroup = "UPDATE t_inodes SET igid=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileGroup(Connection dbConnection, FsInode inode, int level, int newGroup) throws SQLException {
 
@@ -1211,7 +1199,7 @@ class FsSqlDriver {
         }
 
     }
-    private static final String sqlSetFileMode = "UPDATE t_inodes SET imode=?,ictime=? WHERE ipnfsid=?";
+    private static final String sqlSetFileMode = "UPDATE t_inodes SET imode=?,ictime=?,igeneration=igeneration+1 WHERE ipnfsid=?";
 
     void setFileMode(Connection dbConnection, FsInode inode, int level, int newMode) throws SQLException {
 
@@ -1407,7 +1395,7 @@ class FsSqlDriver {
     ////   Location info
     ////
     ////////////////////////////////////////////////////////////////////
-    private static final String sqlGetInodeLocations =
+    private static final String sqlGetInodeLocationsByType =
             "SELECT ilocation,ipriority,ictime,iatime  "
             + "FROM t_locationinfo WHERE itype=? AND ipnfsid=? AND istate=1 ORDER BY ipriority DESC";
 
@@ -1430,7 +1418,7 @@ class FsSqlDriver {
         PreparedStatement stGetInodeLocations = null;
         try {
 
-            stGetInodeLocations = dbConnection.prepareStatement(sqlGetInodeLocations);
+            stGetInodeLocations = dbConnection.prepareStatement(sqlGetInodeLocationsByType);
 
             stGetInodeLocations.setInt(1, type);
             stGetInodeLocations.setString(2, inode.toString());
@@ -1455,6 +1443,56 @@ class FsSqlDriver {
 
         return locations;
     }
+
+    private static final String sqlGetInodeLocations =
+            "SELECT itype,ilocation,ipriority,ictime,iatime  "
+            + "FROM t_locationinfo WHERE ipnfsid=? AND istate=1 ORDER BY ipriority DESC";
+
+    /**
+     *
+     *  returns a list of locations for the inode.
+     *  only 'online' locations is returned
+     *
+     * @param dbConnection
+     * @param inode
+     * @throws SQLException
+     * @return
+     */
+    List<StorageLocatable> getInodeLocations(Connection dbConnection, FsInode inode)
+            throws SQLException
+    {
+        List<StorageLocatable> locations = new ArrayList<>();
+        ResultSet rs = null;
+        PreparedStatement stGetInodeLocations = null;
+        try {
+
+            stGetInodeLocations = dbConnection.prepareStatement(sqlGetInodeLocations);
+
+            stGetInodeLocations.setString(1, inode.toString());
+
+            rs = stGetInodeLocations.executeQuery();
+
+            while (rs.next()) {
+
+                int type = rs.getInt("itype");
+                long ctime = rs.getTimestamp("ictime").getTime();
+                long atime = rs.getTimestamp("iatime").getTime();
+                int priority = rs.getInt("ipriority");
+                String location = rs.getString("ilocation");
+
+                StorageLocatable inodeLocation = new StorageGenericLocation(type, priority, location, ctime, atime, true);
+                locations.add(inodeLocation);
+            }
+
+        } finally {
+            SqlHelper.tryToClose(rs);
+            SqlHelper.tryToClose(stGetInodeLocations);
+        }
+
+        return locations;
+    }
+
+
     private static final String sqlAddInodeLocation = "INSERT INTO t_locationinfo VALUES(?,?,?,?,?,?,?)";
 
     /**
@@ -1575,6 +1613,27 @@ class FsSqlDriver {
         }
 
         return list;
+    }
+
+    private static final String sqlGetTags =
+            "SELECT t.itagname, i.ivalue, i.isize FROM t_tags t JOIN t_tags_inodes i ON t.itagid = i.itagid WHERE t.ipnfsid=?";
+
+    Map<String,byte[]> getAllTags(Connection dbConnection, FsInode inode) throws SQLException, IOException
+    {
+        Map<String,byte[]> tags = new HashMap<>();
+        try (PreparedStatement stGetAllTags = dbConnection.prepareStatement(sqlGetTags)) {
+            stGetAllTags.setString(1, inode.toString());
+            try (ResultSet rs = stGetAllTags.executeQuery()) {
+                while (rs.next()) {
+                    try (InputStream in = rs.getBinaryStream("ivalue")) {
+                        byte[] data = new byte[Ints.saturatedCast(rs.getLong("isize"))];
+                        ByteStreams.readFully(in, data);
+                        tags.put(rs.getString("itagname"), data);
+                    }
+                }
+            }
+        }
+        return tags;
     }
 
     /**
@@ -1773,7 +1832,7 @@ class FsSqlDriver {
             SqlHelper.tryToClose(ps);
         }
     }
-    private static final String sqlGetTag = "SELECT ivalue,isize FROM t_tags_inodes WHERE itagid=?";
+    private static final String sqlGetTag = "SELECT i.ivalue,i.isize FROM t_tags t JOIN t_tags_inodes i ON t.itagid = i.itagid WHERE t.ipnfsid=? AND t.itagname=?";
 
     /**
      * get content of the tag associated with name for inode
@@ -1794,34 +1853,31 @@ class FsSqlDriver {
         ResultSet rs = null;
         PreparedStatement stGetTag = null;
         try {
-
-            String tagId = getTagId(dbConnection, inode, tagName);
-
             stGetTag = dbConnection.prepareStatement(sqlGetTag);
-            stGetTag.setString(1, tagId);
+            stGetTag.setString(1, inode.toString());
+            stGetTag.setString(2, tagName);
             rs = stGetTag.executeQuery();
 
             if (rs.next()) {
+                try (InputStream in = rs.getBinaryStream("ivalue")) {
+                    /*
+                     * some databases (hsqldb in particular) fill a full record for
+                     * BLOBs and on read reads a full record, which is not what we expect.
+                     *
+                     */
+                    int size = Math.min(len, (int) rs.getLong("isize"));
 
-                InputStream in = rs.getBinaryStream("ivalue");
-                /*
-                 * some databases (hsqldb in particular) fill a full record for
-                 * BLOBs and on read reads a full record, which is not what we expect.
-                 *
-                 */
-                int size = Math.min(len, (int) rs.getLong("isize"));
+                    while (count < size) {
 
-                while (count < size) {
+                        int c = in.read();
+                        if (c == -1) {
+                            break;
+                        }
 
-                    int c = in.read();
-                    if (c == -1) {
-                        break;
+                        data[offset + count] = (byte) c;
+                        ++count;
                     }
-
-                    data[offset + count] = (byte) c;
-                    ++count;
                 }
-                in.close();
             }
 
         } finally {
@@ -1912,6 +1968,48 @@ class FsSqlDriver {
 
         return isOwner;
     }
+
+    void createTags(Connection dbConnection, FsInode inode, int uid, int gid, int mode, Map<String, byte[]> tags)
+            throws SQLException
+    {
+        PreparedStatement stmt = null;
+        try {
+            Map<String,String> ids = new HashMap<>();
+            Timestamp now = new Timestamp(System.currentTimeMillis());
+
+            stmt = dbConnection.prepareStatement("INSERT INTO t_tags_inodes VALUES(?,?,1,?,?,?,?,?,?,?)");
+            for (Map.Entry<String, byte[]> tag : tags.entrySet()) {
+                String id = UUID.randomUUID().toString().toUpperCase();
+                ids.put(tag.getKey(), id);
+                byte[] value = tag.getValue();
+                int len = value.length;
+                stmt.setString(1, id);
+                stmt.setInt(2, mode | UnixPermission.S_IFREG);
+                stmt.setInt(3, uid);
+                stmt.setInt(4, gid);
+                stmt.setLong(5, len);
+                stmt.setTimestamp(6, now);
+                stmt.setTimestamp(7, now);
+                stmt.setTimestamp(8, now);
+                stmt.setBinaryStream(9, new ByteArrayInputStream(value), len);
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+            stmt.close();
+
+            stmt = dbConnection.prepareStatement("INSERT INTO t_tags VALUES(?,?,?,1)");
+            for (Map.Entry<String, String> tag : ids.entrySet()) {
+                stmt.setString(1, inode.toString()); // ipnfsid
+                stmt.setString(2, tag.getKey());     // itagname
+                stmt.setString(3, tag.getValue());   // itagid
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+        } finally {
+            SqlHelper.tryToClose(stmt);
+        }
+    }
+
     private final static String sqlCopyTag = "INSERT INTO t_tags ( SELECT ?, itagname, itagid, 0 from t_tags WHERE ipnfsid=?)";
 
     /**
@@ -2342,6 +2440,34 @@ class FsSqlDriver {
 
         return checksum;
 
+    }
+    private static final String sqlGetInodeChecksums = "SELECT isum, itype FROM t_inodes_checksum WHERE ipnfsid=?";
+    /**
+     *
+     * @param dbConnection
+     * @param inode
+     * @param type
+     * @param results holds set of checksums and their types {@link Checksum}
+     *        for this inode
+     * @throws SQLException
+     */
+    void getInodeChecksums(Connection dbConnection, FsInode inode, Set<Checksum> results)
+                    throws SQLException {
+        PreparedStatement stGetInodeChecksums = null;
+        ResultSet getGetInodeChecksumResultSet = null;
+        try {
+            stGetInodeChecksums = dbConnection.prepareStatement(sqlGetInodeChecksums);
+            stGetInodeChecksums.setString(1, inode.toString());
+            getGetInodeChecksumResultSet = stGetInodeChecksums.executeQuery();
+            if (getGetInodeChecksumResultSet.next()) {
+                String checksum = getGetInodeChecksumResultSet.getString("isum");
+                int type = getGetInodeChecksumResultSet.getInt("itype");
+                results.add(new Checksum(ChecksumType.getChecksumType(type), checksum));
+            }
+        } finally {
+            SqlHelper.tryToClose(getGetInodeChecksumResultSet);
+            SqlHelper.tryToClose(stGetInodeChecksums);
+        }
     }
     private static final String sqlRemoveInodeChecksum = "DELETE FROM t_inodes_checksum WHERE ipnfsid=? AND itype=?";
     private static final String sqlRemoveInodeAllChecksum = "DELETE FROM t_inodes_checksum WHERE ipnfsid=?";

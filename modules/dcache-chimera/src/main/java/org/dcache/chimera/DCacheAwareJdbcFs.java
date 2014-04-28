@@ -59,132 +59,39 @@ documents or software obtained from this server.
  */
 package org.dcache.chimera;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-
 import javax.sql.DataSource;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.Arrays;
+import java.net.InetSocketAddress;
 import java.util.EnumSet;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FileLocality;
 import diskCacheV111.util.PnfsHandler;
+import diskCacheV111.util.PnfsId;
+import diskCacheV111.vehicles.DCapProtocolInfo;
 import diskCacheV111.vehicles.PoolManagerGetPoolMonitor;
+import diskCacheV111.vehicles.ProtocolInfo;
 
 import org.dcache.acl.enums.AccessMask;
-import org.dcache.alarms.IAlarms;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
+import org.dcache.pinmanager.PinManagerPinMessage;
+import org.dcache.pinmanager.PinManagerUnpinMessage;
 import org.dcache.poolmanager.PoolMonitor;
 import org.dcache.vehicles.FileAttributes;
 
 /**
  * Overrides protected methods so as to be able to provide live locality
- * information if requested. Embeds a Guava cache to maintain already
- * initialized PGET nodes; the latter is calls out in turn to the PNFS and Pool
- * managers.
+ * information if requested; the latter calls the PNFS and Pool managers.
+ * Also implements requests to pin manager for STAGE command.
  *
  * @author arossi
  */
 public class DCacheAwareJdbcFs extends JdbcFs {
-
-    private final class LocalityArgs {
-        private final FsInode parent;
-        private final String id;
-        private final String[] args;
-
-        private LocalityArgs(FsInode parent, String[] args) {
-            this.parent = parent;
-            this.id = parent.toString();
-            this.args = args.clone();
-        }
-
-        private LocalityArgs(JdbcFs fs, String id, String[] args) {
-            this.parent = new FsInode(fs, id);
-            this.id = id;
-            this.args = args.clone();
-        }
-
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-
-            if (!(o instanceof LocalityArgs)) {
-                return false;
-            }
-
-            LocalityArgs largs = (LocalityArgs) o;
-
-            if (!id.equals(largs.id)) {
-                return false;
-            }
-
-            return Arrays.equals(args, largs.args);
-        }
-
-        public int hashCode() {
-            return toString().hashCode();
-        }
-
-        public String toString() {
-            return id + Arrays.asList(args);
-        }
-
-    }
-
-    private final class LocalityLoader extends
-                    CacheLoader<LocalityArgs, FsInode_PGET> {
-
-        @Override
-        public FsInode_PGET load(LocalityArgs key) throws Exception {
-            FsInode_PGET pget = getSuperPGET(key.parent, key.args);
-            if (pget.hasMetadataFor(LOCALITY)) {
-                FsInode pathInode = inodeOf(key.parent, pget.getName());
-                String path = inode2path(pathInode);
-                String locality = getFileLocality(path);
-                pget.setMetadata(LOCALITY, locality);
-                /*
-                 * need to override the cached stat value
-                 */
-                pget.stat();
-            }
-            return pget;
-        }
-    }
-
-    private static final String LOCALITY = "locality";
-
-    private static String host;
-
-    static {
-        try {
-            host = InetAddress.getLocalHost().getCanonicalHostName();
-        } catch (UnknownHostException e) {
-            host = IAlarms.UNKNOWN_HOST;
-        }
-    }
-
     private CellStub poolManagerStub;
+    private CellStub pinManagerStub;
     private PnfsHandler pnfsHandler;
-
-    /**
-     * Short-term caching of locality information. Policy uses expire after
-     * write because we do not want to get too far out of synchronization with
-     * the live system. Maintains entries for 1 minute.
-     */
-    private final LoadingCache<LocalityArgs, FsInode_PGET> CACHE
-        = CacheBuilder.newBuilder().expireAfterWrite(1, TimeUnit.MINUTES)
-                                   .maximumSize(64)
-                                   .softValues().build(new LocalityLoader());
 
     public DCacheAwareJdbcFs(DataSource dataSource, String dialect) {
         super(dataSource, dialect);
@@ -202,35 +109,54 @@ public class DCacheAwareJdbcFs extends JdbcFs {
         this.poolManagerStub = poolManagerStub;
     }
 
+    public void setPinManagerStub(CellStub pinManagerStub) {
+        this.pinManagerStub = pinManagerStub;
+    }
+
+    @Override
+    public String getFileLocality(FsInode_PLOC node) throws ChimeraFsException {
+        FsInode pathInode = new FsInode(DCacheAwareJdbcFs.this, node.toString());
+        return getFileLocality(inode2path(pathInode));
+    }
+
     /**
-     * Goes to the cache instead of directly creating the inode.
+     * This method sends a request to the pin manager to pin
+     * a given file.
      */
-    protected FsInode_PGET getPGET(FsInode parent, String[] cmd)
-                    throws ChimeraFsException {
+    @Override
+    public void pin(String pnfsid, long lifetime) throws ChimeraFsException {
+        FileAttributes attributes = new FileAttributes();
+        attributes.setPnfsId(new PnfsId(pnfsid));
+        /*
+         * TODO improve code to pass in the actual InetAddress of the
+         * client so that link net masks do not interfere; note that SRM uses
+         * "localhost", so it is not a deviation from existing behavior.
+         */
+        ProtocolInfo protocolInfo
+            =  new DCapProtocolInfo("DCap", 3, 0, new InetSocketAddress("localhost", 0));
+        PinManagerPinMessage message
+            = new PinManagerPinMessage(attributes, protocolInfo, null, lifetime);
+
         try {
-            return CACHE.get(new LocalityArgs(parent, cmd));
-        } catch (ExecutionException t) {
-            Throwable cause = t.getCause();
-            if (cause instanceof ChimeraFsException) {
-                throw (ChimeraFsException)cause;
-            }
-            throw new ChimeraFsException(t.toString());
+            pinManagerStub.sendAndWait(message);
+        } catch (CacheException | InterruptedException t) {
+            throw new ChimeraFsException("pin", t);
         }
     }
 
     /**
-     * Goes to the cache instead of directly creating the inode.
+     * This method sends a request to the pin manager to unpin
+     * a given file.
      */
-    protected FsInode_PGET getPGET(String id, String[] cmd)
-                    throws ChimeraFsException {
+    @Override
+    public void unpin(String pnfsid) throws ChimeraFsException {
+        PinManagerUnpinMessage message
+            = new PinManagerUnpinMessage(new PnfsId(pnfsid));
+
         try {
-            return CACHE.get(new LocalityArgs(this, id, cmd));
-        } catch (ExecutionException t) {
-            Throwable cause = t.getCause();
-            if (cause instanceof ChimeraFsException) {
-                throw (ChimeraFsException)cause;
-            }
-            throw new ChimeraFsException(t.toString());
+            pinManagerStub.sendAndWait(message);
+        } catch (CacheException | InterruptedException t) {
+            throw new ChimeraFsException("unpin", t);
         }
     }
 
@@ -238,9 +164,10 @@ public class DCacheAwareJdbcFs extends JdbcFs {
      * Callout to get pool monitor and check for live (network) status of a file
      * instead of simply its status as recorded in the Chimera database.
      */
-    private String getFileLocality(String filePath) throws IOException {
+    private String getFileLocality(String filePath) throws ChimeraFsException {
         PoolMonitor _poolMonitor;
         FileLocality locality = FileLocality.UNAVAILABLE;
+
         try {
             _poolMonitor = poolManagerStub.sendAndWait(
                             new PoolManagerGetPoolMonitor()).getPoolMonitor();
@@ -254,16 +181,16 @@ public class DCacheAwareJdbcFs extends JdbcFs {
             FileAttributes attributes
                 = pnfsHandler.getFileAttributes(filePath, requestedAttributes,
                                                 accessMask);
-            locality = _poolMonitor.getFileLocality(attributes, host);
+            /*
+             * TODO improve code to pass in the actual InetAddress of the
+             * client so that link net masks do not interfere; note that SRM uses
+             * "localhost", so it is not a deviation from existing behavior.
+             */
+            locality = _poolMonitor.getFileLocality(attributes, "localhost");
         } catch (CacheException | InterruptedException t) {
-            throw new IOException(t);
+            throw new ChimeraFsException("getFileLocality", t);
         }
 
         return locality.toString();
-    }
-
-    private FsInode_PGET getSuperPGET(FsInode parent, String[] cmd)
-                    throws ChimeraFsException {
-        return super.getPGET(parent, cmd);
     }
 }

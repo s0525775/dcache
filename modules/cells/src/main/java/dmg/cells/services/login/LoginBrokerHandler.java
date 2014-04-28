@@ -14,14 +14,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellCommandListener;
 import dmg.cells.nucleus.CellMessage;
 import dmg.cells.nucleus.CellPath;
 import dmg.cells.nucleus.NoRouteToCellException;
-import dmg.util.Args;
 
-import dmg.cells.nucleus.AbstractCellComponent;
-
+import org.dcache.util.Args;
 import org.dcache.util.NetworkUtils;
 
 import static java.util.concurrent.TimeUnit.*;
@@ -36,6 +35,11 @@ public class LoginBrokerHandler
     private final static Logger _log =
         LoggerFactory.getLogger(LoginBrokerHandler.class);
 
+    enum UpdateMode
+    {
+        EAGER, NORMAL
+    }
+
     private static final long EAGER_UPDATE_TIME = SECONDS.toMillis(1);
 
     private String[] _loginBrokers;
@@ -44,13 +48,14 @@ public class LoginBrokerHandler
     private String _protocolEngine;
     private long   _brokerUpdateTime = MINUTES.toMillis(5);
     private TimeUnit _brokerUpdateTimeUnit = MILLISECONDS;
-    private long _currentBrokerUpdateTime = EAGER_UPDATE_TIME;
     private double _brokerUpdateThreshold = 0.1;
+    private UpdateMode _currentUpdateMode = UpdateMode.NORMAL;
     private LoadProvider _load = new FixedLoad(0.0);
     private String[] _hosts;
     private int _port;
     private ScheduledExecutorService _executor;
     private ScheduledFuture<?> _task;
+    private String _root;
 
     public LoginBrokerHandler()
     {
@@ -95,36 +100,25 @@ public class LoginBrokerHandler
                                 getCellDomainName(),
                                 _protocolFamily,
                                 _protocolVersion,
-                                _protocolEngine);
+                                _protocolEngine,
+                                _root);
         info.setUpdateTime(_brokerUpdateTimeUnit.toMillis(_brokerUpdateTime));
         info.setHosts(_hosts);
         info.setPort(_port);
         info.setLoad(_load.getLoad());
 
-        normalUpdates();
+        UpdateMode newUpdateMode = UpdateMode.NORMAL;
         for (String loginBroker: _loginBrokers) {
             try {
                 sendMessage(new CellMessage(new CellPath(loginBroker), info));
             } catch (NoRouteToCellException e) {
-                _log.error("Failed to send update to {}", loginBroker);
-                eagerUpdates();
+                _log.warn("Failed to send update to {}", loginBroker);
+                newUpdateMode = UpdateMode.EAGER;
             }
         }
-    }
 
-    private void eagerUpdates()
-    {
-        if (_currentBrokerUpdateTime != EAGER_UPDATE_TIME) {
-            _currentBrokerUpdateTime = EAGER_UPDATE_TIME;
-            rescheduleTask();
-        }
-    }
-
-    private void normalUpdates()
-    {
-        long millis = _brokerUpdateTimeUnit.toMillis(_brokerUpdateTime);
-        if (_currentBrokerUpdateTime != millis) {
-            _currentBrokerUpdateTime = millis;
+        if (_currentUpdateMode != newUpdateMode) {
+            _currentUpdateMode = newUpdateMode;
             rescheduleTask();
         }
     }
@@ -285,6 +279,16 @@ public class LoginBrokerHandler
         return _brokerUpdateTimeUnit;
     }
 
+    /**
+     * Root directory of door.
+     *
+     * If null, then a per-user root directory is assumed.
+     */
+    public synchronized void setRoot(String root)
+    {
+        _root = root;
+    }
+
     public synchronized void setExecutor(ScheduledExecutorService executor)
     {
         _executor = executor;
@@ -321,7 +325,15 @@ public class LoginBrokerHandler
                     sendUpdate();
                 }
             };
-        _task = _executor.scheduleWithFixedDelay(command, 0, _currentBrokerUpdateTime, MILLISECONDS);
+        switch (_currentUpdateMode) {
+        case EAGER:
+            _task = _executor.scheduleWithFixedDelay(command, EAGER_UPDATE_TIME, EAGER_UPDATE_TIME, MILLISECONDS);
+            break;
+
+        case NORMAL:
+            _task = _executor.scheduleWithFixedDelay(command, 0, _brokerUpdateTime, _brokerUpdateTimeUnit);
+            break;
+        }
     }
 
     /**

@@ -2,8 +2,11 @@
 
 package diskCacheV111.replicaManager;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 
@@ -22,7 +25,7 @@ import diskCacheV111.util.PnfsId;
 
 import dmg.cells.nucleus.CellAdapter;
 
-import org.dcache.util.JdbcConnectionPool;
+import org.dcache.chimera.JdbcFs;
 
 import static org.dcache.commons.util.SqlHelper.tryToClose;
 
@@ -1149,17 +1152,25 @@ public class ReplicaDbV1 implements ReplicaDb1 {
      * Setup method to create connection to the database and the datasource
      *
      * @param connectURI
-     * @param jdbcClass
      * @param user
      * @param password
      */
-    public final static void setup(String connectURI, String jdbcClass, String user, String password) {
+    public final static void setup(String connectURI, String user, String password) {
+        HikariConfig config = new HikariConfig();
+        config.setDataSource(new DriverManagerDataSource(connectURI, user, password));
+        config.setMinimumIdle(1);
+        config.setMaximumPoolSize(30);
+        final HikariDataSource ds = new HikariDataSource(config);
 
-        try {
-            DATASOURCE = JdbcConnectionPool.getDataSource(connectURI, jdbcClass, user, password);
-        } catch (SQLException e) {
-            _log.error(e.toString(), e);
-        }
+        Runtime.getRuntime().addShutdownHook(new Thread("replica-hikaricp-shutdown-hook") {
+            @Override
+            public void run()
+            {
+                ds.shutdown();
+            }
+        });
+
+        DATASOURCE = ds;
     }
 
 
@@ -1167,7 +1178,7 @@ public class ReplicaDbV1 implements ReplicaDb1 {
     {
         System.out.println("Test ReplicaDbV1, cvsId=" + _cvsId);
 
-        setup("jdbc:postgresql://localhost:5432/replicas", "org.postgresql.Driver", "enstore", "NoPassword");
+        setup("jdbc:postgresql://localhost:5432/replicas", "enstore", "NoPassword");
         ReplicaDbV1 db = new ReplicaDbV1(null);
 
         System.out.println("List pnfsId's in all pools");

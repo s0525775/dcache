@@ -77,6 +77,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import java.net.URI;
 import java.util.Arrays;
@@ -119,19 +120,19 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
     private TOverwriteMode overwriteMode;
 
     public PutRequest(SRMUser user,
-    Long requestCredentialId,
-    URI[] surls,
-    long[] sizes,
-    boolean[] wantPermanent,
-    String[] protocols,
-    long lifetime,
-    long max_update_period,
-    int max_number_of_retries,
-    String client_host,
-    String spaceToken,
-    TRetentionPolicy retentionPolicy,
-    TAccessLatency accessLatency,
-    String description)
+        Long requestCredentialId,
+        URI[] surls,
+        Long[] sizes,
+        boolean[] wantPermanent,
+        String[] protocols,
+        long lifetime,
+        long max_update_period,
+        int max_number_of_retries,
+        String client_host,
+        @Nullable String spaceToken,
+        @Nullable TRetentionPolicy retentionPolicy,
+        @Nullable TAccessLatency accessLatency,
+        @Nullable String description)
     {
 
         super(user,
@@ -238,6 +239,12 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
         }
     }
 
+    @Override
+    public void onSrmRestart(Scheduler scheduler)
+    {
+        // Nothing to do.
+    }
+
     /**
      * this callbacks are given to storage.prepareToPut
      * storage.prepareToPut calls methods of callbacks to indicate progress
@@ -284,6 +291,8 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
                     try {
                         file.abort();
                         hasSuccess = true;
+                    } catch (SRMException e) {
+                        hasFailure = true;
                     } catch (IllegalStateTransition e) {
                         if (e.getFromState() == State.DONE) {
                             hasCompleted = true;
@@ -533,5 +542,10 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
         } finally {
             wunlock();
         }
+    }
+
+    @Override
+    public String getNameForRequestType() {
+        return "Put";
     }
 }

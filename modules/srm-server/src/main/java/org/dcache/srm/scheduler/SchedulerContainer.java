@@ -3,6 +3,8 @@ package org.dcache.srm.scheduler;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.Collection;
+import java.util.Map.Entry;
+
 import org.dcache.srm.request.Job;
 
 
@@ -12,40 +14,31 @@ import org.dcache.srm.request.Job;
  */
 public class SchedulerContainer
 {
-    private ImmutableMap<Class<? extends Job>, Scheduler> schedulerMap =
-            ImmutableMap.of();
+    private ImmutableMap<Class<? extends Job>, Scheduler> schedulers;
 
-    public void add(Scheduler scheduler)
+    public SchedulerContainer()
     {
-        schedulerMap = ImmutableMap.<Class<? extends Job>, Scheduler> builder()
-                .putAll(schedulerMap)
-                .put(scheduler.getType(), scheduler)
-                .build();
+        schedulers = ImmutableMap.of();
     }
 
-    public void addAll(Collection<Scheduler> schedulers)
+    public SchedulerContainer(Scheduler... schedulers)
     {
         ImmutableMap.Builder<Class<? extends Job>, Scheduler> builder =
                 ImmutableMap.<Class<? extends Job>, Scheduler> builder();
-        builder.putAll(schedulerMap);
         for (Scheduler scheduler : schedulers) {
             builder.put(scheduler.getType(), scheduler);
         }
-        schedulerMap = builder.build();
+        this.schedulers = builder.build();
     }
 
-    public void start()
+    public void setSchedulers(Collection<Scheduler> schedulers)
     {
-        for (Scheduler scheduler : schedulerMap.values()) {
-            scheduler.start();
+        ImmutableMap.Builder<Class<? extends Job>, Scheduler> builder =
+                ImmutableMap.<Class<? extends Job>, Scheduler> builder();
+        for (Scheduler scheduler : schedulers) {
+            builder.put(scheduler.getType(), scheduler);
         }
-    }
-
-    public void stop()
-    {
-        for (Scheduler scheduler : schedulerMap.values()) {
-            scheduler.stop();
-        }
+        this.schedulers = builder.build();
     }
 
     public double getLoad(Class<? extends Job> type)
@@ -72,20 +65,16 @@ public class SchedulerContainer
         return getScheduler(null, type);
     }
 
-    public void schedule(Iterable<? extends Job> jobs) throws InterruptedException, IllegalStateTransition
-    {
-        Scheduler scheduler = null;
-
-        for (Job job : jobs) {
-            scheduler = getScheduler(scheduler, job.getSchedulerType());
-            job.scheduleWith(scheduler);
-        }
-    }
-
     private Scheduler getScheduler(Scheduler suggestion, Class<? extends Job> type)
+            throws UnsupportedOperationException
     {
-        if (suggestion == null || !suggestion.getType().equals(type)) {
-            suggestion = schedulerMap.get(type);
+        if (suggestion == null || !suggestion.getType().isAssignableFrom(type)) {
+            for (Entry<Class<? extends Job>, Scheduler> entry : schedulers.entrySet()) {
+                if (entry.getKey().isAssignableFrom(type)) {
+                    suggestion = entry.getValue();
+                    break;
+                }
+            }
         }
 
         if (suggestion == null) {
@@ -99,7 +88,7 @@ public class SchedulerContainer
     public CharSequence getInfo()
     {
         StringBuilder sb = new StringBuilder();
-        for (Scheduler scheduler : schedulerMap.values()) {
+        for (Scheduler scheduler : schedulers.values()) {
             scheduler.getInfo(sb);
         }
         return sb;
@@ -116,5 +105,17 @@ public class SchedulerContainer
         scheduler.printReadyQueue(sb);
 
         return sb;
+    }
+
+    public void restoreJobsOnSrmStart(Iterable<? extends Job> activeJobs)
+    {
+        Scheduler scheduler = null;
+
+        for (Job job : activeJobs) {
+            scheduler = getScheduler(scheduler, job.getSchedulerType());
+            if (scheduler.getId().equals(job.getSchedulerId())) {
+                job.onSrmRestart(scheduler);
+            } // else another SRM instance is handling this job
+        }
     }
 }

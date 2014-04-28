@@ -1,10 +1,12 @@
 package org.dcache.poolmanager;
 
+import org.springframework.aop.target.dynamic.Refreshable;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.annotation.Required;
 
+import javax.annotation.PostConstruct;
+
 import java.lang.reflect.Proxy;
-import java.util.concurrent.ScheduledExecutorService;
 
 import org.dcache.cells.CellStub;
 
@@ -23,7 +25,7 @@ public class RemotePoolMonitorFactoryBean implements FactoryBean<PoolMonitor>
     public PoolMonitor getObject() throws Exception
     {
         return (PoolMonitor) Proxy.newProxyInstance(PoolMonitor.class.getClassLoader(),
-                new Class[] { PoolMonitor.class}, handler);
+                new Class[] { PoolMonitor.class, Refreshable.class }, handler);
     }
 
     @Override
@@ -44,13 +46,6 @@ public class RemotePoolMonitorFactoryBean implements FactoryBean<PoolMonitor>
         handler.setPoolManagerStub(stub);
     }
 
-    @Required
-    public void setExecutor(
-            ScheduledExecutorService executor)
-    {
-        handler.setExecutor(executor);
-    }
-
     public long getRefreshDelay()
     {
         return handler.getRefreshDelay();
@@ -65,6 +60,7 @@ public class RemotePoolMonitorFactoryBean implements FactoryBean<PoolMonitor>
         handler.setRefreshDelay(refreshDelay);
     }
 
+    @PostConstruct
     public void init() throws InterruptedException
     {
         handler.init();

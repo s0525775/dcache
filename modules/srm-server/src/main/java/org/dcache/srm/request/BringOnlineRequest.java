@@ -231,7 +231,13 @@ public final class BringOnlineRequest extends ContainerRequest<BringOnlineFileRe
         }
     }
 
-     public String[] getProtocols() {
+    @Override
+    public void onSrmRestart(Scheduler scheduler)
+    {
+        // Nothing to do.
+    }
+
+    public String[] getProtocols() {
         if(protocols == null) {
             return null;
         }
@@ -480,4 +486,8 @@ public final class BringOnlineRequest extends ContainerRequest<BringOnlineFileRe
         return desiredOnlineLifetimeInSeconds;
     }
 
+    @Override
+    public String getNameForRequestType() {
+        return "Bring online";
+    }
 }

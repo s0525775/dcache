@@ -65,20 +65,20 @@ COPYRIGHT STATUS:
  */
 package org.dcache.alarms.server;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-
-import com.google.common.base.Strings;
-
-import java.io.File;
-
-import org.dcache.cells.UniversalSpringCell;
-import org.slf4j.LoggerFactory;
-
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.classic.net.SimpleSocketServer;
 import ch.qos.logback.core.joran.spi.JoranException;
+import com.google.common.base.Strings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+
+import org.dcache.cells.UniversalSpringCell;
+
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Simple POJO wrapper around {@link SimpleSocketServer} to be run inside a
@@ -87,13 +87,14 @@ import ch.qos.logback.core.joran.spi.JoranException;
  * @author arossi
  */
 public class LogEntryServerWrapper {
+    private static final Logger LOGGER
+        = LoggerFactory.getLogger(LogEntryServerWrapper.class);
 
     private String baseDir;
     private String configFile;
     private String definitionsPath;
     private String path;
     private String properties;
-    private String driver;
     private String url;
     private String user;
     private String pass;
@@ -103,31 +104,27 @@ public class LogEntryServerWrapper {
     private SimpleSocketServer server;
 
     public void setBaseDir(String baseDir) {
-        this.baseDir = baseDir;
+        this.baseDir = Strings.emptyToNull(baseDir);
     }
 
     public void setConfigFile(String configFile) {
-        this.configFile = configFile;
+        this.configFile = Strings.emptyToNull(configFile);
     }
 
     public void setDefinitions(String definitionsPath) {
-        this.definitionsPath = definitionsPath;
-    }
-
-    public void setDriver(String driver) {
-        this.driver = driver;
+        this.definitionsPath = Strings.emptyToNull(definitionsPath);
     }
 
     public void setLevel(String level) {
-        this.level = level;
+        this.level = Strings.emptyToNull(level);
     }
 
     public void setPass(String pass) {
-        this.pass = pass;
+        this.pass = Strings.emptyToNull(pass);
     }
 
     public void setPath(String path) {
-        this.path = path;
+        this.path = Strings.emptyToNull(path);
     }
 
     public void setPort(Integer port) {
@@ -135,19 +132,15 @@ public class LogEntryServerWrapper {
     }
 
     public void setProperties(String properties) {
-        this.properties = properties;
-    }
-
-    public void setServer(SimpleSocketServer server) {
-        this.server = server;
+        this.properties = Strings.emptyToNull(properties);
     }
 
     public void setUrl(String url) {
-        this.url = url;
+        this.url = Strings.emptyToNull(url);
     }
 
     public void setUser(String user) {
-        this.user = user;
+        this.user = Strings.emptyToNull(user);
     }
 
     public void shutDown() {
@@ -156,36 +149,73 @@ public class LogEntryServerWrapper {
         }
     }
 
-    public void startUp() throws JoranException {
+    public void startUp() {
         if (Strings.isNullOrEmpty(url)) {
-            LoggerFactory.getLogger("root")
-                .warn("alarms database type is OFF; server will not be started");
+            LOGGER.warn("Alarms database type is OFF; server will not be started.");
+            System.exit(0);
+        }
+
+        File alarmsDirectory;
+
+        try {
+            checkNotNull(configFile);
+            checkNotNull(baseDir);
+            alarmsDirectory = new File(baseDir);
+            checkArgument(alarmsDirectory.isDirectory());
+            checkNotNull(port);
+            checkArgument(port > 0);
+        } catch (IllegalArgumentException ie) {
+            LOGGER.error("Configuration precondition failure: {}; "
+                            + "server will not be started.", ie.getMessage());
+            System.exit(-1);
+            /*
+             * This is really stupid, but Eclipse doesn't
+             * understand that System.exit() is equivalent to
+             * return insofar as preventing the alarmsDirectory
+             * reference below from being uninitialized.
+             */
             return;
         }
 
-        checkNotNull(configFile);
-        checkNotNull(baseDir);
-        File f = new File(baseDir);
-        checkArgument(f.isDirectory());
-        checkNotNull(port);
-        checkArgument(port > 0);
         LoggerContext loggerContext
             = (LoggerContext) LoggerFactory.getILoggerFactory();
-        loggerContext.reset();
 
-        loggerContext.putProperty("alarms.dir", f.getAbsolutePath());
-        loggerContext.putProperty("alarms.db.xml.path", path);
-        loggerContext.putProperty("alarms.db.driver", driver);
-        loggerContext.putProperty("alarms.db.url", url);
-        loggerContext.putProperty("alarms.db.user", user);
-        loggerContext.putProperty("alarms.db.password", pass);
-        loggerContext.putProperty("alarms.db.config.path", properties);
-        loggerContext.putProperty("alarms.definitions.path", definitionsPath);
-        loggerContext.putProperty("alarms.log.root-level", level);
+        try {
+            loggerContext.reset();
 
-        JoranConfigurator configurator = new JoranConfigurator();
-        configurator.setContext(loggerContext);
-        configurator.doConfigure(configFile);
+            loggerContext.putProperty("alarms.dir", alarmsDirectory.getAbsolutePath());
+            loggerContext.putProperty("alarms.db.xml.path", path);
+            loggerContext.putProperty("alarms.db.url", url);
+            loggerContext.putProperty("alarms.db.user", user);
+            loggerContext.putProperty("alarms.db.password", pass);
+            loggerContext.putProperty("alarms.db.config.path", properties);
+            loggerContext.putProperty("alarms.definitions.path", definitionsPath);
+            loggerContext.putProperty("alarms.log.root-level", level);
+
+            JoranConfigurator configurator = new JoranConfigurator();
+            configurator.setContext(loggerContext);
+
+            configurator.doConfigure(configFile);
+        } catch (JoranException je) {
+            /*
+             * Using the logger here is problematic because the exception
+             * may actually have affected the logging system.
+             */
+            System.err.println("Configuration error: server will not be started. "
+                            + je.getMessage());
+
+            System.exit(-2);
+        } catch (RuntimeException e) {
+            /*
+             * Using the logger here is problematic because the exception
+             * may actually have affected the logging system.
+             */
+            System.err.println("Alarm server failed to start, unexpected error; "
+                            + "this is probably a bug.");
+            e.printStackTrace();
+
+            System.exit(-3);
+        }
 
         server = new SimpleSocketServer(loggerContext, port);
         server.start();
