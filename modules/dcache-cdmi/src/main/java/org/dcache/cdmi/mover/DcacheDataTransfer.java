@@ -1,23 +1,31 @@
+/* dCache - http://www.dcache.org/
+ *
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.dcache.cdmi.mover;
 
-import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import org.dcache.acl.ACL;
-import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileType;
-import org.dcache.util.list.ListDirectoryHandler;
 
-// This class is not nice, I'm still searching for a better solution here sometime.
-// But it works for the moment. This class is a workaround which shall solve problems
-// which are caused by another workaround which was suggested by Apache/Eclipse.
-// The workaround of Apache/Eclipse suggested that a class, which has a servlet
-// listener implemented, gets initialized twice. That class receives additional
-// arguments during the first initialization. Since the functions of that class will
-// be executed after a second initialization with the new command, those arguments
-// (which are stored in that class) will be lost then - unless this static class is
-// used.
+// This class is not nice (quick-and-dirty), I'm still searching for a better solution here.
+// It just keeps some data in a static state at the moment so that the data doesn't get lost.
+// The class will be replaced very soon.
 
-public class DCacheDataTransfer
+public class DcacheDataTransfer
 {
 
     //BACKUP

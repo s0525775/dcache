@@ -1,3 +1,20 @@
+/* dCache - http://www.dcache.org/
+ *
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.dcache.cdmi.mover;
 
 import diskCacheV111.util.CacheException;
@@ -38,7 +55,7 @@ public class CDMIMover implements MoverProtocol
         PnfsId pnfsId = fileAttributes.getPnfsId();
         StorageInfo storage = fileAttributes.getStorageInfo();
 
-        _log.debug("\n\trunIO()\n\tprotocol="+protocol+",\n\tStorageInfo="+storage+",\n\tPnfsId="+pnfsId+",\n\taccess="+access);
+        _log.trace("\n\trunIO()\n\tprotocol="+protocol+",\n\tStorageInfo="+storage+",\n\tPnfsId="+pnfsId+",\n\taccess="+access);
 
         channel = new MoverChannel<>(access, fileAttributes, pi, diskFile, allocator);
         if (access == IoMode.WRITE) {
@@ -70,19 +87,19 @@ public class CDMIMover implements MoverProtocol
     {
         if (channel.isOpen()) {
             try {
-                strData = DCacheDataTransfer.getDataAsString();
+                strData = DcacheDataTransfer.getDataAsString();
                 ByteBuffer data = stringToByteBuffer(strData);
                 channel.write(data);
-                _log.debug("CDMIMover data written:|" + strData + "|[" + strData.length() + " bytes]");
-                DCacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                DCacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                DCacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                DCacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                DCacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                DCacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                DCacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                DCacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                DCacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
+                _log.trace("CDMIMover data written:|" + strData + "|[" + strData.length() + " bytes]");
+                DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
+                DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
+                DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
+                DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
+                DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
+                DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
+                DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
+                DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
+                DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
             } catch (IOException ex) {
                 _log.error("Data could not be written into CDMI channel, exception is: " + ex.getMessage());
             }
@@ -98,18 +115,18 @@ public class CDMIMover implements MoverProtocol
                     channel.position(0);
                     ByteBuffer data = ByteBuffer.allocate(dataSize);
                     channel.read(data);
-                    DCacheDataTransfer.setData(data.array());
+                    DcacheDataTransfer.setData(data.array());
                     strData = byteBufferToString(data);
-                    _log.debug("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
-                    DCacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                    DCacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                    DCacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                    DCacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                    DCacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                    DCacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                    DCacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                    DCacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    DCacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
+                    _log.trace("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
+                    DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
+                    DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
+                    DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
+                    DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
+                    DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
+                    DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
+                    DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
+                    DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
+                    DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
                 }
             } catch (IOException ex) {
                 _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
@@ -127,17 +144,17 @@ public class CDMIMover implements MoverProtocol
                     ByteBuffer data = ByteBuffer.allocate(dataSize);
                     channel.read(data);
                     strData = byteBufferToString(data);
-                    _log.debug("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
-                    DCacheDataTransfer.setData(strData);
-                    DCacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                    DCacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                    DCacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                    DCacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                    DCacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                    DCacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                    DCacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                    DCacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    DCacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
+                    _log.trace("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
+                    DcacheDataTransfer.setData(strData);
+                    DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
+                    DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
+                    DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
+                    DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
+                    DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
+                    DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
+                    DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
+                    DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
+                    DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
                 }
             } catch (IOException ex) {
                 _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());

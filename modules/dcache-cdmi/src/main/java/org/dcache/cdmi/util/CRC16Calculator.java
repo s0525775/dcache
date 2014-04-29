@@ -1,4 +1,4 @@
-package org.dcache.cdmi.tool;
+package org.dcache.cdmi.util;
 
 //https://www.ssucet.org/pluginfile.php/1688/mod_assignment/intro/crc.java
 /*
@@ -9,6 +9,9 @@ package org.dcache.cdmi.tool;
     different results. There is no default way to implement the CRC-16 algorithm. SNIA told in their reference implementation that their CRC-16
     algorithm might not be the correct one. The CRC-16 algorithm in this file got tested and is the correct one, the CRC for 123456789 and the
     given input parameters is 0xbb3d as specified in the CDMI specification of ISO/IEC.
+*/
+
+/* This class calculates the correct CRC-16 for 123456789 with the result 0xbb3d regarding the CDMI specification from ISO/IEC.
 */
 
 public class CRC16Calculator

@@ -1,35 +1,23 @@
-/*
- * Copyright (c) 2010, Sun Microsystems, Inc.
- * Copyright (c) 2010, The Storage Networking Industry Association.
+/* dCache - http://www.dcache.org/
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
  *
- * Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- * Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * Neither the name of The Storage Networking Industry Association (SNIA) nor
- * the names of its contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- *  THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.dcache.cdmi.dao.impl;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.dcache.namespace.FileAttribute.*;
 import com.google.common.collect.Range;
 import diskCacheV111.util.CacheException;
@@ -47,9 +35,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import javax.security.auth.Subject;
-import javax.servlet.ServletContext;
 import org.dcache.auth.Subjects;
-import org.dcache.cdmi.mover.DCacheDataTransfer;
+import org.dcache.cdmi.mover.DcacheDataTransfer;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
@@ -57,8 +44,8 @@ import java.util.ArrayList;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.ACLException;
-import org.dcache.cdmi.model.DCacheDataObject;
-import org.dcache.cdmi.tool.IDConverter;
+import org.dcache.cdmi.model.DcacheDataObject;
+import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import org.dcache.namespace.FileType;
@@ -69,27 +56,32 @@ import org.dcache.util.list.DirectoryListPrinter;
 import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
 import org.slf4j.LoggerFactory;
-import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.dao.DataObjectDao;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.ConflictException;
 import org.snia.cdmiserver.model.DataObject;
+
+/* This class is dCache's DAO implementation class for SNIA's DataObjectDao interface.
+   DataObject represents a file in the CDMI standard.
+   This class contains all operations which are related to file operations, such as get/create/update a file.
+   Updating a file is still not supported here, but this support will be added here very soon.
+   Getting/Creating/Updating/Deleting a file via ObjectID still isn't supported, the support shall still get added here.
+*/
 
 /**
  * <p>
  * Concrete implementation of {@link DataObjectDao} using the local filesystem as the backing store.
  * </p>
  */
-public class DCacheDataObjectDaoImpl extends AbstractCellComponent
-    implements DataObjectDao, CellLifeCycleAware//, ServletContextAware
+public class DcacheDataObjectDao extends AbstractCellComponent
+    implements DataObjectDao, CellLifeCycleAware
 {
 
-    //
-    // Something important
-    //
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheDataObjectDaoImpl.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheDataObjectDao.class);
 
-    // -------------------------------------------------------------- Properties
+    //
+    // Properties and Dependency Injection Methods by CDMI
+    //
     private String baseDirectoryName = null;
 
     //
@@ -111,81 +103,87 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
     private ACL acl;
     private FileType fileType;
 
-    //
+    /**
+     * <p>
+     * Set the base directory name for our local storage.
+     * </p>
+     *
+     * @param baseDirectoryName
+     */
     public void setBaseDirectoryName(String baseDirectoryName)
     {
         this.baseDirectoryName = baseDirectoryName;
-        _log.debug("******* Base Directory (O) = " + baseDirectoryName);
-    }
-
-    public void setPnfsStub(CellStub pnfsStub)
-    {
-        this.pnfsStub = pnfsStub;
-        if (this.pnfsStub == null) _log.error("DCacheDataObjectDaoImpl: PnfsStub is null!");
-        _log.debug("******* PnfsStub (O) = " + pnfsStub.toString());
-        this.pnfsHandler = new PnfsHandler(this.pnfsStub);
-    }
-
-    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
-    {
-        this.listDirectoryHandler = listDirectoryHandler;
-        if (this.listDirectoryHandler == null) _log.error("DCacheDataObjectDaoImpl: ListDirectoryHandler is null!");
-        _log.debug("******* ListDirectoryHandler (O) = " + listDirectoryHandler.toString());
-    }
-
-    public void setPoolStub(CellStub poolStub)
-    {
-        this.poolStub = poolStub;
-        if (this.poolStub == null) _log.error("DCacheDataObjectDaoImpl: PoolStub is null!");
-        _log.debug("******* PoolStub (O) = " + poolStub.toString());
-    }
-
-    public void setPoolMgrStub(CellStub poolMgrStub)
-    {
-        this.poolMgrStub = poolMgrStub;
-        if (this.poolMgrStub == null) _log.error("DCacheDataObjectDaoImpl: PoolMgrStub is null!");
-        _log.debug("******* PoolMgrStub (O) = " + poolMgrStub.toString());
-    }
-
-    public void setBillingStub(CellStub billingStub)
-    {
-        this.billingStub = billingStub;
-        if (this.billingStub == null) _log.error("DCacheDataObjectDaoImpl: BillingStub is null!");
-        _log.debug("******* BillingStub (O) = " + billingStub.toString());
+        _log.trace("BaseDirectory(O)={}", baseDirectoryName);
     }
 
     /**
      * <p>
-     * Injected {@link ContainerDao} instance.
+     * Set the PnfsStub from dCache.
      * </p>
+     *
+     * @param pnfsStub
      */
-    private ContainerDao containerDao;
-
-    public void setContainerDao(ContainerDao containerDao)
+    public void setPnfsStub(CellStub pnfsStub)
     {
-        this.containerDao = containerDao;
+        this.pnfsStub = checkNotNull(pnfsStub);
+        this.pnfsHandler = new PnfsHandler(this.pnfsStub);
     }
 
-    // ---------------------------------------------------- ContainerDao Methods
-    // utility function
-    // given a path, find out metadata file name and container directory
-    String getmetadataFileName(String path)
+    /**
+     * <p>
+     * Set the ListDirectoryHandler from dCache.
+     * </p>
+     *
+     * @param listDirectoryHandler
+     */
+    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
     {
-        // Make sure we have a file name for the object
-        // check for file name
-        // path should be <container name>/<file name>
-        // Split path into path and filename
-        String[] tokens = path.split("/");
-        if (tokens.length < 1) {
-            throw new BadRequestException("No object name in path <" + path + ">");
-        }
-
-        String fileName = tokens[tokens.length - 1];
-
-        return "." + fileName;
+        this.listDirectoryHandler = checkNotNull(listDirectoryHandler);
     }
 
-    //
+    /**
+     * <p>
+     * Set the PoolStub from dCache.
+     * </p>
+     *
+     * @param poolStub
+     */
+    public void setPoolStub(CellStub poolStub)
+    {
+        this.poolStub = checkNotNull(poolStub);
+    }
+
+    /**
+     * <p>
+     * Set the PoolMgrStub from dCache.
+     * </p>
+     *
+     * @param poolMgrStub
+     */
+    public void setPoolMgrStub(CellStub poolMgrStub)
+    {
+        this.poolMgrStub = checkNotNull(poolMgrStub);
+    }
+
+    /**
+     * <p>
+     * Set the BillingStub from dCache.
+     * </p>
+     *
+     * @param billingStub
+     */
+    public void setBillingStub(CellStub billingStub)
+    {
+        this.billingStub = checkNotNull(billingStub);
+    }
+
+    /**
+     * <p>
+     * Gets the ContainerName for a requested path.
+     * </p>
+     *
+     * @param path
+     */
     String getcontainerName(String path)
     {
         // Make sure we have a file name for the object
@@ -196,7 +194,6 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         if (tokens.length < 1) {
             throw new BadRequestException("No object name in path <" + path + ">");
         }
-        String fileName = tokens[tokens.length - 1];
         String containerName = "";
         for (int i = 0; i <= tokens.length - 2; i++) {
             containerName += tokens[i] + "/";
@@ -204,30 +201,32 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return containerName;
     }
 
+    //
+    // DataObjectDao Methods invoked from PathResource
+    //
     @Override
-    public DCacheDataObject createByPath(String path, DataObject dObj) throws Exception {
+    public DcacheDataObject createByPath(String path, DataObject dObj) throws Exception {
         //
         String containerName = getcontainerName(path);
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-        DCacheDataObject newDObj = (DCacheDataObject) dObj;
+        DcacheDataObject newDObj = (DcacheDataObject) dObj;
 
         //
         File objFile, baseDirectory, containerDirectory;
         try {
-            _log.debug("baseDirectory = " + baseDirectoryName);
+            _log.trace("baseDirectory={}", baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
-            _log.debug("Base Directory Absolute Path = " + baseDirectory.getAbsolutePath());
+            _log.trace("Base Directory AbsolutePath={}", baseDirectory.getAbsolutePath());
             containerDirectory = new File(baseDirectory, containerName);
-            _log.debug("Container Absolute Path = " + containerDirectory.getAbsolutePath());
+            _log.trace("Container AbsolutePath={}", containerDirectory.getAbsolutePath());
             //
             objFile = new File(baseDirectory, path);
-            _log.debug("Object Absolute Path = " + objFile.getAbsolutePath());
+            _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
         } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception while writing: " + ex);
-            throw new IllegalArgumentException("Cannot write Object @" + path + " error : " + ex);
+            _log.error("Exception while writing, {}", ex);
+            throw new IllegalArgumentException("Cannot write Object @" + path + ", error: " + ex);
         }
 
         // check for container
@@ -258,7 +257,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    _log.debug("DCacheDataObjectDao<Create>, setPnfsID: " + pnfsId.toIdString());
+                    _log.trace("DCacheDataObjectDao<Create>, setPnfsID={}", pnfsId.toIdString());
                     newDObj.setPnfsID(pnfsId.toIdString());
                     long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
                     long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
@@ -270,14 +269,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                     newDObj.setMetadata("cdmi_size", String.valueOf(osize));
                     oowner = attr.getOwner();
                     oacl = attr.getAcl();
-                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    objectID = new IdConverter().toObjectID(pnfsId.toIdString());
                     newDObj.setObjectID(objectID);
-                    _log.debug("DCacheDataObjectDao<Create>, setObjectID: " + objectID);
+                    _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
                 } else {
                     _log.error("DCacheDataObjectDao<Create>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("DCacheDataObjectDao<Create>, Cannot read meta information from directory: " + objFile.getAbsolutePath());
+                _log.error("DCacheDataObjectDao<Create>, Cannot read meta information from directory {}", objFile.getAbsolutePath());
             }
 
             // Add metadata
@@ -315,9 +314,8 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
             newDObj.setMetadata("fileName", objFile.getAbsolutePath());
             //
         } catch (IllegalArgumentException ex) {
-            ex.printStackTrace();
-            _log.error("Exception while writing: " + ex);
-            throw new IllegalArgumentException("Cannot write Object @" + path + " error : " + ex);
+            _log.error("Exception while writing={}", ex);
+            throw new IllegalArgumentException("Cannot write Object @" + path + ", error: " + ex);
         }
         return newDObj;
     }
@@ -329,7 +327,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
     }
 
     @Override
-    public DCacheDataObject findByPath(String path)
+    public DcacheDataObject findByPath(String path)
     {
 
         // ISO-8601 Date
@@ -337,31 +335,20 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         long nowAsLong = now.getTime();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-        _log.debug("In DCacheDataObjectDao.findByPath : " + path);
-        //
+        _log.trace("In DCacheDataObjectDao.findByPath, Path={}", path);
+
         String containerName = getcontainerName(path);
-        //
-        // Check for metadata file
-        File objFile, baseDirectory;
-        try {
-            _log.debug("baseDirectory = " + baseDirectoryName);
-            baseDirectory = new File(baseDirectoryName + "/" + containerName);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception in findByPath : " + ex);
-            throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
-        }
 
         // Check for object file
+        File objFile, baseDirectory;
         try {
-            _log.debug("baseDirectory = " + baseDirectoryName);
+            _log.trace("baseDirectory={}", baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
             objFile = new File(baseDirectory, path);
-            _log.debug("Object Absolute Path = " + objFile.getAbsolutePath());
+            _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
         } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception in findByPath : " + ex);
-            throw new IllegalArgumentException("Cannot get Object @" + path + " error : " + ex);
+            _log.error("Exception in findByPath={}", ex);
+            throw new IllegalArgumentException("Cannot get Object @" + path + ", error: " + ex);
         }
 
         if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
@@ -370,7 +357,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         //
         // Both Files are there. So open, read, create object and send out
         //
-        DCacheDataObject dObj = new DCacheDataObject();
+        DcacheDataObject dObj = new DcacheDataObject();
         try {
             // Read object from file
             byte[] inBytes = readFile(objFile.getAbsolutePath());
@@ -388,7 +375,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
                     // update with real info
-                    _log.debug("DCacheDataObjectDao<Read>, setPnfsID: " + pnfsId.toIdString());
+                    _log.trace("DCacheDataObjectDao<Read>, setPnfsID={}", pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
                     long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
                     long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
@@ -400,14 +387,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                     dObj.setMetadata("cdmi_size", String.valueOf(osize));
                     oowner = attr.getOwner();
                     oacl = attr.getAcl();
-                    objectID = new IDConverter().toObjectID(pnfsId.toIdString());
+                    objectID = new IdConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
-                    _log.debug("DCacheDataObjectDao<Read>, setObjectID: " + objectID);
+                    _log.trace("DCacheDataObjectDao<Read>, setObjectID={}", objectID);
                 } else {
                     _log.error("DCacheDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object: " + objFile.getAbsolutePath());
+                _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object {}", objFile.getAbsolutePath());
             }
 
             dObj.setMetadata("cdmi_acount", "0");
@@ -444,9 +431,8 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
             dObj.setMetadata("fileName", objFile.getAbsolutePath());
 
         } catch (Exception ex) {
-            ex.printStackTrace();
-            _log.error("Exception while reading: " + ex);
-            throw new IllegalArgumentException("Cannot read Object @" + path + " error : " + ex);
+            _log.error("Exception while reading, {}", ex);
+            throw new IllegalArgumentException("Cannot read Object @" + path + " error: " + ex);
         }
 
         // change access time
@@ -456,18 +442,17 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
             pnfsHandler.setFileAttributes(pnfsId, attr);
             dObj.setMetadata("cdmi_atime", sdf.format(now));
         } catch (CacheException ex) {
-            _log.error("DCacheDataObjectDao<Read>, Cannot update meta information for object with objectID " + dObj.getObjectID());
+            _log.error("DCacheDataObjectDao<Read>, Cannot update meta information for object with objectID {}", dObj.getObjectID());
         }
 
         return dObj;
     }
 
     @Override
-    public DCacheDataObject findByObjectId(String objectId)
+    public DcacheDataObject findByObjectId(String objectId)
     {
         throw new UnsupportedOperationException("DCacheDataObjectDaoImpl.findByObjectId()");
     }
-    // --------------------------------------------------------- Private Methods
 
     /**
      * DCache related stuff.
@@ -475,7 +460,7 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
     @Override
     public void afterStart()
     {
-        _log.debug("Start DCacheDataObjectDaoImpl...");
+        _log.trace("Start DCacheDataObjectDaoImpl");
     }
 
     @Override
@@ -483,6 +468,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
     {
     }
 
+    /**
+     * <p>
+     * Gets the parent directory of a file path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
     private String getParentDirectory(String path)
     {
         String result = "/";
@@ -506,6 +499,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
+    /**
+     * <p>
+     * Gets the last item (file or directory) of a file path, opposite of getParentDirectory.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
     private String getItem(String path)
     {
         String result = "";
@@ -525,6 +526,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
+    /**
+     * <p>
+     * Checks if a Directory or File exists in a specific path.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
     private boolean checkIfDirectoryFileExists(String dirPath)
     {
         boolean result = false;
@@ -539,6 +548,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
+    /**
+     * <p>
+     * Lists all File Attributes for specific directory.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
     private FileAttributes getAttributesByPath(String path)
     {
         FileAttributes result = null;
@@ -553,6 +570,14 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
+    /**
+     * <p>
+     * Lists all Directories and Files in a specific path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
     private Map<String, FileAttributes> listDirectoriesFilesByPath(String path)
     {
         String tmpPath = addPrefixSlashToPath(path);
@@ -561,11 +586,19 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         try {
             listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
-            _log.warn("DCacheDataObjectDaoImpl, Directory and file listing for path '" + path + "' was not possible, internal error message: " + ex.getMessage());
+            _log.warn("DCacheDataObjectDaoImpl, Directory and file listing for path '{}' was not possible, internal error message={}", path, ex.getMessage());
         }
         return result;
     }
 
+    /**
+     * <p>
+     * Adds a prefix slash to a directory path if there isn't a slash already.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
     private String addPrefixSlashToPath(String path)
     {
         String result = "";
@@ -579,43 +612,17 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         return result;
     }
 
-    private String addSuffixSlashToPath(String path)
-    {
-        String result = "";
-        if (path != null && path.length() > 0) {
-            if (!path.endsWith("/")) {
-                result = path + "/";
-            } else {
-                result = path;
-            }
-        }
-        return result;
-    }
-
-    private String removeSlashesFromPath(String path)
-    {
-        String result = "";
-        if (path != null && path.length() > 0) {
-            if (path.startsWith("/")) {
-                result = path.substring(1, path.length() - 1);
-            } else {
-                result = path;
-            }
-            if (result.endsWith("/")) {
-                result = result.substring(0, result.length() - 2);
-            } else {
-                result = path;
-            }
-        }
-        return result;
-    }
-
     @Override
-    public DCacheDataObject createById(String string, DataObject d)
+    public DcacheDataObject createById(String string, DataObject d)
     {
         throw new UnsupportedOperationException("DCacheDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
+    /**
+     * <p>
+     * Lists all object in a parent directory including FileAttributes.
+     * </p>
+     */
     private static class ListPrinter implements DirectoryListPrinter
     {
         private final Map<String, FileAttributes> list;
@@ -640,13 +647,21 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
         }
     }
 
+    /**
+     * <p>
+     * Writes a File to dCache and fetches FileAttributes, simple way.
+     * </p>
+     * @param filePath
+     * @param data
+     * @return
+     */
     public boolean writeFile(String filePath, String data)
     {
         boolean result = false;
         try {
             //The order of all commands is very important!
             Subject subject = Subjects.ROOT;
-            DCacheDataTransfer.setData(data);
+            DcacheDataTransfer.setData(data);
             CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
             Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
             transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
@@ -663,40 +678,47 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
                 }
                 finally {
-                    pnfsId = DCacheDataTransfer.getPnfsId();
-                    creationTime = DCacheDataTransfer.getCreationTime();
-                    accessTime = DCacheDataTransfer.getAccessTime();
-                    changeTime = DCacheDataTransfer.getChangeTime();
-                    modificationTime = DCacheDataTransfer.getModificationTime();
-                    size = DCacheDataTransfer.getSize();
-                    owner = DCacheDataTransfer.getOwner();
-                    acl = DCacheDataTransfer.getACL();
-                    fileType = DCacheDataTransfer.getFileType();
+                    pnfsId = DcacheDataTransfer.getPnfsId();
+                    creationTime = DcacheDataTransfer.getCreationTime();
+                    accessTime = DcacheDataTransfer.getAccessTime();
+                    changeTime = DcacheDataTransfer.getChangeTime();
+                    modificationTime = DcacheDataTransfer.getModificationTime();
+                    size = DcacheDataTransfer.getSize();
+                    owner = DcacheDataTransfer.getOwner();
+                    acl = DcacheDataTransfer.getACL();
+                    fileType = DcacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("DCacheDataObjectDaoImpl<Write>-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("DCacheDataObjectDaoImpl<Write>-pnfsId:" + pnfsId);
-                _log.debug("DCacheDataObjectDaoImpl<Write>-creationTime:" + sdf.format(creationTime));
-                _log.debug("DCacheDataObjectDaoImpl<Write>-accessTime:" + sdf.format(accessTime));
-                _log.debug("DCacheDataObjectDaoImpl<Write>-changeTime:" + sdf.format(changeTime));
-                _log.debug("DCacheDataObjectDaoImpl<Write>-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("DCacheDataObjectDaoImpl<Write>-size:" + size);
-                _log.debug("DCacheDataObjectDaoImpl<Write>-owner:" + owner);
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-acl:" + acl.toString());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Write>-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("DCacheDataObjectDaoImpl<Write>-fileType:" + fileType.toString());
-                _log.debug("DCacheDataObjectDaoImpl<Write>-data:" + data);
+                _log.trace("DCacheDataObjectDaoImpl<Write>-isWrite={}", transfer.isWrite());
+                if (pnfsId != null) _log.trace("DCacheDataObjectDaoImpl<Write>-pnfsId={}", pnfsId);
+                _log.trace("DCacheDataObjectDaoImpl<Write>-creationTime={}", sdf.format(creationTime));
+                _log.trace("DCacheDataObjectDaoImpl<Write>-accessTime={}", sdf.format(accessTime));
+                _log.trace("DCacheDataObjectDaoImpl<Write>-changeTime={}", sdf.format(changeTime));
+                _log.trace("DCacheDataObjectDaoImpl<Write>-modificationTime={}", sdf.format(modificationTime));
+                _log.trace("DCacheDataObjectDaoImpl<Write>-size={}", size);
+                _log.trace("DCacheDataObjectDaoImpl<Write>-owner={}", owner);
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-acl={}", acl.toString());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclExtraFormat={}", acl.toExtraFormat());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclNFSv4String={}", acl.toNFSv4String());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclOrgString={}", acl.toOrgString());
+                if (fileType != null) _log.trace("DCacheDataObjectDaoImpl<Write>-fileType={}", fileType.toString());
+                _log.trace("DCacheDataObjectDaoImpl<Write>-data={}", data);
                 result = true;
             } finally {
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("DCacheDataObjectDaoImpl, File could not become written, exception is: " + ex.getMessage());
+            _log.error("DCacheDataObjectDaoImpl, File could not become written, {}", ex.getMessage());
         }
         return result;
     }
 
+    /**
+     * <p>
+     * Reads a File from dCache and fetches FileAttributes, simple way.
+     * </p>
+     * @param filePath
+     * @return
+     */
     public byte[] readFile(String filePath)
     {
         byte[] result = null;
@@ -716,39 +738,39 @@ public class DCacheDataObjectDaoImpl extends AbstractCellComponent
                 transfer.readNameSpaceEntry();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    result = DCacheDataTransfer.getDataAsBytes();
-                    _log.debug("DCacheDataObjectDaoImpl received data: " + result.toString());
+                    result = DcacheDataTransfer.getDataAsBytes();
+                    _log.trace("DCacheDataObjectDaoImpl received data={}", result.toString());
                 }
                 finally {
-                    pnfsId = DCacheDataTransfer.getPnfsId();
-                    creationTime = DCacheDataTransfer.getCreationTime();
-                    accessTime = DCacheDataTransfer.getAccessTime();
-                    changeTime = DCacheDataTransfer.getChangeTime();
-                    modificationTime = DCacheDataTransfer.getModificationTime();
-                    size = DCacheDataTransfer.getSize();
-                    owner = DCacheDataTransfer.getOwner();
-                    acl = DCacheDataTransfer.getACL();
-                    fileType = DCacheDataTransfer.getFileType();
+                    pnfsId = DcacheDataTransfer.getPnfsId();
+                    creationTime = DcacheDataTransfer.getCreationTime();
+                    accessTime = DcacheDataTransfer.getAccessTime();
+                    changeTime = DcacheDataTransfer.getChangeTime();
+                    modificationTime = DcacheDataTransfer.getModificationTime();
+                    size = DcacheDataTransfer.getSize();
+                    owner = DcacheDataTransfer.getOwner();
+                    acl = DcacheDataTransfer.getACL();
+                    fileType = DcacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.debug("DCacheDataObjectDaoImpl<Read>-isWrite:" + transfer.isWrite());
-                if (pnfsId != null) _log.debug("DCacheDataObjectDaoImpl<Read>-pnfsId:" + pnfsId);
-                _log.debug("DCacheDataObjectDaoImpl<Read>-creationTime:" + sdf.format(creationTime));
-                _log.debug("DCacheDataObjectDaoImpl<Read>-accessTime:" + sdf.format(accessTime));
-                _log.debug("DCacheDataObjectDaoImpl<Read>-changeTime:" + sdf.format(changeTime));
-                _log.debug("DCacheDataObjectDaoImpl<Read>-modificationTime:" + sdf.format(modificationTime));
-                _log.debug("DCacheDataObjectDaoImpl<Read>-size:" + size);
-                _log.debug("DCacheDataObjectDaoImpl<Read>-owner:" + owner);
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-acl:" + acl.toString());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclExtraFormat:" + acl.toExtraFormat());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclNFSv4String:" + acl.toNFSv4String());
-                if (acl != null) _log.debug("DCacheDataObjectDaoImpl<Read>-aclOrgString:" + acl.toOrgString());
-                if (fileType != null) _log.debug("DCacheDataObjectDaoImpl<Read>-fileType:" + fileType.toString());
-                _log.debug("DCacheDataObjectDaoImpl<Read>-data:" + result.toString());
+                _log.trace("DCacheDataObjectDaoImpl<Read>-isWrite={}", transfer.isWrite());
+                if (pnfsId != null) _log.trace("DCacheDataObjectDaoImpl<Read>-pnfsId={}", pnfsId);
+                _log.trace("DCacheDataObjectDaoImpl<Read>-creationTime={}", sdf.format(creationTime));
+                _log.trace("DCacheDataObjectDaoImpl<Read>-accessTime={}", sdf.format(accessTime));
+                _log.trace("DCacheDataObjectDaoImpl<Read>-changeTime={}", sdf.format(changeTime));
+                _log.trace("DCacheDataObjectDaoImpl<Read>-modificationTime={}", sdf.format(modificationTime));
+                _log.trace("DCacheDataObjectDaoImpl<Read>-size={}", size);
+                _log.trace("DCacheDataObjectDaoImpl<Read>-owner={}", owner);
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-acl={}", acl.toString());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclExtraFormat={}", acl.toExtraFormat());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclNFSv4String={}", acl.toNFSv4String());
+                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclOrgString={}", acl.toOrgString());
+                if (fileType != null) _log.trace("DCacheDataObjectDaoImpl<Read>-fileType={}", fileType.toString());
+                if (result != null) _log.trace("DCacheDataObjectDaoImpl<Read>-data={}", result.toString());
             } finally {
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("DCacheDataObjectDaoImpl, File could not become read, exception is: " + ex.getMessage());
+            _log.error("DCacheDataObjectDaoImpl, File could not become read, {}", ex.getMessage());
         }
         return result;
     }

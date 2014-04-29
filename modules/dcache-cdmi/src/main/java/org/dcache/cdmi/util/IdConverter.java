@@ -1,10 +1,30 @@
-package org.dcache.cdmi.tool;
+/* dCache - http://www.dcache.org/
+ *
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.dcache.cdmi.util;
 
 import java.math.BigInteger;
-import static org.dcache.cdmi.tool.CRC16Calculator.doCRC;
+import static org.dcache.cdmi.util.CRC16Calculator.doCRC;
 import com.google.common.io.BaseEncoding;
 
-public class IDConverter
+/* This class converts between dCache's PnfsID and CDMI's ObjectID and the other way around.
+*/
+
+public class IdConverter
 {
 
     private byte[] realObjectID = null;
@@ -15,6 +35,13 @@ public class IDConverter
     private static final int ENTERPRISE_NUMBER_2 = 6840;  //alternative, see: http://www.iana.org/assignments/enterprise-numbers/enterprise-numbers
     private static final byte length = 40;
 
+    /**
+    * <p>
+    * Converts a CDMI ObjectID to a dCache PnfsID.
+    * </p>
+     * @param objectID
+     * @return
+    */
     public String toPnfsID(String objectID)
     {
         strObjectID = objectID;
@@ -34,6 +61,15 @@ public class IDConverter
         return strPnfsID;
     }
 
+    /**
+    * <p>
+    * Converts a dCache PnfsID to a CDMI ObjectID.
+    * realObjectID represents the ObjectID in reality, it isn't possible to display it as text since it is binary.
+    * strObjectID represents the ObjectID converted to a Hex string so that in can be displayed as text (e.g. in JSON).
+    * </p>
+     * @param pnfsID
+     * @return
+    */
     public String toObjectID(String pnfsID)
     {
         strPnfsID = pnfsID;
@@ -56,7 +92,7 @@ public class IDConverter
         tempObjectID[6] = reservedByte;
         // set 7th byte of tempObjectID
         tempObjectID[7] = reservedByte;
-        // set convert PnfsID to Network Byte Order, in exactly 32 bytes
+        // convert PnfsID to Network Byte Order, in exactly 32 bytes
         byte[] pnfsIDArray = toNetworkByteOrder32(strPnfsID);
         // set 8th - 39th byte of tempObjectID
         for (int i = 0; i < 32; i++) {
@@ -77,6 +113,13 @@ public class IDConverter
         return strObjectID;
     }
 
+    /**
+    * <p>
+    * Converts an integer to Network Byte Order with exactly 3 bytes (not more and not less bytes).
+    * </p>
+     * @param data
+     * @return
+    */
     private byte[] toNetworkByteOrder3(int data)
     {
         byte[] result = new byte[3];
@@ -86,6 +129,13 @@ public class IDConverter
         return result;
     }
 
+    /**
+    * <p>
+    * Converts a string to Network Byte Order with exactly 2 bytes (not more and not less bytes).
+    * </p>
+     * @param data
+     * @return
+    */
     private byte[] toNetworkByteOrder2(String data)
     {
         byte[] result = new byte[2];
@@ -94,6 +144,13 @@ public class IDConverter
         return result;
     }
 
+    /**
+    * <p>
+    * Converts a string to Network Byte Order with exactly 32 bytes.
+    * </p>
+     * @param data
+     * @return
+    */
     private byte[] toNetworkByteOrder32(String data)
     {
         byte[] result = new byte[32];
@@ -111,24 +168,52 @@ public class IDConverter
         return result;
     }
 
+    /**
+    * <p>
+    * Converts a byte array from Network Byte Order with exactly 32 bytes.
+    * </p>
+     * @param data
+     * @return
+    */
     private String fromNetworkByteOrder32(byte[] data)
     {
         String result = BaseEncoding.base16().encode(data);
         return result.toUpperCase();
     }
 
+    /**
+    * <p>
+    * Calculates the CRC-16 for the CDMI ObjectID regarding CDMI specification from ISO/IEC.
+    * </p>
+     * @param data
+     * @return
+    */
     private String toCRC16(byte[] data)
     {
         String result = Long.toHexString(doCRC(data, 0x8005, 16, 0, true, true, false));
         return result.toUpperCase();
     }
 
+    /**
+    * <p>
+    * Converts a byte array to a Base16 string (Hex).
+    * </p>
+     * @param data
+     * @return
+    */
     private String toBase16(byte[] data)
     {
         String result = BaseEncoding.base16().encode(data);
         return result.toUpperCase();
     }
 
+    /**
+    * <p>
+    * Converts a Base16 string (Hex) to a byte array.
+    * </p>
+     * @param data
+     * @return
+    */
     private byte[] fromBase16(String data)
     {
         byte[] result = BaseEncoding.base16().decode(data);

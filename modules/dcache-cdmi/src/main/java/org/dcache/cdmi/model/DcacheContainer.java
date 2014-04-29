@@ -1,3 +1,20 @@
+/* dCache - http://www.dcache.org/
+ *
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.dcache.cdmi.model;
 
 import java.io.IOException;
@@ -16,18 +33,17 @@ import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.model.Container;
 
-public class DCacheContainer extends Container
+/* This class extends SNIA's Container class and implements/supports more metadata functions for dCache
+ * than SNIA's CDMI reference implementation.
+ */
+
+public class DcacheContainer extends Container
 {
 
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCacheContainer.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheContainer.class);
 
     // Container creation fields
     private Map<String, Object> exports = new HashMap<String, Object>();
-    private String copy;
-    private String move;
-    private String reference;
-    private String snapshot; // To create a snapshot via the "update" operation
-    // Container representation fields
     private String objectType;
     private String objectID;
     private String pnfsID;
@@ -35,15 +51,13 @@ public class DCacheContainer extends Container
     private String domainURI;
     private String capabilitiesURI;
     private String completionStatus;
-    private Integer percentComplete; // FIXME for SNIA - Specification says String but that does not make
-                                     // sense (SNIA says Integer now!)
-    private final List<String> snapshots = new ArrayList<String>();
     private String childrenrange;
     private final List<String> children = new ArrayList<String>();
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-    private final List<String> ignoreList = new ArrayList() {{
+
+    private final static List<String> IGNORE_LIST = new ArrayList() {{
         add("cdmi_ctime");
         add("cdmi_atime");
         add("cdmi_mtime");
@@ -53,57 +67,8 @@ public class DCacheContainer extends Container
     }};
 
     @Override
-    public Map<String, Object> getExports()
-    {
+    public Map<String, Object> getExports() {
         return exports;
-    }
-
-    @Override
-    public String getCopy()
-    {
-        return copy;
-    }
-
-    @Override
-    public void setCopy(String copy)
-    {
-        this.copy = copy;
-    }
-
-    @Override
-    public String getMove()
-    {
-        return move;
-    }
-
-    @Override
-    public void setMove(String move)
-    {
-        this.move = move;
-    }
-
-    @Override
-    public String getReference()
-    {
-        return reference;
-    }
-
-    @Override
-    public void setReference(String reference)
-    {
-        this.reference = reference;
-    }
-
-    @Override
-    public String getSnapshot()
-    {
-        return snapshot;
-    }
-
-    @Override
-    public void setSnapshot(String snapshot)
-    {
-        this.snapshot = snapshot;
     }
 
     @Override
@@ -113,9 +78,9 @@ public class DCacheContainer extends Container
     }
 
     @Override
-    public void setObjectType(String objectURI)
+    public String getCapabilitiesURI()
     {
-        this.objectType = objectURI;
+        return capabilitiesURI;
     }
 
     @Override
@@ -125,33 +90,9 @@ public class DCacheContainer extends Container
     }
 
     @Override
-    public void setParentURI(String parentURI)
-    {
-        this.parentURI = parentURI;
-    }
-
-    @Override
     public String getDomainURI()
     {
         return domainURI;
-    }
-
-    @Override
-    public void setDomainURI(String domainURI)
-    {
-        this.domainURI = domainURI;
-    }
-
-    @Override
-    public String getCapabilitiesURI()
-    {
-        return capabilitiesURI;
-    }
-
-    @Override
-    public void setCapabilitiesURI(String capabilitiesURI)
-    {
-        this.capabilitiesURI = capabilitiesURI;
     }
 
     @Override
@@ -161,39 +102,9 @@ public class DCacheContainer extends Container
     }
 
     @Override
-    public void setCompletionStatus(String completionStatus)
-    {
-        this.completionStatus = completionStatus;
-    }
-
-    @Override
-    public Integer getPercentComplete()
-    {
-        return percentComplete;
-    }
-
-    @Override
-    public void setPercentComplete(Integer percentComplete)
-    {
-        this.percentComplete = percentComplete;
-    }
-
-    @Override
-    public List<String> getSnapshots()
-    {
-        return snapshots;
-    }
-
-    @Override
     public String getChildrenrange()
     {
         return childrenrange;
-    }
-
-    @Override
-    public void setChildrenrange(String childrenrange)
-    {
-        this.childrenrange = childrenrange;
     }
 
     @Override
@@ -203,15 +114,9 @@ public class DCacheContainer extends Container
     }
 
     @Override
-    public String getObjectID()
+    public Map<String, String> getMetadata()
     {
-        return objectID;
-    }
-
-    @Override
-    public void setObjectID(String objectID)
-    {
-        this.objectID = objectID;
+        return metadata;
     }
 
     public String getPnfsID()
@@ -219,25 +124,50 @@ public class DCacheContainer extends Container
         return pnfsID;
     }
 
+    @Override
+    public void setObjectType(String objectType)
+    {
+        this.objectType = objectType;
+    }
+
+    @Override
+    public void setCapabilitiesURI(String capabilitiesURI)
+    {
+        this.capabilitiesURI = capabilitiesURI;
+    }
+
+    @Override
+    public void setParentURI(String parentURI)
+    {
+        this.parentURI = parentURI;
+    }
+
+    @Override
+    public void setDomainURI(String domainURI)
+    {
+        this.domainURI = domainURI;
+    }
+
+    @Override
+    public void setCompletionStatus(String completionStatus)
+    {
+        this.completionStatus = completionStatus;
+    }
+
+    @Override
+    public void setChildrenrange(String childrenrange)
+    {
+        this.childrenrange = childrenrange;
+    }
+
     public void setPnfsID(String pnfsId)
     {
         this.pnfsID = pnfsId;
     }
 
-    @Override
-    public Map<String, String> getMetadata()
-    {
-        return metadata;
-    }
-
     public List<HashMap<String, String>> getSubMetadata_ACL()
     {
         return subMetadata_ACL;
-    }
-
-    public void setMetadata(String key, String val)
-    {
-        metadata.put(key, val);
     }
 
     public void addSubMetadata_ACL(HashMap<String, String> metadata)
@@ -248,6 +178,11 @@ public class DCacheContainer extends Container
     public void addSubMetadata_ACL(int position, HashMap<String, String> metadata)
     {
         subMetadata_ACL.add(position, metadata);
+    }
+
+    public void setMetadata(String key, String val)
+    {
+        metadata.put(key, val);
     }
 
     public void setMetadata(Map<String, String> metadata)
@@ -331,7 +266,6 @@ public class DCacheContainer extends Container
             g.writeEndObject();
             g.flush();
         } catch (IOException ex) {
-            ex.printStackTrace();
             return ("Error : " + ex);
         }
         //
@@ -353,7 +287,7 @@ public class DCacheContainer extends Container
                 g.writeStringField("pnfsID", pnfsID);
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : metadata.entrySet()) {
-                if (!ignoreList.contains(entry.getKey())) {
+                if (!IGNORE_LIST.contains(entry.getKey())) {
                     g.writeStringField(entry.getKey(), entry.getValue());
                 }
             }
@@ -362,7 +296,6 @@ public class DCacheContainer extends Container
 
             g.flush();
         } catch (IOException ex) {
-            ex.printStackTrace();
             return("Error : " + ex);
         }
         return outBuffer.toString();
@@ -386,74 +319,87 @@ public class DCacheContainer extends Container
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception
     {
-        _log.debug("   CDMIContainer<fromJson>:");
+        _log.trace("CDMIContainer<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
             String key = jp.getCurrentName();
-            if ("metadata".equals(key)) {// process metadata
-                tolkein = jp.nextToken();
-                while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                    key = jp.getCurrentName();
+            switch (key) {
+                case "metadata":
                     tolkein = jp.nextToken();
-                    String value = jp.getText();
-                    _log.debug("   Key = " + key + " : Value = " + value);
-                    this.getMetadata().put(key, value);
-                }
-            } else if ("exports".equals(key)) {// process exports
-                tolkein = jp.nextToken();
-                while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                    key = jp.getCurrentName();
-                    tolkein = jp.nextToken(); // Start
-                    tolkein = jp.nextToken(); // End
-                    this.getExports().put(key, null); // jp.nextToken();
-                }// while
-            } else if ("capabilitiesURI".equals(key)) {// process capabilitiesURI
-                jp.nextToken();
-                String value2 = jp.getText();
-                _log.debug("Key : " + key + " Val : " + value2);
-                this.setCapabilitiesURI(value2);
-            } else if ("domainURI".equals(key)) {// process domainURI
-                jp.nextToken();
-                String value2 = jp.getText();
-                _log.debug("Key : " + key + " Val : " + value2);
-                this.setDomainURI(value2);
-            } else if ("move".equals(key)) {// process move
-                jp.nextToken();
-                String value2 = jp.getText();
-                _log.debug("Key : " + key + " Val : " + value2);
-                this.setMove(value2);
-            } else if ("valuetransferencoding".equals(key)) { // ignore
-                jp.nextToken();
-                // Ignore, it's from the Python CDMI test client
-            } else {
-                if (fromFile) { // accept rest of key-values
-                    if ("objectID".equals(key)) { // process value
+                    while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                        key = jp.getCurrentName();
+                        tolkein = jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("- Key={} : Value={}", key, value);
+                        this.getMetadata().put(key, value);
+                    }   break;
+                case "exports":
+                    tolkein = jp.nextToken();
+                    while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                        key = jp.getCurrentName();
+                        tolkein = jp.nextToken(); // Start
+                        tolkein = jp.nextToken(); // End
+                        this.getExports().put(key, null);
+                    }// while
+                    break;
+                case "capabilitiesURI":
+                    {
                         jp.nextToken();
                         String value2 = jp.getText();
-                        _log.debug("Key : " + key + " Val : " + value2);
-                        this.setObjectID(value2);
-                    } else if ("pnfsID".equals(key)) { // process value
+                        _log.trace("Key={} : Val={}", key, value2);
+                        this.setCapabilitiesURI(value2);
+                        break;
+                    }
+                case "domainURI":
+                    {
                         jp.nextToken();
                         String value2 = jp.getText();
-                        _log.debug("Key : " + key + " Val : " + value2);
-                        this.setPnfsID(value2);
+                        _log.trace("Key={} : Val={}", key, value2);
+                        this.setDomainURI(value2);
+                        break;
+                    }
+                case "move":
+                    {
+                        jp.nextToken();
+                        String value2 = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value2);
+                        this.setMove(value2);
+                        break;
+                    }
+                case "valuetransferencoding":
+                    jp.nextToken();
+                    // Ignore, it's from the Python CDMI test client
+                    break;
+                default:
+                    if (fromFile) { // accept rest of key-values
+                        switch (key) {
+                            case "objectID":
+                            {
+                                jp.nextToken();
+                                String value2 = jp.getText();
+                                _log.trace("Key={} : Val={}", key, value2);
+                                this.setObjectID(value2);
+                                break;
+                            }
+                            case "pnfsID":
+                            {
+                                jp.nextToken();
+                                String value2 = jp.getText();
+                                _log.trace("Key={} : Val={}", key, value2);
+                                this.setPnfsID(value2);
+                                break;
+                            }
+                            default:
+                                _log.trace("Invalid Key: {}", key);
+                                throw new BadRequestException("Invalid Key: " + key);
+                        }
                     } else {
-                        _log.debug("Invalid Key : " + key);
+                        _log.trace("Invalid Key: {}", key);
                         throw new BadRequestException("Invalid Key : " + key);
-                    } // inner if
-                } else {
-                    _log.debug("Invalid Key : " + key);
-                    throw new BadRequestException("Invalid Key : " + key);
-                }
+                    }
             }
         }
-    }
-
-    @Override
-    public Object getObjectURI()
-    {
-        throw new UnsupportedOperationException("Not yet implemented");
     }
 
 }

@@ -1,40 +1,21 @@
-/*
-* Copyright (c) 2010, Sun Microsystems, Inc.
-* Copyright (c) 2010, The Storage Networking Industry Association.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-* Redistributions of source code must retain the above copyright notice,
-* this list of conditions and the following disclaimer.
-*
-* Redistributions in binary form must reproduce the above copyright notice,
-* this list of conditions and the following disclaimer in the documentation
-* and/or other materials provided with the distribution.
-*
-* Neither the name of The Storage Networking Industry Association (SNIA) nor
-* the names of its contributors may be used to endorse or promote products
-* derived from this software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-* THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
-package org.dcache.cdmi.resource;
-
-/**
+/* dCache - http://www.dcache.org/
  *
- * @author Jana
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package org.dcache.cdmi.resource;
 
 import java.net.URI;
 import javax.ws.rs.Consumes;
@@ -51,8 +32,8 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
-import org.dcache.cdmi.model.DCacheContainer;
-import org.dcache.cdmi.model.DCacheDataObject;
+import org.dcache.cdmi.model.DcacheContainer;
+import org.dcache.cdmi.model.DcacheDataObject;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.dao.DataObjectDao;
@@ -68,13 +49,10 @@ import org.snia.cdmiserver.util.ObjectID;
 * Access to objects by path.
 * </p>
 */
-public class DCachePathResource
+public class DcachePathResource
 {
 
-    //
-    // Something important
-    //
-    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DCachePathResource.class);
+    private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcachePathResource.class);
 
     //
     // Properties and Dependency Injection Methods
@@ -128,10 +106,9 @@ public class DCachePathResource
             return Response.noContent().header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
         } catch (Exception ex) {
-            _log.debug(ex.toString());
-            ex.printStackTrace();
+            _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST).tag(
-                    "Object Delete Error : " + ex.toString()).build();
+                    "Object Delete Error: " + ex.toString()).build();
         }
     }
 
@@ -172,13 +149,11 @@ public class DCachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.debug("In PathResource.getContainerOrObject, path=" +
-                path);
+        _log.trace("In PathResource.getContainerOrObject, path={}", path);
 
         //print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-          _log.debug("Hdr: "+ hdr + " - " +
-                  headers.getRequestHeader(hdr));
+          _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
 
         if (headers.getRequestHeader(HttpHeaders.CONTENT_TYPE).isEmpty()) {
@@ -198,10 +173,9 @@ public class DCachePathResource
                       "X-CDMI-Specification-Version", "1.0.2").build();
             }
           } catch (Exception ex) {
-            _log.debug(ex.toString());
-            ex.printStackTrace();
+            _log.trace(ex.toString());
             return Response.status(Response.Status.NOT_FOUND).tag(
-                    "Container Read Error : " + ex.toString()).build();
+                    "Container Read Error: " + ex.toString()).build();
           }
         }
         try {
@@ -216,10 +190,9 @@ public class DCachePathResource
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
         } catch (Exception ex) {
-          _log.debug(ex.toString());
-          ex.printStackTrace();
+          _log.trace(ex.toString());
           return Response.status(Response.Status.BAD_REQUEST).tag(
-                  "Object Fetch Error : " + ex.toString()).build();
+                  "Object Fetch Error: " + ex.toString()).build();
         }
     }
 
@@ -242,7 +215,7 @@ public class DCachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.debug("In PathResource.getRootContainer");
+        _log.trace("In PathResource.getRootContainer");
         return getContainerOrDataObject(path, headers);
 
     }
@@ -275,13 +248,11 @@ public class DCachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.debug("In PathResource.getDataObjectOrContainer, path: " +
-                path);
+        _log.trace("In PathResource.getDataObjectOrContainer, path={}", path);
 
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-            _log.debug("Hdr: " + hdr + " - " +
-                    headers.getRequestHeader(hdr));
+            _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
 
         // Check for container vs object
@@ -297,10 +268,9 @@ public class DCachePathResource
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 }
             } catch (Exception ex) {
-                _log.debug(ex.toString());
-                ex.printStackTrace();
+                _log.trace(ex.toString());
                 return Response.status(Response.Status.NOT_FOUND)
-                        .tag("Container Read Error : " + ex.toString()).build();
+                        .tag("Container Read Error: " + ex.toString()).build();
             }
         } else {
             // if object, send out the object in it's native form
@@ -312,15 +282,14 @@ public class DCachePathResource
                     // make http response
                     // build a JSON representation
                     String respStr = dObj.getValue();//Remark: Switch to dObj.toJsonWithMetadata() if Metadata shall be showed instead
-                    _log.debug("MimeType = " + dObj.getMimetype());
+                    _log.trace("MimeType={}", dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 } // if/else
             } catch (Exception ex) {
-                _log.debug(ex.toString());
-                ex.printStackTrace();
+                _log.trace(ex.toString());
                 return Response.status(Response.Status.BAD_REQUEST)
-                        .tag("Object Fetch Error : " + ex.toString()).build();
+                        .tag("Object Fetch Error: " + ex.toString()).build();
             }
         }
     }
@@ -351,12 +320,12 @@ public class DCachePathResource
             byte[] bytes)
     {
 
-        _log.debug("In PathResource.putContainer, path is: " + path);
+        _log.trace("In PathResource.putContainer, path={}", path);
 
         String inBuffer = new String(bytes);
-        _log.debug("Request = " + inBuffer);
+        _log.trace("Request={}", inBuffer);
 
-        DCacheContainer containerRequest = new DCacheContainer();
+        DcacheContainer containerRequest = new DcacheContainer();
 
         try {
             containerRequest.fromJson(bytes, false);
@@ -373,10 +342,9 @@ public class DCachePathResource
                 return builder.entity(respStr).build();
             } // if/else
         } catch (Exception ex) {
-            _log.debug(ex.toString());
-            ex.printStackTrace();
+            _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Object Creation Error : " + ex.toString()).build();
+                    .tag("Object Creation Error: " + ex.toString()).build();
         }
     }
 
@@ -402,18 +370,18 @@ public class DCachePathResource
             byte[] bytes)
     {
 
-        _log.debug("putDataObject(): ");
+        _log.trace("putDataObject():");
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
-            _log.debug(hdr + " - " + headers.getRequestHeader(hdr));
+            _log.trace("{} - {}", hdr, headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        _log.debug("Path = " + path + "\n" + inBuffer);
+        _log.trace("Path={}\n{}", path, inBuffer);
 
         try {
             DataObject dObj = dataObjectDao.findByPath(path);
             if (dObj == null) {
-                dObj = new DCacheDataObject();
+                dObj = new DcacheDataObject();
 
                 dObj.setObjectType("application/cdmi-object");
                 // parse json
@@ -433,10 +401,9 @@ public class DCachePathResource
             dObj.fromJson(bytes,false);
             return Response.ok().build();
         } catch (Exception ex) {
-            _log.debug(ex.toString());
-            ex.printStackTrace();
+            _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST).tag(
-                  "Object PUT Error : " + ex.toString()).build();
+                  "Object PUT Error: " + ex.toString()).build();
         }
     }
 
@@ -482,7 +449,7 @@ public class DCachePathResource
     {
 
         String inBuffer = new String(bytes);
-        _log.debug("Path = " + path + "\n" + inBuffer);
+        _log.trace("Path={}\n{}", path, inBuffer);
 
         boolean containerRequest = false;
         if (containerDao.isContainer(path)) {
@@ -493,13 +460,12 @@ public class DCachePathResource
             String objectId = ObjectID.getObjectID(11);
             String objectPath = path + "/" + objectId;
 
-            DataObject dObj = new DCacheDataObject();
+            DataObject dObj = new DcacheDataObject();
             dObj.setObjectID(objectId);
             dObj.setObjectType(objectPath);
             dObj.setValue(inBuffer);
 
-            _log.debug("objectId = " + objectId + " objectPath = " +
-                    objectPath);
+            _log.trace("objectId={}, objectPath={}", objectId, objectPath);
 
             dObj = dataObjectDao.createByPath(objectPath, dObj);
 
@@ -509,10 +475,9 @@ public class DCachePathResource
             }
             return Response.ok().build();
         } catch (Exception ex) {
-            _log.debug(ex.toString());
-            ex.printStackTrace();
+            _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST).
-              tag("Object Creation Error : " + ex.toString()).build();
+              tag("Object Creation Error: " + ex.toString()).build();
         }
     }
 
