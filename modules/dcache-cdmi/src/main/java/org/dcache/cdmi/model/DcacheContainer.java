@@ -266,7 +266,7 @@ public class DcacheContainer extends Container
             g.writeEndObject();
             g.flush();
         } catch (IOException ex) {
-            return ("Error : " + ex);
+            return ("Error: " + ex);
         }
         //
         return outBuffer.toString();
@@ -296,7 +296,7 @@ public class DcacheContainer extends Container
 
             g.flush();
         } catch (IOException ex) {
-            return("Error : " + ex);
+            return("Error: " + ex);
         }
         return outBuffer.toString();
     }
@@ -319,7 +319,7 @@ public class DcacheContainer extends Container
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception
     {
-        _log.trace("CDMIContainer<fromJson>:");
+        _log.trace("DcacheContainer<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {

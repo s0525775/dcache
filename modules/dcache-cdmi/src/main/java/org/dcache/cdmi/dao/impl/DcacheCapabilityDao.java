@@ -103,7 +103,7 @@ public class DcacheCapabilityDao implements CapabilityDao
     @Override
     public Capability findByObjectId(String objectId)
     {
-        throw new UnsupportedOperationException("DCacheCapabilityDaoImpl.findByObjectId()");
+        throw new UnsupportedOperationException("DcacheCapabilityDao.findByObjectId()");
     }
 
     @Override

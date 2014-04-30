@@ -149,7 +149,7 @@ public class DcachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.trace("In PathResource.getContainerOrObject, path={}", path);
+        _log.trace("In DcachePathResource.getContainerOrObject, path={}", path);
 
         //print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
@@ -215,7 +215,7 @@ public class DcachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.trace("In PathResource.getRootContainer");
+        _log.trace("In DcachePathResource.getRootContainer");
         return getContainerOrDataObject(path, headers);
 
     }
@@ -248,7 +248,7 @@ public class DcachePathResource
             @Context HttpHeaders headers)
     {
 
-        _log.trace("In PathResource.getDataObjectOrContainer, path={}", path);
+        _log.trace("In DcachePathResource.getDataObjectOrContainer, path={}", path);
 
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
@@ -320,7 +320,7 @@ public class DcachePathResource
             byte[] bytes)
     {
 
-        _log.trace("In PathResource.putContainer, path={}", path);
+        _log.trace("In DcachePathResource.putContainer, path={}", path);
 
         String inBuffer = new String(bytes);
         _log.trace("Request={}", inBuffer);
@@ -428,7 +428,7 @@ public class DcachePathResource
     {
 
         throw new UnsupportedOperationException(
-                "PathResource.putDataObject(Non-CDMI Content Type");
+                "DcachePathResource.putDataObject(Non-CDMI Content Type");
     }
 
     /**

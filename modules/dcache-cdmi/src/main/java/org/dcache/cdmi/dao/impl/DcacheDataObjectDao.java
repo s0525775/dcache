@@ -323,7 +323,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public void deleteByPath(String path)
     {
-        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl.deleteByPath()");
+        throw new UnsupportedOperationException("DcacheDataObjectDao.deleteByPath()");
     }
 
     @Override
@@ -451,7 +451,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public DcacheDataObject findByObjectId(String objectId)
     {
-        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl.findByObjectId()");
+        throw new UnsupportedOperationException("DcacheDataObjectDao.findByObjectId()");
     }
 
     /**
@@ -460,7 +460,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public void afterStart()
     {
-        _log.trace("Start DCacheDataObjectDaoImpl");
+        _log.trace("Start DCacheDataObjectDao");
     }
 
     @Override
@@ -586,7 +586,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         try {
             listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
-            _log.warn("DCacheDataObjectDaoImpl, Directory and file listing for path '{}' was not possible, internal error message={}", path, ex.getMessage());
+            _log.warn("DcacheDataObjectDao, Directory and file listing for path '{}' was not possible, internal error message={}", path, ex.getMessage());
         }
         return result;
     }
@@ -615,7 +615,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public DcacheDataObject createById(String string, DataObject d)
     {
-        throw new UnsupportedOperationException("DCacheDataObjectDaoImpl, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException("DcacheDataObjectDao, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     /**
@@ -689,25 +689,25 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     fileType = DcacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.trace("DCacheDataObjectDaoImpl<Write>-isWrite={}", transfer.isWrite());
-                if (pnfsId != null) _log.trace("DCacheDataObjectDaoImpl<Write>-pnfsId={}", pnfsId);
-                _log.trace("DCacheDataObjectDaoImpl<Write>-creationTime={}", sdf.format(creationTime));
-                _log.trace("DCacheDataObjectDaoImpl<Write>-accessTime={}", sdf.format(accessTime));
-                _log.trace("DCacheDataObjectDaoImpl<Write>-changeTime={}", sdf.format(changeTime));
-                _log.trace("DCacheDataObjectDaoImpl<Write>-modificationTime={}", sdf.format(modificationTime));
-                _log.trace("DCacheDataObjectDaoImpl<Write>-size={}", size);
-                _log.trace("DCacheDataObjectDaoImpl<Write>-owner={}", owner);
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-acl={}", acl.toString());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclExtraFormat={}", acl.toExtraFormat());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclNFSv4String={}", acl.toNFSv4String());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Write>-aclOrgString={}", acl.toOrgString());
-                if (fileType != null) _log.trace("DCacheDataObjectDaoImpl<Write>-fileType={}", fileType.toString());
-                _log.trace("DCacheDataObjectDaoImpl<Write>-data={}", data);
+                _log.trace("DcacheDataObjectDao<Write>-isWrite={}", transfer.isWrite());
+                if (pnfsId != null) _log.trace("DcacheDataObjectDao<Write>-pnfsId={}", pnfsId);
+                _log.trace("DcacheDataObjectDao<Write>-creationTime={}", sdf.format(creationTime));
+                _log.trace("DcacheDataObjectDao<Write>-accessTime={}", sdf.format(accessTime));
+                _log.trace("DcacheDataObjectDao<Write>-changeTime={}", sdf.format(changeTime));
+                _log.trace("DcacheDataObjectDao<Write>-modificationTime={}", sdf.format(modificationTime));
+                _log.trace("DcacheDataObjectDao<Write>-size={}", size);
+                _log.trace("DcacheDataObjectDao<Write>-owner={}", owner);
+                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-acl={}", acl.toString());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclExtraFormat={}", acl.toExtraFormat());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclNFSv4String={}", acl.toNFSv4String());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclOrgString={}", acl.toOrgString());
+                if (fileType != null) _log.trace("DcacheDataObjectDao<Write>-fileType={}", fileType.toString());
+                _log.trace("DcacheDataObjectDao<Write>-data={}", data);
                 result = true;
             } finally {
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("DCacheDataObjectDaoImpl, File could not become written, {}", ex.getMessage());
+            _log.error("DcacheDataObjectDao, File could not become written, {}", ex.getMessage());
         }
         return result;
     }
@@ -739,7 +739,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
                     result = DcacheDataTransfer.getDataAsBytes();
-                    _log.trace("DCacheDataObjectDaoImpl received data={}", result.toString());
+                    _log.trace("DcacheDataObjectDao received data={}", result.toString());
                 }
                 finally {
                     pnfsId = DcacheDataTransfer.getPnfsId();
@@ -753,24 +753,24 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     fileType = DcacheDataTransfer.getFileType();
                 }
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.trace("DCacheDataObjectDaoImpl<Read>-isWrite={}", transfer.isWrite());
-                if (pnfsId != null) _log.trace("DCacheDataObjectDaoImpl<Read>-pnfsId={}", pnfsId);
-                _log.trace("DCacheDataObjectDaoImpl<Read>-creationTime={}", sdf.format(creationTime));
-                _log.trace("DCacheDataObjectDaoImpl<Read>-accessTime={}", sdf.format(accessTime));
-                _log.trace("DCacheDataObjectDaoImpl<Read>-changeTime={}", sdf.format(changeTime));
-                _log.trace("DCacheDataObjectDaoImpl<Read>-modificationTime={}", sdf.format(modificationTime));
-                _log.trace("DCacheDataObjectDaoImpl<Read>-size={}", size);
-                _log.trace("DCacheDataObjectDaoImpl<Read>-owner={}", owner);
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-acl={}", acl.toString());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclExtraFormat={}", acl.toExtraFormat());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclNFSv4String={}", acl.toNFSv4String());
-                if (acl != null) _log.trace("DCacheDataObjectDaoImpl<Read>-aclOrgString={}", acl.toOrgString());
-                if (fileType != null) _log.trace("DCacheDataObjectDaoImpl<Read>-fileType={}", fileType.toString());
-                if (result != null) _log.trace("DCacheDataObjectDaoImpl<Read>-data={}", result.toString());
+                _log.trace("DcacheDataObjectDao<Read>-isWrite={}", transfer.isWrite());
+                if (pnfsId != null) _log.trace("DcacheDataObjectDao<Read>-pnfsId={}", pnfsId);
+                _log.trace("DcacheDataObjectDao<Read>-creationTime={}", sdf.format(creationTime));
+                _log.trace("DcacheDataObjectDao<Read>-accessTime={}", sdf.format(accessTime));
+                _log.trace("DcacheDataObjectDao<Read>-changeTime={}", sdf.format(changeTime));
+                _log.trace("DcacheDataObjectDao<Read>-modificationTime={}", sdf.format(modificationTime));
+                _log.trace("DcacheDataObjectDao<Read>-size={}", size);
+                _log.trace("DcacheDataObjectDao<Read>-owner={}", owner);
+                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-acl={}", acl.toString());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclExtraFormat={}", acl.toExtraFormat());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclNFSv4String={}", acl.toNFSv4String());
+                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclOrgString={}", acl.toOrgString());
+                if (fileType != null) _log.trace("DcacheDataObjectDao<Read>-fileType={}", fileType.toString());
+                if (result != null) _log.trace("DcacheDataObjectDao<Read>-data={}", result.toString());
             } finally {
             }
         } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
-            _log.error("DCacheDataObjectDaoImpl, File could not become read, {}", ex.getMessage());
+            _log.error("DcacheDataObjectDao, File could not become read, {}", ex.getMessage());
         }
         return result;
     }

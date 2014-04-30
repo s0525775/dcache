@@ -259,7 +259,7 @@ public class DcacheDataObject extends DataObject
 
     private void fromJson(JsonParser jp, boolean fromFile) throws Exception
     {
-        _log.trace("CDMIDataObject<fromJson>:");
+        _log.trace("DcacheDataObject<fromJson>:");
         JsonToken tolkein;
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
