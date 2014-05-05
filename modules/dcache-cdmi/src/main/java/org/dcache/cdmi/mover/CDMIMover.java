@@ -54,6 +54,7 @@ public class CDMIMover implements MoverProtocol
     {
         PnfsId pnfsId = fileAttributes.getPnfsId();
         StorageInfo storage = fileAttributes.getStorageInfo();
+        pi = (CDMIProtocolInfo) protocol;
 
         _log.trace("\n\trunIO()\n\tprotocol="+protocol+",\n\tStorageInfo="+storage+",\n\tPnfsId="+pnfsId+",\n\taccess="+access);
 
@@ -158,17 +159,6 @@ public class CDMIMover implements MoverProtocol
                 }
             } catch (IOException ex) {
                 _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
-            }
-        }
-    }
-
-    public void closeChannel()
-    {
-        if (channel.isOpen()) {
-            try {
-                channel.close();
-            } catch (IOException ex) {
-                _log.error("CDMI channel could not be closed, exception is: " + ex.getMessage());
             }
         }
     }
