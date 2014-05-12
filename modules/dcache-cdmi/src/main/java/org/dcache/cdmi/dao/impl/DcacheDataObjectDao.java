@@ -36,14 +36,17 @@ import java.util.Map;
 import java.util.Set;
 import javax.security.auth.Subject;
 import org.dcache.auth.Subjects;
-import org.dcache.cdmi.mover.DcacheDataTransfer;
 import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ConnectException;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
-import org.dcache.acl.ACLException;
 import org.dcache.cdmi.model.DcacheDataObject;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
@@ -94,14 +97,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private CellStub poolMgrStub;
     private CellStub billingStub;
     private PnfsId pnfsId;
-    private long accessTime;
-    private long creationTime;
-    private long changeTime;
-    private long modificationTime;
-    private long size;
-    private int owner;
-    private ACL acl;
-    private FileType fileType;
+    private SocketChannel socketChannel = null;
+    private ObjectOutputStream  oos = null;
+    private ObjectInputStream ois = null;
+    private String host = "localhost";
+    private static final int port = 9999;
+    private static final int maxTries = 5;
 
     /**
      * <p>
@@ -259,10 +260,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     // update with real info
                     _log.trace("DCacheDataObjectDao<Create>, setPnfsID={}", pnfsId.toIdString());
                     newDObj.setPnfsID(pnfsId.toIdString());
-                    long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
-                    long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
-                    long mtime = (attr.getModificationTime() > modificationTime) ? attr.getModificationTime() : modificationTime;
-                    long osize = (attr.getSize() > size) ? attr.getSize() : size;
+                    long ctime = attr.getCreationTime();
+                    long atime = attr.getAccessTime();
+                    long mtime = attr.getModificationTime();
+                    long osize = attr.getSize();
                     newDObj.setMetadata("cdmi_ctime", sdf.format(ctime));
                     newDObj.setMetadata("cdmi_atime", sdf.format(atime));
                     newDObj.setMetadata("cdmi_mtime", sdf.format(mtime));
@@ -360,8 +361,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         DcacheDataObject dObj = new DcacheDataObject();
         try {
             // Read object from file
-            byte[] inBytes = readFile(objFile.getAbsolutePath());
-            dObj.setValue(new String(inBytes));
+            String inBytes = readFile(objFile.getAbsolutePath());
+            dObj.setValue(inBytes);
 
             dObj.setObjectType("application/cdmi-object");
             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
@@ -377,10 +378,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     // update with real info
                     _log.trace("DCacheDataObjectDao<Read>, setPnfsID={}", pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
-                    long ctime = (attr.getCreationTime() > creationTime) ? attr.getCreationTime() : creationTime;
-                    long atime = (attr.getAccessTime() > accessTime) ? attr.getAccessTime() : accessTime;
-                    long mtime = (attr.getModificationTime() > modificationTime) ? attr.getModificationTime() : modificationTime;
-                    long osize = (attr.getSize() > size) ? attr.getSize() : size;
+                    long ctime = attr.getCreationTime();
+                    long atime = attr.getAccessTime();
+                    long mtime = attr.getModificationTime();
+                    long osize = attr.getSize();
                     dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
                     dObj.setMetadata("cdmi_atime", sdf.format(atime));
                     dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
@@ -661,7 +662,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         try {
             //The order of all commands is very important!
             Subject subject = Subjects.ROOT;
-            DcacheDataTransfer.setData(data);
             CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
             Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
             transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
@@ -676,37 +676,17 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 transfer.createNameSpaceEntryWithParents();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
+                    write(data);
                 }
                 finally {
-                    pnfsId = DcacheDataTransfer.getPnfsId();
-                    creationTime = DcacheDataTransfer.getCreationTime();
-                    accessTime = DcacheDataTransfer.getAccessTime();
-                    changeTime = DcacheDataTransfer.getChangeTime();
-                    modificationTime = DcacheDataTransfer.getModificationTime();
-                    size = DcacheDataTransfer.getSize();
-                    owner = DcacheDataTransfer.getOwner();
-                    acl = DcacheDataTransfer.getACL();
-                    fileType = DcacheDataTransfer.getFileType();
+                    pnfsId = transfer.getPnfsId();
                 }
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-                _log.trace("DcacheDataObjectDao<Write>-isWrite={}", transfer.isWrite());
                 if (pnfsId != null) _log.trace("DcacheDataObjectDao<Write>-pnfsId={}", pnfsId);
-                _log.trace("DcacheDataObjectDao<Write>-creationTime={}", sdf.format(creationTime));
-                _log.trace("DcacheDataObjectDao<Write>-accessTime={}", sdf.format(accessTime));
-                _log.trace("DcacheDataObjectDao<Write>-changeTime={}", sdf.format(changeTime));
-                _log.trace("DcacheDataObjectDao<Write>-modificationTime={}", sdf.format(modificationTime));
-                _log.trace("DcacheDataObjectDao<Write>-size={}", size);
-                _log.trace("DcacheDataObjectDao<Write>-owner={}", owner);
-                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-acl={}", acl.toString());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclExtraFormat={}", acl.toExtraFormat());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclNFSv4String={}", acl.toNFSv4String());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Write>-aclOrgString={}", acl.toOrgString());
-                if (fileType != null) _log.trace("DcacheDataObjectDao<Write>-fileType={}", fileType.toString());
                 _log.trace("DcacheDataObjectDao<Write>-data={}", data);
                 result = true;
             } finally {
             }
-        } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("DcacheDataObjectDao, File could not become written, {}", ex.getMessage());
         }
         return result;
@@ -719,9 +699,9 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param filePath
      * @return
      */
-    public byte[] readFile(String filePath)
+    public String readFile(String filePath)
     {
-        byte[] result = null;
+        String result = "";
         try {
             //The order of all commands is very important!
             Subject subject = Subjects.ROOT;
@@ -738,41 +718,85 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 transfer.readNameSpaceEntry();
                 try {
                     transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    result = DcacheDataTransfer.getDataAsBytes();
+                    result = read();
                     _log.trace("DcacheDataObjectDao received data={}", result.toString());
                 }
                 finally {
-                    pnfsId = DcacheDataTransfer.getPnfsId();
-                    creationTime = DcacheDataTransfer.getCreationTime();
-                    accessTime = DcacheDataTransfer.getAccessTime();
-                    changeTime = DcacheDataTransfer.getChangeTime();
-                    modificationTime = DcacheDataTransfer.getModificationTime();
-                    size = DcacheDataTransfer.getSize();
-                    owner = DcacheDataTransfer.getOwner();
-                    acl = DcacheDataTransfer.getACL();
-                    fileType = DcacheDataTransfer.getFileType();
+                    pnfsId = transfer.getFileAttributes().getPnfsId();
                 }
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 _log.trace("DcacheDataObjectDao<Read>-isWrite={}", transfer.isWrite());
                 if (pnfsId != null) _log.trace("DcacheDataObjectDao<Read>-pnfsId={}", pnfsId);
-                _log.trace("DcacheDataObjectDao<Read>-creationTime={}", sdf.format(creationTime));
-                _log.trace("DcacheDataObjectDao<Read>-accessTime={}", sdf.format(accessTime));
-                _log.trace("DcacheDataObjectDao<Read>-changeTime={}", sdf.format(changeTime));
-                _log.trace("DcacheDataObjectDao<Read>-modificationTime={}", sdf.format(modificationTime));
-                _log.trace("DcacheDataObjectDao<Read>-size={}", size);
-                _log.trace("DcacheDataObjectDao<Read>-owner={}", owner);
-                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-acl={}", acl.toString());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclExtraFormat={}", acl.toExtraFormat());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclNFSv4String={}", acl.toNFSv4String());
-                if (acl != null) _log.trace("DcacheDataObjectDao<Read>-aclOrgString={}", acl.toOrgString());
-                if (fileType != null) _log.trace("DcacheDataObjectDao<Read>-fileType={}", fileType.toString());
                 if (result != null) _log.trace("DcacheDataObjectDao<Read>-data={}", result.toString());
             } finally {
             }
-        } catch (CacheException | InterruptedException | UnknownHostException | ACLException ex) {
+        } catch (CacheException | InterruptedException | UnknownHostException ex) {
             _log.error("DcacheDataObjectDao, File could not become read, {}", ex.getMessage());
         }
         return result;
+    }
+
+    public synchronized void connect()
+    {
+        int tries = 0;
+        boolean connected = false;
+        try {
+            host = InetAddress.getLocalHost().getHostName();
+            while ((!connected) && (tries < maxTries)) {
+                try {
+                    socketChannel = SocketChannel.open();
+                    connected = socketChannel.connect(new InetSocketAddress(host, port));
+                    tries = tries + 1;
+                } catch (ConnectException ex) {
+                }
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private synchronized void write(String data)
+    {
+        connect();
+        try {
+            if ((socketChannel != null) && socketChannel.isConnected()) {
+                oos = new ObjectOutputStream(socketChannel.socket().getOutputStream());
+                String dataWrite1 = data;
+                oos.writeObject(dataWrite1);
+                oos.close();
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        close();
+    }
+
+    private synchronized String read()
+    {
+        String data = "";
+        connect();
+        try {
+            if ((socketChannel != null) && socketChannel.isConnected()) {
+                ois = new ObjectInputStream(socketChannel.socket().getInputStream());
+                String dataRead1 = (String) ois.readObject();
+                data = dataRead1;
+                socketChannel.close();
+            }
+        } catch (ClassNotFoundException ex) {
+            ex.printStackTrace();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        close();
+        return data;
+    }
+
+    private synchronized void close()
+    {
+        try {
+            if (socketChannel != null) socketChannel.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
 }

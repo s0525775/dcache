@@ -23,8 +23,14 @@ import diskCacheV111.vehicles.ProtocolInfo;
 import diskCacheV111.vehicles.StorageInfo;
 import dmg.cells.nucleus.CellEndpoint;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.BindException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import org.dcache.acl.ACLException;
 import org.dcache.pool.movers.IoMode;
 import org.dcache.pool.movers.MoverChannel;
@@ -41,6 +47,11 @@ public class CDMIMover implements MoverProtocol
     private final CellEndpoint cell;
     private CDMIProtocolInfo pi;
     private MoverChannel<CDMIProtocolInfo> channel;
+    private ServerSocketChannel serverSocketChannel = null;
+    private SocketChannel socketChannel = null;
+    private ObjectOutputStream  oos = null;
+    private ObjectInputStream ois = null;
+    private static final int port = 9999;
     private String strData = "";
 
     public CDMIMover(CellEndpoint endpoint)
@@ -56,15 +67,31 @@ public class CDMIMover implements MoverProtocol
         StorageInfo storage = fileAttributes.getStorageInfo();
         pi = (CDMIProtocolInfo) protocol;
 
-        _log.trace("\n\trunIO()\n\tprotocol="+protocol+",\n\tStorageInfo="+storage+",\n\tPnfsId="+pnfsId+",\n\taccess="+access);
+        _log.trace("\n\trunIO()\n\tprotocol={},\n\tStorageInfo={},\n\tPnfsId={},\n\taccess={}"+access, protocol, storage, pnfsId, access);
+
+        try {
+            serverSocketChannel = ServerSocketChannel.open();
+            serverSocketChannel.socket().bind(new InetSocketAddress(port));
+        } catch (BindException ex) {
+            //Do nothing here, might occur if Client tries to reconnect
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
 
         channel = new MoverChannel<>(access, fileAttributes, pi, diskFile, allocator);
         if (access == IoMode.WRITE) {
             writeFile();
         } else if (access == IoMode.READ) {
-            readFileAsBytes();
+            readFile();
         }
-    }
+
+        try {
+            if (socketChannel != null) socketChannel.close();
+            if (serverSocketChannel != null) serverSocketChannel.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+   }
 
     @Override
     public long getBytesTransferred()
@@ -84,58 +111,33 @@ public class CDMIMover implements MoverProtocol
         return channel.getLastTransferred();
     }
 
-    private void writeFile() throws ACLException
+    private synchronized void writeFile()
     {
+        try {
+            socketChannel = serverSocketChannel.accept();
+            if ((socketChannel != null) && socketChannel.isOpen() && socketChannel.isConnected()) {
+                ois = new ObjectInputStream(socketChannel.socket().getInputStream());
+                String dataRead1 = (String) ois.readObject();
+                strData = dataRead1;
+                ois.close();
+            }
+        } catch (ClassNotFoundException ex) {
+            ex.printStackTrace();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
         if (channel.isOpen()) {
             try {
-                strData = DcacheDataTransfer.getDataAsString();
                 ByteBuffer data = stringToByteBuffer(strData);
                 channel.write(data);
-                _log.trace("CDMIMover data written:|" + strData + "|[" + strData.length() + " bytes]");
-                DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
+                _log.trace("CDMIMover data written:[{}|[{} bytes]", strData, strData.length());
             } catch (IOException ex) {
-                _log.error("Data could not be written into CDMI channel, exception is: " + ex.getMessage());
+                _log.error("Data could not be written into CDMI channel, {}", ex.getMessage());
             }
         }
     }
 
-    private void readFileAsBytes() throws ACLException
-    {
-        if (channel.isOpen()) {
-            try {
-                int dataSize = (int) channel.getFileAttributes().getSize();
-                if (dataSize > 0) {
-                    channel.position(0);
-                    ByteBuffer data = ByteBuffer.allocate(dataSize);
-                    channel.read(data);
-                    DcacheDataTransfer.setData(data.array());
-                    strData = byteBufferToString(data);
-                    _log.trace("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
-                    DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                    DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                    DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                    DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                    DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                    DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                    DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                    DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
-                }
-            } catch (IOException ex) {
-                _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
-            }
-        }
-    }
-
-    private void readFileAsString() throws ACLException
+    private synchronized void readFile()
     {
         if (channel.isOpen()) {
             try {
@@ -145,21 +147,22 @@ public class CDMIMover implements MoverProtocol
                     ByteBuffer data = ByteBuffer.allocate(dataSize);
                     channel.read(data);
                     strData = byteBufferToString(data);
-                    _log.trace("CDMIMover data read:|" + strData + "|[" + dataSize + " bytes]");
-                    DcacheDataTransfer.setData(strData);
-                    DcacheDataTransfer.setPnfsId(channel.getFileAttributes().getPnfsId());
-                    DcacheDataTransfer.setSize(channel.getFileAttributes().getSize());
-                    DcacheDataTransfer.setOwner(channel.getFileAttributes().getOwner());
-                    DcacheDataTransfer.setAccessTime(channel.getFileAttributes().getAccessTime());
-                    DcacheDataTransfer.setChangeTime(channel.getFileAttributes().getChangeTime());
-                    DcacheDataTransfer.setModificationTime(channel.getFileAttributes().getModificationTime());
-                    DcacheDataTransfer.setCreationTime(channel.getFileAttributes().getCreationTime());
-                    DcacheDataTransfer.setFileType(channel.getFileAttributes().getFileType());
-                    DcacheDataTransfer.setACL(channel.getFileAttributes().getAcl());
+                    _log.trace("CDMIMover data read:[{}|[{} bytes]", strData, strData.length());
                 }
             } catch (IOException ex) {
-                _log.error("Data could not be read from CDMI channel, exception is: " + ex.getMessage());
+                _log.error("Data could not be read from CDMI channel, {}", ex.getMessage());
             }
+        }
+        try {
+            socketChannel = serverSocketChannel.accept();
+            if ((socketChannel != null) && socketChannel.isOpen() && socketChannel.isConnected()) {
+                oos = new ObjectOutputStream(socketChannel.socket().getOutputStream());
+                String dataWrite1 = strData;
+                oos.writeObject(dataWrite1);
+                oos.close();
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 
