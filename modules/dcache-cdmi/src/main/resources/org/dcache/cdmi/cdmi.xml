@@ -59,6 +59,7 @@
         <constructor-arg value="2"/>
     </bean>
 
+    <!--
     <bean id="login-stub" class="org.dcache.cells.CellStub">
         <description>Login serviceunication stub</description>
         <property name="destination" value="${webdav.service.gplazma}"/>
@@ -86,6 +87,7 @@
           factory-method="getBannedCipherSuitesFromConfigurationValue">
         <constructor-arg value="${webdav.authn.ciphers}"/>
     </bean>
+    -->
 
     <!--
     <bean id="cdmi-door" class="org.dcache.cdmi.door.CDMIDoor">
