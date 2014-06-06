@@ -164,7 +164,7 @@ public class DcachePathResource
         if (containerDao.isContainer(path)) {
           // if container build container browser page
           try {
-            Container container = containerDao.findByPath(path);
+            Container container = (DcacheContainer) containerDao.findByPath(path);
             if (container == null) {
               return Response.status(Response.Status.NOT_FOUND).build();
             } else {
@@ -179,7 +179,7 @@ public class DcachePathResource
           }
         }
         try {
-          DataObject dObj = dataObjectDao.findByPath(path);
+          DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
           if (dObj == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
           } else {
@@ -259,7 +259,7 @@ public class DcachePathResource
         if (containerDao.isContainer(path)) {
             // if container build container browser page
             try {
-                Container container = containerDao.findByPath(path);
+                Container container = (DcacheContainer) containerDao.findByPath(path);
                 if (container == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
@@ -275,13 +275,14 @@ public class DcachePathResource
         } else {
             // if object, send out the object in it's native form
             try {
-                DataObject dObj = dataObjectDao.findByPath(path);
+                DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
                 if (dObj == null) {
                     return Response.status(Response.Status.NOT_FOUND).build();
                 } else {
                     // make http response
                     // build a JSON representation
-                    String respStr = dObj.getValue();//Remark: Switch to dObj.toJsonWithMetadata() if Metadata shall be showed instead
+                    //String respStr = dObj.getValue();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
+                    String respStr = dObj.toJson();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
                     _log.trace("MimeType={}", dObj.getMimetype());
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
@@ -329,7 +330,7 @@ public class DcachePathResource
 
         try {
             containerRequest.fromJson(bytes, false);
-            Container container = containerDao.createByPath(path,
+            Container container = (DcacheContainer) containerDao.createByPath(path,
                     containerRequest);
             if (container == null) {
                 return Response.status(Response.Status.BAD_REQUEST).build();
@@ -379,7 +380,7 @@ public class DcachePathResource
         _log.trace("Path={}\n{}", path, inBuffer);
 
         try {
-            DataObject dObj = dataObjectDao.findByPath(path);
+            DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
             if (dObj == null) {
                 dObj = new DcacheDataObject();
 
@@ -389,7 +390,7 @@ public class DcachePathResource
                 if (dObj.getValue() == null) {
                     dObj.setValue("== N/A ==");
                 }
-                dObj = dataObjectDao.createByPath(path, dObj);
+                dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
                 // return representation
                 String respStr = dObj.toJson();
                 // make http response
@@ -467,7 +468,7 @@ public class DcachePathResource
 
             _log.trace("objectId={}, objectPath={}", objectId, objectPath);
 
-            dObj = dataObjectDao.createByPath(objectPath, dObj);
+            dObj = (DcacheDataObject) dataObjectDao.createByPath(objectPath, dObj);
 
             if (containerRequest) {
                 return Response.ok().header("Location",

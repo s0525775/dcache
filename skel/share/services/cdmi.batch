@@ -1,9 +1,10 @@
 check -strong cdmi.cell.name
+check -strong cdmi.cell.export
 check -strong cdmi.service.poolmanager
 check -strong cdmi.service.poolmanager.timeout
 check -strong cdmi.service.poolmanager.timeout.unit
 
-create org.dcache.cells.UniversalSpringCell "${cdmi.cell.name}" \
+create org.dcache.cells.UniversalSpringCell ${cdmi.cell.name} \
     "classpath:org/dcache/cdmi/cdmi.xml   \
       -poolmanager=\"${poolmanager}\"     \
-    "
+      -export=${cdmi.cell.export} -cellClass=CDMIDoor"

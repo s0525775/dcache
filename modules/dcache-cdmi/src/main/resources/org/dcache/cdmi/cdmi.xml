@@ -47,10 +47,55 @@
     </bean>
 
     <bean id="pool-manager-stub" class="org.dcache.cells.CellStub">
-        <description>Communication stub for pool manager</description>
-        <property name="destination" value="${poolmanager}" />
-        <property name="timeout" value="30000" />
+        <description>PoolManager communication stub</description>
+        <property name="destination" value="${cdmi.service.poolmanager}"/>
+        <property name="timeout" value="${cdmi.service.poolmanager.timeout}"/>
+        <property name="timeoutUnit" value="${cdmi.service.poolmanager.timeout.unit}"/>
     </bean>
+
+    <bean id="scheduled-thread-pool" class="java.util.concurrent.Executors"
+        factory-method="newScheduledThreadPool" destroy-method="shutdown">
+        <description>Thread pool for scheduled activities</description>
+        <constructor-arg value="2"/>
+    </bean>
+
+    <bean id="login-stub" class="org.dcache.cells.CellStub">
+        <description>Login serviceunication stub</description>
+        <property name="destination" value="${webdav.service.gplazma}"/>
+        <property name="timeout" value="${webdav.service.gplazma.timeout}"/>
+        <property name="timeoutUnit" value="${webdav.service.gplazma.timeout.unit}"/>
+    </bean>
+
+    <bean id="lb" class="dmg.cells.services.login.LoginBrokerHandler"
+        init-method="start" destroy-method="stop">
+        <description>Registers the door with a LoginBroker</description>
+        <property name="executor" ref="scheduled-thread-pool"/>
+        <property name="updateTime" value="${webdav.service.loginbroker.update-period}"/>
+        <property name="updateTimeUnit" value="${webdav.service.loginbroker.update-period.unit}"/>
+        <property name="updateThreshold" value="${webdav.service.loginbroker.update-threshold}"/>
+        <property name="protocolEngine" value="org.dcache.webdav.DcacheResourceFactory"/>
+        <property name="protocolVersion" value="${webdav.service.loginbroker.version}"/>
+        <property name="protocolFamily" value="${webdav.service.loginbroker.family}"/>
+        <property name="address" value="#{ '${webdav.net.listen}'.equals('any') ? null : '${webdav.net.listen}' }"/>
+        <property name="port" value="${webdav.net.port}"/>
+        <property name="loginBrokers" value="${webdav.service.loginbroker}"/>
+        <property name="root" value="${webdav.root}"/>
+    </bean>
+
+    <bean id="banned-ciphers" class="org.dcache.util.Crypto"
+          factory-method="getBannedCipherSuitesFromConfigurationValue">
+        <constructor-arg value="${webdav.authn.ciphers}"/>
+    </bean>
+
+    <!--
+    <bean id="cdmi-door" class="org.dcache.cdmi.door.CDMIDoor">
+        <property name="executor" ref="scheduled-thread-pool"/>
+        <property name="pnfsStub" ref="pnfs-stub"/>
+        <property name="poolMgrStub" ref="pool-manager-stub"/>
+        <property name="poolStub" ref="pool-stub"/>
+        <property name="billingStub" ref="billing-stub"/>
+    </bean>
+    -->
 
     <!-- JETTY CONFIG -->
 
@@ -123,6 +168,7 @@
 
     <bean id="dataObjectDao" class="org.dcache.cdmi.dao.impl.DcacheDataObjectDao">
         <property name="baseDirectoryName" value="/disk"/>
+        <property name="executor" ref="scheduled-thread-pool"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
         <property name="listDirectoryHandler" ref="list-handler"/>
         <property name="poolMgrStub" ref="pool-manager-stub"/>
