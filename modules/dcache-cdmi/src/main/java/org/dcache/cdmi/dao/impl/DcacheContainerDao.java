@@ -87,6 +87,7 @@ public class DcacheContainerDao extends AbstractCellComponent
     private PnfsHandler pnfsHandler;
     private ListDirectoryHandler listDirectoryHandler;
     private PnfsId pnfsId;
+    private boolean _isAnonymousListingAllowed;
 
     /**
      * <p>
@@ -139,6 +140,16 @@ public class DcacheContainerDao extends AbstractCellComponent
     public void setRecreate(boolean recreate)
     {
         this.recreate = recreate;
+    }
+
+    public void setAnonymousListing(boolean isAllowed)
+    {
+        _isAnonymousListingAllowed = isAllowed;
+    }
+
+    public boolean isAnonymousListing()
+    {
+        return _isAnonymousListingAllowed;
     }
 
     //

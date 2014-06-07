@@ -60,32 +60,48 @@
     </bean>
 
     <!--
+    <bean id="login-strategy" class="org.dcache.auth.UnionLoginStrategy">
+        <description>Processes login requests</description>
+        <property name="loginStrategies">
+            <list>
+                <bean class="org.dcache.services.login.RemoteLoginStrategy">
+                    <property name="cellStub" ref="login-stub"/>
+                </bean>
+            </list>
+        </property>
+        <property name="anonymousAccess" value="${cdmi.authz.anonymous-operations}"/>
+    </bean>
+
     <bean id="login-stub" class="org.dcache.cells.CellStub">
         <description>Login serviceunication stub</description>
-        <property name="destination" value="${webdav.service.gplazma}"/>
-        <property name="timeout" value="${webdav.service.gplazma.timeout}"/>
-        <property name="timeoutUnit" value="${webdav.service.gplazma.timeout.unit}"/>
+        <property name="destination" value="${cdmi.service.gplazma}"/>
+        <property name="timeout" value="${cdmi.service.gplazma.timeout}"/>
+        <property name="timeoutUnit" value="${cdmi.service.gplazma.timeout.unit}"/>
+    </bean>
+
+    <bean id="logging-filter" class="org.dcache.cdmi.LoggingFilter">
+        <description>Logs all requests</description>
     </bean>
 
     <bean id="lb" class="dmg.cells.services.login.LoginBrokerHandler"
         init-method="start" destroy-method="stop">
         <description>Registers the door with a LoginBroker</description>
         <property name="executor" ref="scheduled-thread-pool"/>
-        <property name="updateTime" value="${webdav.service.loginbroker.update-period}"/>
-        <property name="updateTimeUnit" value="${webdav.service.loginbroker.update-period.unit}"/>
-        <property name="updateThreshold" value="${webdav.service.loginbroker.update-threshold}"/>
-        <property name="protocolEngine" value="org.dcache.webdav.DcacheResourceFactory"/>
-        <property name="protocolVersion" value="${webdav.service.loginbroker.version}"/>
-        <property name="protocolFamily" value="${webdav.service.loginbroker.family}"/>
-        <property name="address" value="#{ '${webdav.net.listen}'.equals('any') ? null : '${webdav.net.listen}' }"/>
-        <property name="port" value="${webdav.net.port}"/>
-        <property name="loginBrokers" value="${webdav.service.loginbroker}"/>
-        <property name="root" value="${webdav.root}"/>
+        <property name="updateTime" value="${cdmi.service.loginbroker.update-period}"/>
+        <property name="updateTimeUnit" value="${cdmi.service.loginbroker.update-period.unit}"/>
+        <property name="updateThreshold" value="${cdmi.service.loginbroker.update-threshold}"/>
+        <property name="protocolEngine" value="org.dcache.cdmi.DcacheResourceFactory"/>
+        <property name="protocolVersion" value="${cdmi.service.loginbroker.version}"/>
+        <property name="protocolFamily" value="${cdmi.service.loginbroker.family}"/>
+        <property name="address" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
+        <property name="port" value="${cdmi.net.port}"/>
+        <property name="loginBrokers" value="${cdmi.service.loginbroker}"/>
+        <property name="root" value="${cdmi.root}"/>
     </bean>
 
     <bean id="banned-ciphers" class="org.dcache.util.Crypto"
           factory-method="getBannedCipherSuitesFromConfigurationValue">
-        <constructor-arg value="${webdav.authn.ciphers}"/>
+        <constructor-arg value="${cdmi.authn.ciphers}"/>
     </bean>
     -->
 
@@ -121,9 +137,10 @@
         </httpj:engine>
     </httpj:engine-factory>
 
-    <jaxrs:server id="cdmiService" address="http://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.port}/" depends-on="cxf"
-                  beanNames="objectIdResource pathResource">
+    <jaxrs:server id="cdmiService" address="http://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.port}/"
+                  depends-on="cxf" beanNames="objectIdResource pathResource">
         <jaxrs:providers>
+            <ref bean="securityFilter"/>
             <ref bean="badRequestExceptionMapper"/>
             <ref bean="conflictExceptionMapper"/>
             <ref bean="containerProvider"/>
@@ -152,6 +169,7 @@
         <property name="dataObjectDao" ref="dataObjectDao"/>
     </bean>
 
+    <bean id="securityFilter" class="org.dcache.cdmi.filter.SecurityFilter"/>
     <bean id="badRequestExceptionMapper" class="org.snia.cdmiserver.provider.BadRequestExceptionMapper"/>
     <bean id="conflictExceptionMapper" class="org.snia.cdmiserver.provider.ConflictExceptionMapper"/>
     <bean id="containerProvider" class="org.snia.cdmiserver.provider.ContainerProvider"/>
@@ -163,6 +181,7 @@
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.impl.DcacheContainerDao">
         <property name="baseDirectoryName" value="/disk"/>
+        <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/>
         <property name="recreate" value="false"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
         <property name="listDirectoryHandler" ref="list-handler"/>
@@ -170,6 +189,7 @@
 
     <bean id="dataObjectDao" class="org.dcache.cdmi.dao.impl.DcacheDataObjectDao">
         <property name="baseDirectoryName" value="/disk"/>
+        <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/>
         <property name="executor" ref="scheduled-thread-pool"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
         <property name="listDirectoryHandler" ref="list-handler"/>

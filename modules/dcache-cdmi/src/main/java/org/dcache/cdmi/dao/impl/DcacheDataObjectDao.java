@@ -157,6 +157,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private boolean _doRedirectOnRead = true;
     private boolean _doRedirectOnWrite = true;
     private boolean _isOverwriteAllowed;
+    private boolean _isAnonymousListingAllowed;
     private TransferRetryPolicy _retryPolicy =
         TransferRetryPolicies.tryOncePolicy(_moverTimeout, _moverTimeoutUnit);
 
@@ -234,8 +235,25 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         this.billingStub = checkNotNull(billingStub);
     }
 
+    public void setAnonymousListing(boolean isAllowed)
+    {
+        _isAnonymousListingAllowed = isAllowed;
+    }
+
+    public boolean isAnonymousListing()
+    {
+        return _isAnonymousListingAllowed;
+    }
+
+    public String getInternalAddress()
+    {
+        return _internalAddress.getHostAddress();
+    }
+
     /**
      * Message handler for redirect messages from the pools.
+     * @param envelope
+     * @param message
      */
     public void messageArrived(CellMessage envelope,
                                HttpDoorUrlInfoMessage message)
@@ -249,6 +267,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     /**
      * Message handler for transfer completion messages from the
      * pools.
+     * @param message
      */
     public void messageArrived(DoorTransferFinishedMessage message)
     {
@@ -256,11 +275,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         if (transfer != null) {
             transfer.finished(message);
         }
-    }
-
-    public String getInternalAddress()
-    {
-        return _internalAddress.getHostAddress();
     }
 
     public DcacheDataObjectDao() throws UnknownHostException
