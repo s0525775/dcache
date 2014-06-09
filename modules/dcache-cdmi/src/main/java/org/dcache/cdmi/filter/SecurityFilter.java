@@ -41,6 +41,7 @@ import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PermissionDeniedCacheException;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -55,15 +56,21 @@ import java.util.StringTokenizer;
 import java.util.logging.Level;
 import javax.security.auth.Subject;
 import javax.servlet.ServletException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.cxf.configuration.security.AuthorizationPolicy;
-//import org.apache.cxf.configuration.security.AuthorizationPolicy;
 import org.apache.cxf.jaxrs.ext.RequestHandler;
 import org.apache.cxf.jaxrs.model.ClassResourceInfo;
 import org.apache.cxf.message.Message;
-//import org.apache.cxf.message.Message;
+import org.apache.cxf.security.SecurityContext;
+import org.apache.cxf.service.Service;
+import org.apache.cxf.service.model.BindingOperationInfo;
+import org.apache.cxf.interceptor.security.AccessDeniedException;
+import org.apache.cxf.jaxrs.utils.HttpUtils;
+import org.apache.cxf.service.invoker.MethodDispatcher;
 import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.Origin;
@@ -172,15 +179,35 @@ public class SecurityFilter implements RequestHandler
                     .build();
         }
 
+        SecurityContext securityContext = (SecurityContext) msg.get(SecurityContext.class);
+        if (securityContext == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity("Access denied for this resource.")
+                    .header("WWW-Authenticate", "Basic")
+                    .build();
+        }
+
         String username = policy.getUserName();
         String password = policy.getPassword();
 
-        System.out.println("Username:" + username);
-        System.out.println("Password:" + password);
-        System.out.println("Auth1: " + policy.getAuthorization());
-        System.out.println("Auth2: " + policy.getAuthorizationType());
-        System.out.println("Cri1: " + cri.getParent());
-        System.out.println("Cri2: " + cri.getPath());
+        String endpointAddress = HttpUtils.getEndpointAddress(msg);
+        Object basePathProperty = msg.get(Message.BASE_PATH);
+        Object requestMethod = msg.get(Message.HTTP_REQUEST_METHOD);
+        Object requestURL = msg.get(Message.REQUEST_URL);
+        Object requestURI = msg.get(Message.REQUEST_URI);
+        Object pathInfo = msg.get(Message.PATH_INFO);
+
+        System.out.println("Username: " + username);
+        System.out.println("Password: " + password);
+        System.out.println("AuthType: " + policy.getAuthorizationType());
+        System.out.println("Method: " + getTargetMethod(msg).getName());
+        System.out.println("SC: " + securityContext.toString());
+        System.out.println("Endpoint: " + endpointAddress);
+        System.out.println("BasePath: " + basePathProperty.toString());
+        System.out.println("requestMethod: " + requestMethod.toString());
+        System.out.println("requestURL: " + requestURL.toString());
+        System.out.println("requestURI: " + requestURI.toString());
+        System.out.println("pathInfo: " + pathInfo.toString());
 
         /*
         Subject subject = new Subject();
@@ -246,6 +273,20 @@ public class SecurityFilter implements RequestHandler
         */
         //Temp:
         return Response.status(401).header("WWW-Authenticate", "Basic").build();
+    }
+
+    protected Method getTargetMethod(Message m) {
+        BindingOperationInfo bop = m.getExchange().get(BindingOperationInfo.class);
+        if (bop != null) {
+            MethodDispatcher md = (MethodDispatcher)
+                m.getExchange().get(Service.class).get(MethodDispatcher.class.getName());
+            return md.getMethod(bop);
+        }
+        Method method = (Method)m.get("org.apache.cxf.resource.method");
+        if (method != null) {
+            return method;
+        }
+        throw new AccessDeniedException("Method is not available : Unauthorized");
     }
 
     /*
