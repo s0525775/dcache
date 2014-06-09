@@ -15,6 +15,21 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/*
+    <dependency>
+      <groupId>com.sun.jersey</groupId>
+      <artifactId>jersey-server</artifactId>
+      <version>1.8</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>com.sun.jersey.contribs</groupId>
+      <artifactId>jersey-spring</artifactId>
+      <version>1.8</version>
+    </dependency>
+*/
+
 package org.dcache.cdmi.filter;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -32,23 +47,20 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import static java.util.Arrays.asList;
-import java.util.List;
 import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import javax.security.auth.Subject;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.ws.rs.HttpMethod;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.SecurityContext;
-import javax.ws.rs.core.UriInfo;
 import org.apache.commons.httpclient.HttpStatus;
+import org.apache.cxf.configuration.security.AuthorizationPolicy;
+//import org.apache.cxf.configuration.security.AuthorizationPolicy;
+import org.apache.cxf.jaxrs.ext.RequestHandler;
+import org.apache.cxf.jaxrs.model.ClassResourceInfo;
+import org.apache.cxf.message.Message;
+//import org.apache.cxf.message.Message;
 import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.Origin;
@@ -62,42 +74,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 //import org.snia.cdmiserver.exception.UnauthorizedException;
 
-/*
-    <dependency>
-      <groupId>javax.ws.rs</groupId>
-      <artifactId>javax.ws.rs-api</artifactId>
-      <version>2.0</version>
-    </dependency>
-*/
-
 /**
- * SecurityFilter for CDMI door. Is called. Throws error message through Maven, conflict between javax.ws.rs-api and jsr311-api.
- * javax.ws.rs-api provides similar functions like jsr311-api.
- * http://comments.gmane.org/gmane.comp.apache.cxf.user/25132
+ * SecurityFilter3 for CDMI door(3). Error: Isn't called/executed from Spring. Jersey implementation (as SNIA does).
  */
-
-/* When replacing jsr311-api by javax.ws.rs-api, or when adding both jsr311-api and javax.ws.rs-api in POM file:
- * CDMI Server isn't started.
- * java.lang.RuntimeException: URL [file:/DCACHE/dcache/packages/system-test/target/dcache/share/services/cdmi.batch]: line 10: java.lang.RuntimeException: dmg.util.CommandThrowableException: (3) Failed to create bean 'cdmiService' : javax.ws.rs.BindingPriority
- *      at dmg.cells.nucleus.CellShell.execute(CellShell.java:1653) ~[cells-2.10.0-SNAPSHOT.jar:2.10.0-SNAPSHOT]
- *      ....
- */
-
-/* When only leaving jsr311-api in POM file and when not adding javax.ws.rs-api there (as before):
- * CDMI Server is started and Filter is executed till gPlazma.
- * java.lang.NoSuchMethodError: javax.ws.rs.core.Response.getHeaders()Ljavax/ws/rs/core/MultivaluedMap;
- *      at org.apache.cxf.jaxrs.utils.JAXRSUtils.setMessageContentType(JAXRSUtils.java:1595) ~[cxf-rt-frontend-jaxrs-2.7.6.jar:2.7.6]
- *      ....
- *      at org.apache.cxf.phase.PhaseInterceptorChain.doIntercept(PhaseInterceptorChain.java:271) ~[cxf-api-2.7.6.jar:2.7.6]
- *      ....
- *      at org.apache.cxf.transport.http_jetty.JettyHTTPHandler.handle(JettyHTTPHandler.java:72) ~[cxf-rt-transports-http-jetty-2.7.6.jar:2.7.6]
- *      at org.eclipse.jetty.server.handler.ContextHandler.doHandle(ContextHandler.java:1088) ~[jetty-server-8.1.14.v20131031.jar:8.1.14.v20131031]
- *      ....
- */
-
-// Remark: The cxf version 2.7.6 is dependent from the Jetty version.
-
-public class SecurityFilter implements ContainerRequestFilter
+public class SecurityFilter implements RequestHandler
 {
 
     private final Logger _log = LoggerFactory.getLogger(SecurityFilter.class);
@@ -176,81 +156,97 @@ public class SecurityFilter implements ContainerRequestFilter
         return Objects.toString(_uploadPath, null);
     }
 
-    /**
-     * <p>The URI information for this request.  This information may be
-     * accessed from an <code>Authorizer</code> to make request specific
-     * role determinations.</p>
-     */
-    @Context
-    UriInfo uriInfo = null;
-
-    @Context
-    private HttpServletRequest servletRequest;
-
-    @Context
-    HttpServletResponse response;
-
     @Override
-    public void filter(ContainerRequestContext requestContext) throws IOException
+    public Response handleRequest(Message msg, ClassResourceInfo cri)
     {
         System.out.println("Authentication Process...");
 
+        AuthorizationPolicy policy = (AuthorizationPolicy) msg.get(AuthorizationPolicy.class);
+        if (policy == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity("Access denied for this resource.")
+                    .header("WWW-Authenticate", "Basic")
+                    .build();
+        }
+
+        String username = policy.getUserName();
+        String password = policy.getPassword();
+
+        System.out.println("Username:" + username);
+        System.out.println("Password:" + password);
+        System.out.println("Auth1: " + policy.getAuthorization());
+        System.out.println("Auth2: " + policy.getAuthorizationType());
+        System.out.println("Cri1: " + cri.getParent());
+        System.out.println("Cri2: " + cri.getPath());
+
+        /*
         Subject subject = new Subject();
 
-        if (!isAllowedMethod(requestContext.getMethod())) {
-            _log.debug("Failing {} from {} as door is read-only", requestContext.getMethod(), uriInfo.getBaseUri().getHost());
-            //manager.getResponseHandler().respondMethodNotAllowed(new EmptyResource(request), response, request);
-            requestContext.abortWith(Response
-                .status(Response.Status.UNAUTHORIZED)
-                .entity("Access denied for this resource.")
-                .build());
-            return;
+        if (!isAllowedMethod(request.getMethod())) {
+            try {
+                _log.debug("Failing {} from {} as door is read-only", request.getMethod(), uriInfo.getBaseUri().getHost());
+                //manager.getResponseHandler().respondMethodNotAllowed(new EmptyResource(request), response, request);
+                Response.status(401).header("WWW-Authenticate", "Basic").build();
+                servletResponse.sendError(HttpStatus.SC_UNAUTHORIZED, "Access denied for this resource.");
+            } catch (IOException ex) {
+                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            //request.abortWith(Response
+            //    .status(Response.Status.UNAUTHORIZED)
+            //    .entity("Access denied for this resource.")
+            //    .build());
+            return null;
         }
 
         try {
             addX509ChainToSubject(servletRequest, subject);
             addOriginToSubject(servletRequest, subject);
-            addPasswordCredentialToSubject(requestContext, subject);
+            addPasswordCredentialToSubject(request, subject);
 
             LoginReply login = _loginStrategy.login(subject);
             subject = login.getSubject();
 
-            if (!isAuthorizedMethod(requestContext.getMethod(), login)) {
+            if (!isAuthorizedMethod(request.getMethod(), login)) {
                 throw new PermissionDeniedCacheException("Permission denied: read-only user");
             }
 
-            checkRootPath(requestContext, login);
+            checkRootPath(request, login);
 
-            /* Add the origin of the request to the subject. This
-             * ought to be processed in the LoginStrategy, but our
-             * LoginStrategies currently do not process the Origin.
-             */
+            // Add the origin of the request to the subject. This
+            // ought to be processed in the LoginStrategy, but our
+            // LoginStrategies currently do not process the Origin.
             addOriginToSubject(servletRequest, subject);
 
-            /* Process the request as the authenticated user.
-             */
+            // Process the request as the authenticated user.
             Subject.doAs(subject, new PrivilegedAction<Void>() {
                     @Override
                     public Void run()
                         {
-                            response.setStatus(HttpStatus.SC_OK);
                             try {
-                                servletRequest.authenticate(response);
+                                servletResponse.setStatus(HttpStatus.SC_OK);
+                                servletRequest.authenticate(servletResponse);
+                                //filterChain.process(requestContext, response);
                             } catch (IOException | ServletException ex) {
                                 java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
                             }
-                            //filterChain.process(requestContext, response);
                             return null;
                         }
                 });
         } catch (CacheException e) {
-            _log.error("Internal server error: " + e);
-            response.sendError(HttpStatus.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+            try {
+                _log.error("Internal server error: " + e);
+                servletResponse.sendError(HttpStatus.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+            } catch (IOException ex) {
+                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
-
+        */
+        //Temp:
+        return Response.status(401).header("WWW-Authenticate", "Basic").build();
     }
 
-    private void checkRootPath(ContainerRequestContext request, LoginReply login) throws CacheException
+    /*
+    private void checkRootPath(ContainerRequest request, LoginReply login) throws CacheException
     {
         FsPath userRoot = new FsPath();
         FsPath userHome = new FsPath();
@@ -262,7 +258,7 @@ public class SecurityFilter implements ContainerRequestFilter
             }
         }
 
-        String path = request.getUriInfo().getAbsolutePath().getPath();
+        String path = uriInfo.getAbsolutePath().getPath();
         FsPath fullPath = new FsPath(_rootPath, new FsPath(path));
         if (!fullPath.startsWith(userRoot) &&
                 (_uploadPath == null || !fullPath.startsWith(_uploadPath))) {
@@ -273,10 +269,10 @@ public class SecurityFilter implements ContainerRequestFilter
             try {
                 FsPath redirectFullPath = new FsPath(userRoot, userHome);
                 String redirectPath = _rootPath.relativize(redirectFullPath).toString();
-                URI uri = request.getUriInfo().getAbsolutePath();
+                URI uri = uriInfo.getAbsolutePath();
                 URI redirect = new URI(uri.getScheme(), uri.getAuthority(), redirectPath, null, null);
                 try {
-                    response.sendRedirect(redirect.toString());
+                    servletResponse.sendRedirect(redirect.toString());
                 } catch (IOException ex) {
                     java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -342,22 +338,27 @@ public class SecurityFilter implements ContainerRequestFilter
         }
     }
 
-    private void addPasswordCredentialToSubject(ContainerRequestContext request, Subject subject)
+    private void addPasswordCredentialToSubject(ContainerRequest request, Subject subject)
     {
-        SecurityContext auth = request.getSecurityContext();
+        final String authorization = servletRequest.getHeader(AUTHORIZATION_PROPERTY);
+        System.out.println("Auth: " + authorization);
 
-        final MultivaluedMap<String, String> headers = request.getHeaders();
-        final List<String> authorization = headers.get(AUTHORIZATION_PROPERTY);
-
-        if (auth == null || authorization == null || authorization.isEmpty()) {
-            request.abortWith(Response
-                .status(Response.Status.UNAUTHORIZED)
-                .entity("Access denied for this resource.")
-                .build());
+        if (isNullOrEmpty(authorization)) {
+            try {
+                _log.debug("Failing {} from {} as door is read-only", request.getMethod(), uriInfo.getBaseUri().getHost());
+                //manager.getResponseHandler().respondMethodNotAllowed(new EmptyResource(request), response, request);
+                servletResponse.sendError(HttpStatus.SC_UNAUTHORIZED, "Access denied for this resource.");
+                //request.abortWith(Response
+                //    .status(Response.Status.UNAUTHORIZED)
+                //    .entity("Access denied for this resource.")
+                //    .build());
+            } catch (IOException ex) {
+                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+            }
             return;
         }
 
-        final String encodedUserPassword = authorization.get(0).replaceFirst(auth.getAuthenticationScheme() + " ", "");
+        final String encodedUserPassword = authorization.replaceFirst(request.getAuthenticationScheme() + " ", "");
 
         //Decode username and password
         String usernameAndPassword = Base64.byteArrayToBase64(encodedUserPassword.getBytes());
@@ -371,10 +372,11 @@ public class SecurityFilter implements ContainerRequestFilter
         System.out.println(username);
         System.out.println(password);
 
-        if (auth.getAuthenticationScheme().equals(SecurityContext.BASIC_AUTH) && _isBasicAuthenticationEnabled) {
+        if (request.getAuthenticationScheme().equals(SecurityContext.BASIC_AUTH) && _isBasicAuthenticationEnabled) {
             PasswordCredential credential = new PasswordCredential(username, password);
             subject.getPrivateCredentials().add(credential);
         }
     }
+    */
 
 }
