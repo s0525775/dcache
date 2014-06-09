@@ -16,19 +16,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
-    <dependency>
-      <groupId>com.sun.jersey</groupId>
-      <artifactId>jersey-server</artifactId>
-      <version>1.8</version>
-      <type>jar</type>
-    </dependency>
-    <dependency>
-      <groupId>com.sun.jersey.contribs</groupId>
-      <artifactId>jersey-spring</artifactId>
-      <version>1.8</version>
-    </dependency>
-*/
+// http://cxf.apache.org/docs/secure-jax-rs-services.html#SecureJAX-RSServices-Authentication
+// Has to be CXF 2.7.10 partially since it needs to be compatible with the newer Jetty-Server and since needs to be compatible
+// with JSR311 (version 1.1.1) as well. I can't use JSR311 (version 2.0) since it wouldn't be compatible with the dCache Core.
+
+// More Info: http://cxf.apache.org/docs/jax-rs.html#JAX-RS-FromJAX-RS1.1to2.0
+// Quote: "CXF 2.7.10 and CXF 3.0.0 are expected to support existing JAX-RS 1.1 applications."
+
+// If I updated JSR311 to version 2.0, the error message would be (from dCache Core):
+// java.lang.RuntimeException: URL [file:/DCACHE/dcache/packages/system-test/target/dcache/share/services/cdmi.batch]: line 10: java.lang.RuntimeException: dmg.util.CommandThrowableException: (3) Failed to create bean 'cdmiService' : javax.ws.rs.BindingPriority
+//      at dmg.cells.nucleus.CellShell.execute(CellShell.java:1653) ~[cells-2.10.0-SNAPSHOT.jar:2.10.0-SNAPSHOT]
+//      ...
+
+// If I didn't use CXF version 2.7.10, the error message would be (affects cxf-rt-frontend-jaxrs in the main):
+// java.lang.NoSuchMethodError: javax.ws.rs.core.Response.getHeaders()Ljavax/ws/rs/core/MultivaluedMap;
+//      at org.apache.cxf.jaxrs.utils.JAXRSUtils.setMessageContentType(JAXRSUtils.java:1595) ~[cxf-rt-frontend-jaxrs-2.7.6.jar:2.7.6]
+//      ...
 
 package org.dcache.cdmi.filter;
 
