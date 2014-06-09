@@ -71,8 +71,7 @@ import org.slf4j.LoggerFactory;
 */
 
 /**
- * SecurityFilter for CDMI door. Is called. Throws error message through Maven, conflict between javax.ws.rs-api and jsr311-api.
- * javax.ws.rs-api provides similar functions like jsr311-api.
+ * SecurityFilter for CDMI door. Is called. Backup. Throws error message through Maven, conflict between javax.ws.rs-api and jsr311-api.
  * http://comments.gmane.org/gmane.comp.apache.cxf.user/25132
  */
 
@@ -97,10 +96,10 @@ import org.slf4j.LoggerFactory;
 
 // Remark: The cxf version 2.7.6 is dependent from the Jetty version.
 
-public class SecurityFilter implements ContainerRequestFilter
+public class SecurityFilter2 implements ContainerRequestFilter
 {
 
-    private final Logger _log = LoggerFactory.getLogger(SecurityFilter.class);
+    private final Logger _log = LoggerFactory.getLogger(SecurityFilter2.class);
     private static final String AUTHORIZATION_PROPERTY = "Authorization";
     private static final String X509_CERTIFICATE_ATTRIBUTE =
         "javax.servlet.request.X509Certificate";
@@ -117,7 +116,7 @@ public class SecurityFilter implements ContainerRequestFilter
      */
     private String _realm = "CDMI Service";
 
-    public SecurityFilter()
+    public SecurityFilter2()
     {
         _cf = CertificateFactories.newX509CertificateFactory();
     }
@@ -191,8 +190,7 @@ public class SecurityFilter implements ContainerRequestFilter
     HttpServletResponse response;
 
     @Override
-    public void filter(ContainerRequestContext requestContext) throws IOException
-    {
+    public void filter(ContainerRequestContext requestContext) throws IOException {
         System.out.println("Authentication Process...");
 
         Subject subject = new Subject();
@@ -237,7 +235,7 @@ public class SecurityFilter implements ContainerRequestFilter
                             try {
                                 servletRequest.authenticate(response);
                             } catch (IOException | ServletException ex) {
-                                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                                java.util.logging.Logger.getLogger(SecurityFilter2.class.getName()).log(Level.SEVERE, null, ex);
                             }
                             //filterChain.process(requestContext, response);
                             return null;
@@ -278,7 +276,7 @@ public class SecurityFilter implements ContainerRequestFilter
                 try {
                     response.sendRedirect(redirect.toString());
                 } catch (IOException ex) {
-                    java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                    java.util.logging.Logger.getLogger(SecurityFilter2.class.getName()).log(Level.SEVERE, null, ex);
                 }
             } catch (URISyntaxException e) {
                 throw new CacheException(e.getMessage(), e);
