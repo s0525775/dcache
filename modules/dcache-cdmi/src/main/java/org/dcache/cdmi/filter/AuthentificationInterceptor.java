@@ -46,22 +46,26 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.security.Principal;
 import java.security.PrivilegedAction;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import static java.util.Arrays.asList;
+import java.util.List;
 import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import javax.security.auth.Subject;
 import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.cxf.configuration.security.AuthorizationPolicy;
+import org.apache.cxf.interceptor.Fault;
 import org.apache.cxf.jaxrs.ext.RequestHandler;
 import org.apache.cxf.jaxrs.model.ClassResourceInfo;
 import org.apache.cxf.message.Message;
@@ -70,7 +74,12 @@ import org.apache.cxf.service.Service;
 import org.apache.cxf.service.model.BindingOperationInfo;
 import org.apache.cxf.interceptor.security.AccessDeniedException;
 import org.apache.cxf.jaxrs.utils.HttpUtils;
+import org.apache.cxf.phase.AbstractPhaseInterceptor;
+import org.apache.cxf.phase.Phase;
 import org.apache.cxf.service.invoker.MethodDispatcher;
+import org.apache.ws.security.WSSecurityEngineResult;
+import org.apache.ws.security.handler.WSHandlerConstants;
+import org.apache.ws.security.handler.WSHandlerResult;
 import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.Origin;
@@ -85,12 +94,12 @@ import org.slf4j.LoggerFactory;
 //import org.snia.cdmiserver.exception.UnauthorizedException;
 
 /**
- * SecurityFilter3 for CDMI door(3). Error: Isn't called/executed from Spring. Jersey implementation (as SNIA does).
+ * AuthentificationInterceptor3 for CDMI door(3). Error: Isn't called/executed from Spring. Jersey implementation (as SNIA does).
  */
-public class SecurityFilter implements RequestHandler
+public class AuthentificationInterceptor extends AbstractPhaseInterceptor<Message>
 {
 
-    private final Logger _log = LoggerFactory.getLogger(SecurityFilter.class);
+    private final Logger _log = LoggerFactory.getLogger(AuthentificationInterceptor.class);
     private static final String AUTHORIZATION_PROPERTY = "Authorization";
     private static final String X509_CERTIFICATE_ATTRIBUTE =
         "javax.servlet.request.X509Certificate";
@@ -107,8 +116,9 @@ public class SecurityFilter implements RequestHandler
      */
     private String _realm = "CDMI Service";
 
-    public SecurityFilter()
+    public AuthentificationInterceptor()
     {
+        super(Phase.PRE_INVOKE);
         _cf = CertificateFactories.newX509CertificateFactory();
     }
 
@@ -167,28 +177,37 @@ public class SecurityFilter implements RequestHandler
     }
 
     @Override
-    public Response handleRequest(Message msg, ClassResourceInfo cri)
+    public void handleMessage(Message msg) throws Fault
     {
         System.out.println("Authentication Process...");
 
+        for (Object key : msg.keySet()) {
+            System.out.println("KeySet: " + key.toString());
+        }
+
         AuthorizationPolicy policy = (AuthorizationPolicy) msg.get(AuthorizationPolicy.class);
         if (policy == null) {
-            return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity("Access denied for this resource.")
-                    .header("WWW-Authenticate", "Basic")
-                    .build();
+            //throw new AccessDeniedException("Unauthorized");
         }
 
         SecurityContext securityContext = (SecurityContext) msg.get(SecurityContext.class);
         if (securityContext == null) {
-            return Response.status(Response.Status.UNAUTHORIZED)
-                    .entity("Access denied for this resource.")
-                    .header("WWW-Authenticate", "Basic")
-                    .build();
+            //throw new AccessDeniedException("Unauthorized");
         }
 
-        String username = policy.getUserName();
-        String password = policy.getPassword();
+        if (policy != null) {
+            String username = policy.getUserName();
+            String password = policy.getPassword();
+            System.out.println("Username: " + username);
+            System.out.println("Password: " + password);
+            System.out.println("AuthType: " + policy.getAuthorizationType());
+        }
+
+        if (securityContext != null) {
+            System.out.println("SC: " + securityContext.toString());
+        }
+
+        Method method = getTargetMethod(msg);
 
         String endpointAddress = HttpUtils.getEndpointAddress(msg);
         Object basePathProperty = msg.get(Message.BASE_PATH);
@@ -197,11 +216,7 @@ public class SecurityFilter implements RequestHandler
         Object requestURI = msg.get(Message.REQUEST_URI);
         Object pathInfo = msg.get(Message.PATH_INFO);
 
-        System.out.println("Username: " + username);
-        System.out.println("Password: " + password);
-        System.out.println("AuthType: " + policy.getAuthorizationType());
         System.out.println("Method: " + getTargetMethod(msg).getName());
-        System.out.println("SC: " + securityContext.toString());
         System.out.println("Endpoint: " + endpointAddress);
         System.out.println("BasePath: " + basePathProperty.toString());
         System.out.println("requestMethod: " + requestMethod.toString());
@@ -209,22 +224,30 @@ public class SecurityFilter implements RequestHandler
         System.out.println("requestURI: " + requestURI.toString());
         System.out.println("pathInfo: " + pathInfo.toString());
 
+        HttpServletRequest request = (HttpServletRequest) msg.get("HTTP.REQUEST");
+        if (request != null) {
+            X509Certificate[] certs =  (X509Certificate[]) request.getAttribute(X509_CERTIFICATE_ATTRIBUTE);
+            if (certs != null) {
+                System.out.println("Certs: " + certs.length);
+            }
+        }
+
+        if (authorize(securityContext, method)) {
+            return;
+        }
+
+        throw new AccessDeniedException("Unauthorized");
+
         /*
         Subject subject = new Subject();
 
-        if (!isAllowedMethod(request.getMethod())) {
-            try {
-                _log.debug("Failing {} from {} as door is read-only", request.getMethod(), uriInfo.getBaseUri().getHost());
-                //manager.getResponseHandler().respondMethodNotAllowed(new EmptyResource(request), response, request);
-                Response.status(401).header("WWW-Authenticate", "Basic").build();
-                servletResponse.sendError(HttpStatus.SC_UNAUTHORIZED, "Access denied for this resource.");
-            } catch (IOException ex) {
-                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
-            }
-            //request.abortWith(Response
-            //    .status(Response.Status.UNAUTHORIZED)
-            //    .entity("Access denied for this resource.")
-            //    .build());
+        if (!isAllowedMethod(requestMethod.toString())) {
+            _log.debug("Failing {} from {} as door is read-only", requestMethod.toString(), endpointAddress);
+            //manager.getResponseHandler().respondMethodNotAllowed(new EmptyResource(request), response, request);
+            Response.status(HttpStatus.SC_METHOD_NOT_ALLOWED)
+                .entity("Access denied for this resource.")
+                .header("WWW-Authenticate", "Basic")
+                .build();
             return null;
         }
 
@@ -257,7 +280,7 @@ public class SecurityFilter implements RequestHandler
                                 servletRequest.authenticate(servletResponse);
                                 //filterChain.process(requestContext, response);
                             } catch (IOException | ServletException ex) {
-                                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                                java.util.logging.Logger.getLogger(AuthentificationInterceptor.class.getName()).log(Level.SEVERE, null, ex);
                             }
                             return null;
                         }
@@ -267,26 +290,34 @@ public class SecurityFilter implements RequestHandler
                 _log.error("Internal server error: " + e);
                 servletResponse.sendError(HttpStatus.SC_INTERNAL_SERVER_ERROR, e.getMessage());
             } catch (IOException ex) {
-                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                java.util.logging.Logger.getLogger(AuthentificationInterceptor.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
         */
-        //Temp:
-        return Response.status(401).header("WWW-Authenticate", "Basic").build();
     }
 
-    protected Method getTargetMethod(Message m) {
-        BindingOperationInfo bop = m.getExchange().get(BindingOperationInfo.class);
+    protected Method getTargetMethod(Message msg) {
+        BindingOperationInfo bop = msg.getExchange().get(BindingOperationInfo.class);
         if (bop != null) {
             MethodDispatcher md = (MethodDispatcher)
-                m.getExchange().get(Service.class).get(MethodDispatcher.class.getName());
+                msg.getExchange().get(Service.class).get(MethodDispatcher.class.getName());
             return md.getMethod(bop);
         }
-        Method method = (Method)m.get("org.apache.cxf.resource.method");
+        Method method = (Method) msg.get("org.apache.cxf.resource.method");
         if (method != null) {
             return method;
         }
         throw new AccessDeniedException("Method is not available : Unauthorized");
+    }
+
+    protected boolean authorize(SecurityContext sc, Method method) {
+        if (sc != null) {
+            System.out.println("Authorize: " + sc.getUserPrincipal().getName());
+            if (sc.getUserPrincipal() != null) {
+                _log.trace(sc.getUserPrincipal().getName() + " is not authorized");
+            }
+        }
+        return false;
     }
 
     /*
@@ -318,7 +349,7 @@ public class SecurityFilter implements RequestHandler
                 try {
                     servletResponse.sendRedirect(redirect.toString());
                 } catch (IOException ex) {
-                    java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                    java.util.logging.Logger.getLogger(AuthentificationInterceptor.class.getName()).log(Level.SEVERE, null, ex);
                 }
             } catch (URISyntaxException e) {
                 throw new CacheException(e.getMessage(), e);
@@ -397,7 +428,7 @@ public class SecurityFilter implements RequestHandler
                 //    .entity("Access denied for this resource.")
                 //    .build());
             } catch (IOException ex) {
-                java.util.logging.Logger.getLogger(SecurityFilter.class.getName()).log(Level.SEVERE, null, ex);
+                java.util.logging.Logger.getLogger(AuthentificationInterceptor.class.getName()).log(Level.SEVERE, null, ex);
             }
             return;
         }

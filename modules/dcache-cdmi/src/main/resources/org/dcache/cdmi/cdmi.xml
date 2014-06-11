@@ -5,6 +5,7 @@
        xmlns:http="http://cxf.apache.org/transports/http/configuration"
        xmlns:httpj="http://cxf.apache.org/transports/http-jetty/configuration"
        xmlns:jaxrs="http://cxf.apache.org/jaxrs"
+       xmlns:sec="http://cxf.apache.org/configuration/security"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
                            http://www.springframework.org/schema/beans/spring-beans.xsd
                            http://www.springframework.org/schema/context
@@ -14,7 +15,9 @@
                            http://cxf.apache.org/transports/http-jetty/configuration
                            http://cxf.apache.org/schemas/configuration/http-jetty.xsd
                            http://cxf.apache.org/jaxrs
-                           http://cxf.apache.org/schemas/jaxrs.xsd">
+                           http://cxf.apache.org/schemas/jaxrs.xsd
+                           http://cxf.apache.org/configuration/security
+                           http://cxf.apache.org/schemas/configuration/security.xsd">
 
     <context:property-placeholder/>
 
@@ -122,13 +125,8 @@
 
     <import resource="classpath:META-INF/cxf/cxf.xml"/>
 
-    <httpj:engine-factory bus="cxf">
+    <httpj:engine-factory id="httpSettings" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
-            <httpj:connector>
-                <bean class="org.eclipse.jetty.server.bio.SocketConnector">
-                    <property name = "port" value="${cdmi.net.port}" />
-                </bean>
-            </httpj:connector>
             <httpj:handlers>
                 <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
             </httpj:handlers>
@@ -136,9 +134,54 @@
     </httpj:engine-factory>
 
     <jaxrs:server id="cdmiService" address="http://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.port}/"
-                  depends-on="cxf" beanNames="objectIdResource pathResource">
+                  depends-on="httpSettings" beanNames="objectIdResource pathResource">
+        <jaxrs:inInterceptors>
+            <ref bean="authentificationInterceptor"/>
+        </jaxrs:inInterceptors>
         <jaxrs:providers>
-            <ref bean="securityFilter"/>
+            <ref bean="badRequestExceptionMapper"/>
+            <ref bean="conflictExceptionMapper"/>
+            <ref bean="containerProvider"/>
+            <ref bean="capabilityProvider"/>
+            <ref bean="forbiddenExceptionMapper"/>
+            <ref bean="notFoundExceptionMapper"/>
+            <ref bean="unauthorizedExceptionMapper"/>
+            <ref bean="unsupportedOperationExceptionMapper"/>
+        </jaxrs:providers>
+        <jaxrs:serviceBeans>
+            <ref bean="objectIdResource"/>
+            <ref bean="pathResource"/>
+            <ref bean="capabilityResource"/>
+        </jaxrs:serviceBeans>
+    </jaxrs:server>
+
+    <httpj:engine-factory id="httpsSettings" bus="cxf">
+        <httpj:engine port="${cdmi.net.ssl.port}">
+            <httpj:tlsServerParameters>
+                <sec:keyManagers keyPassword="${cdmi.authn.keystore.password}">
+                    <sec:keyStore type="PKCS12" password="${cdmi.authn.keystore.password}" file="${cdmi.authn.keystore}"/>
+                </sec:keyManagers>
+                <sec:trustManagers>
+                    <sec:keyStore type="JKS" password="${cdmi.authn.truststore.password}" file="${cdmi.authn.truststore}"/>
+                </sec:trustManagers>
+                <sec:cipherSuitesFilter>
+                    <sec:include>.*_EXPORT_.*</sec:include>
+                    <sec:include>.*_EXPORT1024_.*</sec:include>
+                    <sec:include>.*_WITH_DES_.*</sec:include>
+                    <sec:include>.*_WITH_NULL_.*</sec:include>
+                    <sec:exclude>.*_DH_anon_.*</sec:exclude>
+                </sec:cipherSuitesFilter>
+               <sec:clientAuthentication want="${cdmi.authn.accept-client-cert}" required="${cdmi.authn.require-client-cert}"/>
+            </httpj:tlsServerParameters>
+        </httpj:engine>
+    </httpj:engine-factory>
+
+    <jaxrs:server id="cdmiSSLService" address="https://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.ssl.port}/"
+                  depends-on="httpsSettings" beanNames="objectIdResource pathResource">
+        <jaxrs:inInterceptors>
+            <ref bean="authentificationInterceptor"/>
+        </jaxrs:inInterceptors>
+        <jaxrs:providers>
             <ref bean="badRequestExceptionMapper"/>
             <ref bean="conflictExceptionMapper"/>
             <ref bean="containerProvider"/>
@@ -167,7 +210,7 @@
         <property name="dataObjectDao" ref="dataObjectDao"/>
     </bean>
 
-    <bean id="securityFilter" class="org.dcache.cdmi.filter.SecurityFilter">
+    <bean id="authentificationInterceptor" class="org.dcache.cdmi.filter.AuthentificationInterceptor">
         <description>Handles authorization for the CDMI door</description>
         <property name="loginStrategy" ref="login-strategy"/>
         <property name="readOnly" value="${cdmi.authz.readonly}"/>

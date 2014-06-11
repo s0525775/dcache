@@ -40,6 +40,11 @@
     </dependency>
     <dependency>
       <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-rs-security-xml</artifactId>
+      <version>2.7.6</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-transports-http</artifactId>
       <version>2.7.6</version>
     </dependency>
@@ -82,7 +87,6 @@
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-api</artifactId>
       <version>2.7.10</version>
-      <type>jar</type>
     </dependency>
 
     <dependency>
