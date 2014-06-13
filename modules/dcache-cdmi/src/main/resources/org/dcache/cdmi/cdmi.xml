@@ -96,7 +96,7 @@
         <property name="protocolVersion" value="${cdmi.service.loginbroker.version}"/>
         <property name="protocolFamily" value="${cdmi.service.loginbroker.family}"/>
         <property name="address" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
-        <property name="port" value="${cdmi.net.port}"/>
+        <property name="port" value="${cdmi.net.ssl.port}"/>
         <property name="loginBrokers" value="${cdmi.service.loginbroker}"/>
         <property name="root" value="${cdmi.root}"/>
     </bean>
@@ -125,16 +125,22 @@
 
     <import resource="classpath:META-INF/cxf/cxf.xml"/>
 
-    <httpj:engine-factory id="httpSettings" bus="cxf">
+    <httpj:engine-factory id="http" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
+            <httpj:connector>
+                <bean class="org.eclipse.jetty.server.bio.SocketConnector">
+                    <property name="port" value="${cdmi.net.port}"/>
+                </bean>
+            </httpj:connector>
             <httpj:handlers>
                 <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
             </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
         </httpj:engine>
     </httpj:engine-factory>
 
     <jaxrs:server id="cdmiService" address="http://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.port}/"
-                  depends-on="httpSettings" beanNames="objectIdResource pathResource">
+                  depends-on="http" beanNames="objectIdResource pathResource">
         <jaxrs:inInterceptors>
             <ref bean="authentificationInterceptor"/>
         </jaxrs:inInterceptors>
@@ -155,29 +161,40 @@
         </jaxrs:serviceBeans>
     </jaxrs:server>
 
-    <httpj:engine-factory id="httpsSettings" bus="cxf">
-        <httpj:engine port="${cdmi.net.ssl.port}">
+    <httpj:engine-factory id="https" bus="cxf">
+        <httpj:identifiedTLSServerParameters id="secure">
             <httpj:tlsServerParameters>
-                <sec:keyManagers keyPassword="${cdmi.authn.keystore.password}">
-                    <sec:keyStore type="PKCS12" password="${cdmi.authn.keystore.password}" file="${cdmi.authn.keystore}"/>
-                </sec:keyManagers>
-                <sec:trustManagers>
-                    <sec:keyStore type="JKS" password="${cdmi.authn.truststore.password}" file="${cdmi.authn.truststore}"/>
-                </sec:trustManagers>
-                <sec:cipherSuitesFilter>
-                    <sec:include>.*_EXPORT_.*</sec:include>
-                    <sec:include>.*_EXPORT1024_.*</sec:include>
-                    <sec:include>.*_WITH_DES_.*</sec:include>
-                    <sec:include>.*_WITH_NULL_.*</sec:include>
-                    <sec:exclude>.*_DH_anon_.*</sec:exclude>
-                </sec:cipherSuitesFilter>
-               <sec:clientAuthentication want="${cdmi.authn.accept-client-cert}" required="${cdmi.authn.require-client-cert}"/>
             </httpj:tlsServerParameters>
+        </httpj:identifiedTLSServerParameters>
+        <httpj:engine port="${cdmi.net.ssl.port}">
+            <httpj:tlsServerParametersRef id="secure" />
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
+            <httpj:connector>
+                <bean class="org.eclipse.jetty.server.ssl.SslSocketConnector">
+                    <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <constructor-arg>
+                        <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
+                            <property name="keyStore" value="${cdmi.authn.keystore}"/>
+                            <property name="keyStoreType" value="PKCS12"/>
+                            <property name="keyStorePassword" value="${cdmi.authn.keystore.password}"/>
+                            <property name="trustStore" value="${cdmi.authn.truststore}"/>
+                            <property name="trustStorePassword" value="${cdmi.authn.truststore.password}"/>
+                            <property name="wantClientAuth" value="${cdmi.authn.accept-client-cert}"/>
+                            <property name="needClientAuth" value="${cdmi.authn.require-client-cert}"/>
+                            <property name="excludeCipherSuites" ref="banned-ciphers"/>
+                        </bean>
+                    </constructor-arg>
+                </bean>
+            </httpj:connector>
+            <httpj:handlers>
+                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+            </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
         </httpj:engine>
     </httpj:engine-factory>
 
     <jaxrs:server id="cdmiSSLService" address="https://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.ssl.port}/"
-                  depends-on="httpsSettings" beanNames="objectIdResource pathResource">
+                  depends-on="https" beanNames="objectIdResource pathResource">
         <jaxrs:inInterceptors>
             <ref bean="authentificationInterceptor"/>
         </jaxrs:inInterceptors>
