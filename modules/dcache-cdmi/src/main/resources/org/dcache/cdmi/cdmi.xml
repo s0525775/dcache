@@ -128,8 +128,9 @@
     <httpj:engine-factory id="http" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
             <httpj:connector>
-                <bean class="org.eclipse.jetty.server.nio.SelectChannelConnector">
+                <bean id="http-connector" class="org.eclipse.jetty.server.nio.SelectChannelConnector">
                     <property name="port" value="${cdmi.net.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
                 </bean>
             </httpj:connector>
             <httpj:handlers>
@@ -139,7 +140,7 @@
         </httpj:engine>
     </httpj:engine-factory>
 
-    <jaxrs:server id="cdmiService" address="http://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.port}/"
+    <jaxrs:server id="cdmiService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.port}/"
                   depends-on="http" beanNames="objectIdResource pathResource">
         <jaxrs:inInterceptors>
             <ref bean="authentificationInterceptor"/>
@@ -164,14 +165,16 @@
     <httpj:engine-factory id="https" bus="cxf">
         <httpj:identifiedTLSServerParameters id="secure">
             <httpj:tlsServerParameters>
+                <!-- workaround, not documented by Apache or Eclipse -->
             </httpj:tlsServerParameters>
         </httpj:identifiedTLSServerParameters>
         <httpj:engine port="${cdmi.net.ssl.port}">
             <httpj:tlsServerParametersRef id="secure" />
             <httpj:threadingParameters minThreads="5" maxThreads="15" />
             <httpj:connector>
-                <bean class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
+                <bean id="https-connector" class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
                     <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
                     <constructor-arg>
                         <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
                             <property name="keyStore" value="${cdmi.authn.keystore}"/>
@@ -193,8 +196,59 @@
         </httpj:engine>
     </httpj:engine-factory>
 
-    <jaxrs:server id="cdmiSSLService" address="https://#{ T(com.google.common.base.Strings).emptyToNull( '${cdmi.net.listen}' ) }:${cdmi.net.ssl.port}/"
+    <jaxrs:server id="cdmiSSLService" address="https://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl.port}/"
                   depends-on="https" beanNames="objectIdResource pathResource">
+        <jaxrs:inInterceptors>
+            <ref bean="authentificationInterceptor"/>
+        </jaxrs:inInterceptors>
+        <jaxrs:providers>
+            <ref bean="badRequestExceptionMapper"/>
+            <ref bean="conflictExceptionMapper"/>
+            <ref bean="containerProvider"/>
+            <ref bean="capabilityProvider"/>
+            <ref bean="forbiddenExceptionMapper"/>
+            <ref bean="notFoundExceptionMapper"/>
+            <ref bean="unauthorizedExceptionMapper"/>
+            <ref bean="unsupportedOperationExceptionMapper"/>
+        </jaxrs:providers>
+        <jaxrs:serviceBeans>
+            <ref bean="objectIdResource"/>
+            <ref bean="pathResource"/>
+            <ref bean="capabilityResource"/>
+        </jaxrs:serviceBeans>
+    </jaxrs:server>
+
+    <httpj:engine-factory id="http-jg" bus="cxf">
+        <httpj:engine port="${cdmi.net.ssl-jg.port}">
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
+            <httpj:connector>
+                <bean id="https-connector" class="org.dcache.util.JettyGSIConnector">
+                    <property name="port" value="${cdmi.net.ssl-jg.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
+                    <property name="hostCertificatePath" value="${cdmi.authn.hostcert.cert}"/>
+                    <property name="hostKeyPath" value="${cdmi.authn.hostcert.key}"/>
+                    <property name="caCertificatePath" value="${cdmi.authn.capath}"/>
+                    <property name="autoFlush" value="true"/>
+                    <property name="encrypt" value="true"/>
+                    <property name="acceptNoClientCerts" value="#{ '$cdmi.authn.accept-client-cert}' == 'false' }"/>
+                    <property name="requireClientAuth" value="${cdmi.authn.require-client-cert}"/>
+                    <property name="gssMode" value="SSL"/>
+                    <property name="hostCertRefreshInterval" value="${cdmi.authn.hostcert.refresh}"/>
+                    <property name="hostCertRefreshIntervalUnit" value="${cdmi.authn.hostcert.refresh.unit}"/>
+                    <property name="trustAnchorRefreshInterval" value="${cdmi.authn.capath.refresh}"/>
+                    <property name="trustAnchorRefreshIntervalUnit" value="${cdmi.authn.capath.refresh.unit}"/>
+                    <property name="excludeCipherSuites" ref="banned-ciphers"/>
+                </bean>
+            </httpj:connector>
+            <httpj:handlers>
+                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+            </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
+        </httpj:engine>
+    </httpj:engine-factory>
+
+    <jaxrs:server id="cdmiSSLJGService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl-jg.port}/"
+                  depends-on="http-jg" beanNames="objectIdResource pathResource">
         <jaxrs:inInterceptors>
             <ref bean="authentificationInterceptor"/>
         </jaxrs:inInterceptors>
