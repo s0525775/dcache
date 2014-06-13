@@ -127,6 +127,7 @@
 
     <httpj:engine-factory id="http" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
             <httpj:connector>
                 <bean id="http-connector" class="org.eclipse.jetty.server.nio.SelectChannelConnector">
                     <property name="port" value="${cdmi.net.port}"/>
@@ -173,8 +174,6 @@
             <httpj:threadingParameters minThreads="5" maxThreads="15" />
             <httpj:connector>
                 <bean id="https-connector" class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
-                    <property name="port" value="${cdmi.net.ssl.port}"/>
-                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
                     <constructor-arg>
                         <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
                             <property name="keyStore" value="${cdmi.authn.keystore}"/>
@@ -187,6 +186,8 @@
                             <property name="excludeCipherSuites" ref="banned-ciphers"/>
                         </bean>
                     </constructor-arg>
+                    <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
                 </bean>
             </httpj:connector>
             <httpj:handlers>
