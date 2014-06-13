@@ -128,7 +128,7 @@
     <httpj:engine-factory id="http" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
             <httpj:connector>
-                <bean class="org.eclipse.jetty.server.bio.SocketConnector">
+                <bean class="org.eclipse.jetty.server.nio.SelectChannelConnector">
                     <property name="port" value="${cdmi.net.port}"/>
                 </bean>
             </httpj:connector>
@@ -170,7 +170,7 @@
             <httpj:tlsServerParametersRef id="secure" />
             <httpj:threadingParameters minThreads="5" maxThreads="15" />
             <httpj:connector>
-                <bean class="org.eclipse.jetty.server.ssl.SslSocketConnector">
+                <bean class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
                     <property name="port" value="${cdmi.net.ssl.port}"/>
                     <constructor-arg>
                         <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
