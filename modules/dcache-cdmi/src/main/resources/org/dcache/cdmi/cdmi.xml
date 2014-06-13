@@ -125,6 +125,19 @@
 
     <import resource="classpath:META-INF/cxf/cxf.xml"/>
 
+    <bean id="authorizationInterceptor" class="org.dcache.cdmi.filter.AuthorizationInterceptor">
+        <description>Handles authorization for the CDMI door</description>
+        <property name="loginStrategy" ref="login-strategy"/>
+        <property name="readOnly" value="${cdmi.authz.readonly}"/>
+        <property name="enableBasicAuthentication" value="${cdmi.authn.basic}"/>
+        <property name="rootPath" value="${cdmi.root}"/>
+        <property name="uploadPath" value="${cdmi.authz.upload-directory}"/>
+    </bean>
+
+    <bean id="authorizationFilter" class="org.dcache.cdmi.filter.AuthorizationFilter">
+        <property name="interceptor" ref="authorizationInterceptor"/>
+    </bean>
+
     <httpj:engine-factory id="http" bus="cxf">
         <httpj:engine port="${cdmi.net.port}">
             <httpj:threadingParameters minThreads="5" maxThreads="15" />
@@ -143,10 +156,8 @@
 
     <jaxrs:server id="cdmiService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.port}/"
                   depends-on="http" beanNames="objectIdResource pathResource">
-        <jaxrs:inInterceptors>
-            <ref bean="authentificationInterceptor"/>
-        </jaxrs:inInterceptors>
         <jaxrs:providers>
+            <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
             <ref bean="conflictExceptionMapper"/>
             <ref bean="containerProvider"/>
@@ -155,6 +166,8 @@
             <ref bean="notFoundExceptionMapper"/>
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
+            <ref bean="methodNotAllowedExceptionMapper"/>
+            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -199,10 +212,8 @@
 
     <jaxrs:server id="cdmiSSLService" address="https://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl.port}/"
                   depends-on="https" beanNames="objectIdResource pathResource">
-        <jaxrs:inInterceptors>
-            <ref bean="authentificationInterceptor"/>
-        </jaxrs:inInterceptors>
         <jaxrs:providers>
+            <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
             <ref bean="conflictExceptionMapper"/>
             <ref bean="containerProvider"/>
@@ -211,6 +222,8 @@
             <ref bean="notFoundExceptionMapper"/>
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
+            <ref bean="methodNotAllowedExceptionMapper"/>
+            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -250,10 +263,8 @@
 
     <jaxrs:server id="cdmiSSLJGService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl-jg.port}/"
                   depends-on="http-jg" beanNames="objectIdResource pathResource">
-        <jaxrs:inInterceptors>
-            <ref bean="authentificationInterceptor"/>
-        </jaxrs:inInterceptors>
         <jaxrs:providers>
+            <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
             <ref bean="conflictExceptionMapper"/>
             <ref bean="containerProvider"/>
@@ -262,6 +273,8 @@
             <ref bean="notFoundExceptionMapper"/>
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
+            <ref bean="methodNotAllowedExceptionMapper"/>
+            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -282,15 +295,6 @@
         <property name="dataObjectDao" ref="dataObjectDao"/>
     </bean>
 
-    <bean id="authentificationInterceptor" class="org.dcache.cdmi.filter.AuthentificationInterceptor">
-        <description>Handles authorization for the CDMI door</description>
-        <property name="loginStrategy" ref="login-strategy"/>
-        <property name="readOnly" value="${cdmi.authz.readonly}"/>
-        <property name="enableBasicAuthentication" value="${cdmi.authn.basic}"/>
-        <property name="rootPath" value="${cdmi.root}"/>
-        <property name="uploadPath" value="${cdmi.authz.upload-directory}"/>
-    </bean>
-
     <bean id="badRequestExceptionMapper" class="org.snia.cdmiserver.provider.BadRequestExceptionMapper"/>
     <bean id="conflictExceptionMapper" class="org.snia.cdmiserver.provider.ConflictExceptionMapper"/>
     <bean id="containerProvider" class="org.snia.cdmiserver.provider.ContainerProvider"/>
@@ -299,6 +303,8 @@
     <bean id="notFoundExceptionMapper" class="org.snia.cdmiserver.provider.NotFoundExceptionMapper"/>
     <bean id="unauthorizedExceptionMapper" class="org.snia.cdmiserver.provider.UnauthorizedExceptionMapper"/>
     <bean id="unsupportedOperationExceptionMapper" class="org.snia.cdmiserver.provider.UnsupportedOperationExceptionMapper"/>
+    <bean id="methodNotAllowedExceptionMapper" class="org.dcache.cdmi.provider.MethodNotAllowedExceptionMapper"/>
+    <bean id="serverErrorExceptionMapper" class="org.dcache.cdmi.provider.ServerErrorExceptionMapper"/>
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.impl.DcacheContainerDao">
         <property name="baseDirectoryName" value="/disk"/>

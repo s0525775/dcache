@@ -48,7 +48,8 @@ public class LoggingFilter implements Filter
         "javax.servlet.request.X509Certificate";
 
     @Override
-    public void init(FilterConfig filterConfig) throws ServletException {
+    public void init(FilterConfig filterConfig) throws ServletException
+    {
         config = filterConfig;
     }
 
@@ -171,7 +172,8 @@ public class LoggingFilter implements Filter
     }
 
     @Override
-    public void destroy() {
+    public void destroy()
+    {
         //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 }
