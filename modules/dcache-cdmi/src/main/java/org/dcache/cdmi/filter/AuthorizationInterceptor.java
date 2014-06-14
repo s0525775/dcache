@@ -240,16 +240,6 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         }
     }
 
-    protected boolean authorize(SecurityContext sc, Method method) {
-        if (sc != null) {
-            if (sc.getUserPrincipal() != null) {
-                System.out.println("Authorize: " + sc.getUserPrincipal().getName());
-                _log.trace(sc.getUserPrincipal().getName() + " is not authorized");
-            }
-        }
-        return false;
-    }
-
     private void checkRootPath(Message msg, LoginReply login) throws CacheException
     {
         FsPath userRoot = new FsPath();
