@@ -376,6 +376,22 @@ public abstract class Request extends Job {
         return Long.toString(user.getId());
     }
 
+    @Override
+    public void checkExpiration()
+    {
+        wlock();
+        try {
+            if (creationTime + lifetime < System.currentTimeMillis() && !getState().isFinal()) {
+                logger.info("expiring job #{}", getId());
+                setStateAndStatusCode(State.FAILED, "Total request time exceeded.", TStatusCode.SRM_REQUEST_TIMED_OUT);
+            }
+        } catch (IllegalStateTransition e) {
+            logger.error("Illegal state transition while expiring job: {}", e.toString());
+        } finally {
+            wunlock();
+        }
+    }
+
     /**
      * @return the storage
      */
@@ -397,7 +413,7 @@ public abstract class Request extends Job {
         return configuration;
     }
 
-    public TReturnStatus abort()
+    public TReturnStatus abort(String reason)
     {
         wlock();
         try {
@@ -410,7 +426,7 @@ public abstract class Request extends Job {
              */
             State state = getState();
             if (!state.isFinal()) {
-                setState(State.CANCELED, "Request aborted.");
+                setState(State.CANCELED, reason);
             }
         } catch (IllegalStateTransition e) {
             return new TReturnStatus(TStatusCode.SRM_FAILURE, "Cannot abort request in its current state");

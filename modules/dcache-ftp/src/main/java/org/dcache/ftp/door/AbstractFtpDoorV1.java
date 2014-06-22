@@ -292,6 +292,8 @@ public abstract class AbstractFtpDoorV1
      *
      * For ACTIVE transfers dCache establishes the data connection.
      *
+     * When INVALID, the client most reset the mode.
+     *
      * Depending on the values of _isProxyRequiredOnActive and
      * _isProxyRequiredOnPassive, the data connection with the client
      * will be established either to an adapter (proxy) at the FTP
@@ -299,7 +301,7 @@ public abstract class AbstractFtpDoorV1
      */
     protected enum Mode
     {
-        PASSIVE, ACTIVE
+        PASSIVE, ACTIVE, INVALID
     }
 
 
@@ -1193,6 +1195,11 @@ public abstract class AbstractFtpDoorV1
             if (_adapter != null) {
                 _adapter.close();
                 _adapter = null;
+
+                if (_mode == Mode.PASSIVE) {
+                    closePassiveModeServerSocket();
+                    AbstractFtpDoorV1.this._mode = Mode.INVALID;
+                }
             }
 
             if (isWrite()) {
@@ -1228,6 +1235,26 @@ public abstract class AbstractFtpDoorV1
             }
             setTransfer(null);
             reply(msg);
+        }
+
+        public void getInfo(PrintWriter pw)
+        {
+            pw.println( "  Data channel  : " + _mode + "; mode " + _xferMode + "; " + _parallel + " streams");
+            PerfMarkerTask perfMarkerTask = _perfMarkerTask;
+            long size = getLength();
+            if (size > 0) {
+                pw.println("     File size  : " + size);
+            }
+            if (!isWrite() && _size > -1 && _offset > -1) {
+                pw.println("  File segment  : " + _offset + '-' + (_offset + _size));
+            }
+            if (perfMarkerTask != null) {
+                pw.println("   Transferred  : " + perfMarkerTask.getBytesTransferred());
+            }
+            ProxyAdapter adapter = _adapter;
+            if (adapter != null) {
+                pw.println("         Proxy  : " + adapter);
+            }
         }
     }
 
@@ -1573,13 +1600,16 @@ public abstract class AbstractFtpDoorV1
     {
         String user = getUser();
         if (user != null) {
-            pw.println( "         User  : " + user);
+            pw.println( "          User  : " + user);
         }
-        pw.println( "    User Host  : " + _clientDataAddress.getAddress().getHostAddress());
-        pw.println( "   Local Host  : " + _local_host);
-        pw.println( " Last Command  : " + _lastCommand);
-        pw.println( " Command Count : " + _commandCounter);
-        pw.println( "     I/O Queue : " + _ioQueueName);
+        pw.println( "    Local Host  : " + _local_host);
+        pw.println( "  Last Command  : " + _lastCommand);
+        pw.println( " Command Count  : " + _commandCounter);
+        pw.println( "     I/O Queue  : " + _ioQueueName);
+        FtpTransfer transfer = _transfer;
+        if (transfer != null) {
+            transfer.getInfo(pw);
+        }
         pw.println(ac_get_door_info(new Args("")));
     }
 
@@ -3122,6 +3152,9 @@ public abstract class AbstractFtpDoorV1
         if (xferMode.equals("X") && mode == Mode.PASSIVE && _isProxyRequiredOnPassive) {
             throw new FTPCommandException(504, "Cannot use passive X mode");
         }
+        if (mode == Mode.INVALID) {
+            throw new FTPCommandException(425, "Issue PASV or PORT to reset data channel.");
+        }
         if (_checkSumFactory != null || _checkSum != null) {
             throw new FTPCommandException(503,"Expecting STOR ESTO PUT commands");
         }
@@ -3246,6 +3279,9 @@ public abstract class AbstractFtpDoorV1
         }
         if (xferMode.equals("X") && mode == Mode.PASSIVE && _isProxyRequiredOnPassive) {
             throw new FTPCommandException(504, "Cannot use passive X mode");
+        }
+        if (mode == Mode.INVALID) {
+            throw new FTPCommandException(425, "Issue PASV or PORT to reset data channel.");
         }
 
         FtpTransfer transfer =
@@ -3379,18 +3415,24 @@ public abstract class AbstractFtpDoorV1
     }
 
     private void openDataSocket()
-        throws IOException
+        throws IOException, FTPCommandException
     {
         /* Mode being PASSIVE means the client did a PASV.  Otherwise
          * we establish the data connection to the client.
          */
-        if (_mode == Mode.PASSIVE) {
+        switch (_mode) {
+        case PASSIVE:
             replyDelayedPassive(_delayedPassive, (InetSocketAddress) _passiveModeServerSocket.getLocalAddress());
-            reply("150 Openening ASCII mode data connection", false);
+            reply("150 Ready to accept ASCII mode data connection", false);
             _dataSocket = _passiveModeServerSocket.accept().socket();
-        } else {
+            break;
+        case ACTIVE:
+            reply("150 Opening ASCII mode data connection", false);
             _dataSocket = new Socket();
             _dataSocket.connect(_clientDataAddress);
+            break;
+        default:
+            throw new FTPCommandException(425, "Issue PASV or PORT to reset data channel.");
         }
     }
 
@@ -3940,6 +3982,11 @@ public abstract class AbstractFtpDoorV1
                 LOGGER.error("Performance marker engine: {}",
                         msg.getClass().getName());
             }
+        }
+
+        public long getBytesTransferred()
+        {
+            return _perfMarkersBlock.getBytesTransferred();
         }
     }
 

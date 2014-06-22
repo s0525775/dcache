@@ -49,7 +49,7 @@ public final class LsFileRequest extends FileRequest<LsRequest> {
         private static final Logger logger =
                 LoggerFactory.getLogger(LsFileRequest.class);
         private static final String SFN_STRING="SFN=";
-        private URI surl;
+        private final URI surl;
         private TMetaDataPathDetail metaDataPathDetail;
         private static final Comparator<FileMetaData> DIRECTORY_LAST_ORDER =
                 new Comparator<FileMetaData>() {
@@ -290,6 +290,7 @@ public final class LsFileRequest extends FileRequest<LsRequest> {
                 case RUNNING:
                 case RQUEUED:
                 case ASYNCWAIT:
+                case PRIORITYTQUEUED:
                     return new TReturnStatus(TStatusCode.SRM_REQUEST_INPROGRESS, description);
                 default:
                     return new TReturnStatus(TStatusCode.SRM_REQUEST_QUEUED, description);

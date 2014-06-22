@@ -207,21 +207,11 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
 
     @Nullable
     public final Long getSize() {
-        rlock();
-        try {
-            return size;
-        } finally {
-            runlock();
-        }
+        return size;
     }
 
     public final URI getSurl() {
-        rlock();
-        try {
-            return surl;
-       } finally {
-           runlock();
-       }
+        return surl;
     }
 
     public final String getSurlString() {
@@ -469,7 +459,7 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
     }
 
     @Override
-    public void abort() throws IllegalStateTransition, SRMException
+    public void abort(String reason) throws IllegalStateTransition, SRMException
     {
         wlock();
         try {
@@ -496,7 +486,7 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
             State state = getState();
             if (!state.isFinal()) {
                 if (getFileId() != null) {
-                    getStorage().abortPut(getUser(), getFileId(), getSurl(), "Upload aborted by client.");
+                    getStorage().abortPut(getUser(), getFileId(), getSurl(), reason);
                 }
                 setState(State.CANCELED, "Request aborted.");
             } else if (state == State.DONE) {
@@ -575,12 +565,7 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
      */
     @Nullable
     public final String getSpaceReservationId() {
-        rlock();
-        try {
-            return spaceReservationId;
-        } finally {
-            runlock();
-        }
+        return spaceReservationId;
     }
 
     @Override
@@ -597,7 +582,8 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
 
         switch (getState()) {
         case PENDING:
-        case RQUEUED:
+        case TQUEUED:
+        case RETRYWAIT:
             return new TReturnStatus(TStatusCode.SRM_REQUEST_QUEUED, description);
         case READY:
         case TRANSFERRING:
@@ -659,15 +645,25 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
                     String fileId = future.checkedGet();
 
                     State state = fr.getState();
-                    if(state == State.ASYNCWAIT) {
+                    switch (state) {
+                    case ASYNCWAIT:
                         logger.trace("Storage info arrived for file {}.", fr.getSurlString());
                         fr.setFileId(fileId);
-                        Scheduler scheduler = Scheduler.getScheduler(fr.getSchedulerId());
+                        Scheduler<?> scheduler = Scheduler.getScheduler(fr.getSchedulerId());
                         try {
                             scheduler.schedule(fr);
-                        } catch(Exception ie) {
+                        } catch (Exception ie) {
                             logger.error(ie.toString());
                         }
+                        break;
+                    case CANCELED:
+                    case FAILED:
+                        fr.getStorage().abortPut(fr.getUser(), fileId, fr.getSurl(), fr.getErrorMessage());
+                        break;
+                    default:
+                        logger.error("Put request is in an unexpected state in callback: {}", state);
+                        fr.getStorage().abortPut(fr.getUser(), fileId, fr.getSurl(), fr.getErrorMessage());
+                        break;
                     }
                 } catch (SRMException e) {
                     fr.setStateAndStatusCode(
@@ -687,22 +683,12 @@ public final class PutFileRequest extends FileRequest<PutRequest> {
 
     @Nullable
     public final TAccessLatency getAccessLatency() {
-        rlock();
-        try {
-            return accessLatency;
-        } finally {
-            runlock();
-        }
+        return accessLatency;
     }
 
     @Nullable
     public final TRetentionPolicy getRetentionPolicy() {
-        rlock();
-        try {
-            return retentionPolicy;
-        } finally {
-            runlock();
-        }
+        return retentionPolicy;
     }
 
     /**

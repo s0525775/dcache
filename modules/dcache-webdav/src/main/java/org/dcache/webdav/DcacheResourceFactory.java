@@ -12,6 +12,7 @@ import io.milton.http.HttpManager;
 import io.milton.http.Request;
 import io.milton.http.ResourceFactory;
 import io.milton.resource.Resource;
+import io.milton.servlet.ServletRequest;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.slf4j.Logger;
@@ -105,9 +106,13 @@ public class DcacheResourceFactory
     private static final Logger _log =
         LoggerFactory.getLogger(DcacheResourceFactory.class);
 
+    public static final String TRANSACTION_ATTRIBUTE = "org.dcache.transaction";
+
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES =
         EnumSet.of(TYPE, PNFSID, CREATION_TIME, MODIFICATION_TIME, SIZE,
                    MODE, OWNER, OWNER_GROUP);
+
+    private static final String HTML_TEMPLATE_NAME = "page";
 
     // Additional attributes needed for PROPFIND requests; e.g., to supply
     // values for properties.
@@ -459,6 +464,16 @@ public class DcacheResourceFactory
     {
         _listingGroup = new STGroupFile(resource.getURL(), "UTF-8", '$', '$');
         _listingGroup.setListener(new Slf4jSTErrorListener(_log));
+
+        /* StringTemplate has lazy initialisation, but this is very racey and
+         * can break StringTemplate altogether:
+         *
+         *     https://github.com/antlr/stringtemplate4/issues/61
+         *
+         * here we force initialisation to work-around this.
+         */
+        _listingGroup.getInstanceOf(HTML_TEMPLATE_NAME);
+
     }
 
     /**
@@ -783,7 +798,17 @@ public class DcacheResourceFactory
         String requestPath = new URI(request.getAbsoluteUrl()).getPath();
         String[] base =
             Iterables.toArray(PATH_SPLITTER.split(requestPath), String.class);
-        final ST t = _listingGroup.getInstanceOf("page");
+        final ST t = _listingGroup.getInstanceOf(HTML_TEMPLATE_NAME);
+
+        if (t == null) {
+            _log.error("template '{}' not found in templategroup: {}",
+                    HTML_TEMPLATE_NAME, _listingGroup.getFileName());
+            out.append(DcacheResponseHandler.templateNotFoundErrorPage(_listingGroup,
+                    HTML_TEMPLATE_NAME));
+            out.flush();
+            return;
+        }
+
         t.add("path", asList(UrlPathWrapper.forPaths(base)));
         t.add("static", _staticContentPath);
         t.add("subject", new SubjectWrapper(getSubject()));
@@ -1123,6 +1148,9 @@ public class DcacheResourceFactory
             super(pnfs, subject, path);
             initializeTransfer(this, subject);
             _clientAddressForPool = getClientAddress();
+
+            ServletRequest.getRequest().setAttribute(TRANSACTION_ATTRIBUTE,
+                    getTransaction());
         }
 
         protected ProtocolInfo createProtocolInfo(InetSocketAddress address)

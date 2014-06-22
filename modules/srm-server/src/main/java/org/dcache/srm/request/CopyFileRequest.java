@@ -593,6 +593,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
             Exception transferError = getTransferError();
             getStorage().abortPut(getUser(), getDestinationFileId(), getDestinationSurl(),
                                   (transferError == null) ? null : transferError.getMessage());
+            setDestinationFileId(null);
             setTransferId(null);
             throw new NonFatalJobFailure(transferError);
         }
@@ -902,12 +903,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
      */
     public URI getSourceSurl()
     {
-        rlock();
-        try {
-            return sourceSurl;
-        } finally {
-            runlock();
-        }
+        return sourceSurl;
     }
     /**
      * Getter for property to_surl.
@@ -915,12 +911,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
      */
     public URI getDestinationSurl()
     {
-        rlock();
-        try {
-            return destinationSurl;
-        } finally {
-            runlock();
-        }
+        return destinationSurl;
     }
     /**
      * Setter for property remoteRequestId.
@@ -954,12 +945,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
      */
     public String getSpaceReservationId()
     {
-        rlock();
-        try {
-            return spaceReservationId;
-        } finally {
-            runlock();
-        }
+        return spaceReservationId;
     }
 
     /**
@@ -1149,6 +1135,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
         case RUNNING:
         case RQUEUED:
         case ASYNCWAIT:
+        case PRIORITYTQUEUED:
             return new TReturnStatus(TStatusCode.SRM_REQUEST_INPROGRESS, description);
         default:
             return new TReturnStatus(TStatusCode.SRM_REQUEST_QUEUED, description);

@@ -120,6 +120,8 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -132,6 +134,8 @@ import diskCacheV111.services.space.message.ExtendLifetime;
 import diskCacheV111.services.space.message.GetFileSpaceTokensMessage;
 import diskCacheV111.services.space.message.GetSpaceMetaData;
 import diskCacheV111.services.space.message.GetSpaceTokens;
+import diskCacheV111.services.space.message.Release;
+import diskCacheV111.services.space.message.Reserve;
 import diskCacheV111.util.AccessLatency;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FileExistsCacheException;
@@ -167,6 +171,7 @@ import dmg.cells.services.login.LoginBrokerInfo;
 
 import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AccessType;
+import org.dcache.auth.Origin;
 import org.dcache.auth.Subjects;
 import org.dcache.cells.AbstractMessageCallback;
 import org.dcache.cells.CellStub;
@@ -178,6 +183,8 @@ import org.dcache.namespace.FileType;
 import org.dcache.namespace.PermissionHandler;
 import org.dcache.namespace.PosixPermissionHandler;
 import org.dcache.pinmanager.PinManagerExtendPinMessage;
+import org.dcache.pinmanager.PinManagerPinMessage;
+import org.dcache.pinmanager.PinManagerUnpinMessage;
 import org.dcache.poolmanager.PoolMonitor;
 import org.dcache.srm.AbstractStorageElement;
 import org.dcache.srm.AdvisoryDeleteCallbacks;
@@ -266,10 +273,10 @@ public final class Storage
             new ChainedPermissionHandler(new ACLPermissionHandler(),
                                          new PosixPermissionHandler());
     private final Set<FileAttribute> attributesRequiredForRmdir;
+    private Executor _executor;
 
     private PoolMonitor _poolMonitor;
 
-    private SRM srm;
     private Configuration config;
     private boolean customGetHostByAddr; //falseByDefault
 
@@ -338,6 +345,12 @@ public final class Storage
     {
         attributesRequiredForRmdir = EnumSet.of(TYPE);
         attributesRequiredForRmdir.addAll(permissionHandler.getRequiredAttributes());
+    }
+
+    @Required
+    public void setExecutor(Executor executor)
+    {
+        _executor = executor;
     }
 
     @Required
@@ -514,6 +527,43 @@ public final class Storage
         }
     }
 
+    public void messageArrived(PnfsCreateUploadPath msg)
+    {
+        // Catches replies for which the callback timed out
+        try {
+            if (msg.isReply() && msg.getReturnCode() == 0) {
+                _pnfsStub.notify(
+                        new PnfsCancelUpload(msg.getSubject(), new FsPath(msg.getUploadPath()), msg.getPath()));
+            }
+        } catch (NoRouteToCellException e) {
+            _log.error("Failed to remove {}: No route to {}.", msg.getUploadPath(), _pnfsStub.getDestinationPath());
+        }
+    }
+
+    public void messageArrived(PinManagerPinMessage msg)
+    {
+        // Catches replies for which the callback timed out
+        try {
+            if (msg.isReply() && msg.getReturnCode() == 0) {
+                _pinManagerStub.notify(new PinManagerUnpinMessage(msg.getPnfsId(), msg.getPinId()));
+            }
+        } catch (NoRouteToCellException e) {
+            _log.error("Failed to unpin {}: No route to {}.", msg.getPinId(), _pinManagerStub.getDestinationPath());
+        }
+    }
+
+    public void messageArrived(Reserve msg)
+    {
+        // Catches replies for which the callback timed out
+        try {
+            if (msg.isReply() && msg.getReturnCode() == 0) {
+                _spaceManagerStub.notify(new Release(msg.getSpaceToken(), null));
+            }
+        } catch (NoRouteToCellException e) {
+            _log.error("Failed to release {}: No route to {}.", msg.getSpaceToken(), _spaceManagerStub.getDestinationPath());
+        }
+    }
+
     @Override
     public CheckedFuture<Pin, ? extends SRMException> pinFile(SRMUser user,
                                                               URI surl,
@@ -531,7 +581,8 @@ public final class Storage
                                                             _poolMonitor,
                                                             _pnfsStub,
                                                             _poolManagerStub,
-                                                            _pinManagerStub),
+                                                            _pinManagerStub,
+                                                            _executor),
                                        new ToSRMException());
         } catch (SRMInvalidPathException e) {
             return Futures.immediateFailedCheckedFuture(new SRMInvalidPathException(e.getMessage()));
@@ -1021,7 +1072,10 @@ public final class Storage
             infoMsg.setResult(0, "");
             infoMsg.setFileSize(msg.getFileAttributes().getSize());
             infoMsg.setStorageInfo(msg.getFileAttributes().getStorageInfo());
-            infoMsg.setClient(Subjects.getOrigin(subject).getAddress().getHostAddress());
+            Origin origin = Subjects.getOrigin(subject);
+            if (origin != null) {
+                infoMsg.setClient(origin.getAddress().getHostAddress());
+            }
             _billingStub.notify(infoMsg);
         } catch (FileNotFoundCacheException e) {
             throw new SRMInvalidPathException(e.getMessage(), e);
@@ -1055,7 +1109,10 @@ public final class Storage
             infoMsg.setTransaction(CDC.getSession());
             infoMsg.setPnfsId(msg.getPnfsId());
             infoMsg.setResult(CacheException.DEFAULT_ERROR_CODE, reason);
-            infoMsg.setClient(Subjects.getOrigin(subject).getAddress().getHostAddress());
+            Origin origin = Subjects.getOrigin(subject);
+            if (origin != null) {
+                infoMsg.setClient(origin.getAddress().getHostAddress());
+            }
             _billingStub.notify(infoMsg);
         } catch (PermissionDeniedCacheException e) {
             throw new SRMAuthorizationException("Permission denied.", e);

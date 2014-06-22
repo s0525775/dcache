@@ -256,7 +256,7 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
     }
 
     @Override
-    public TReturnStatus abort()
+    public TReturnStatus abort(String reason)
     {
         wlock();
         try {
@@ -289,7 +289,7 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
             if (!state.isFinal()) {
                 for (PutFileRequest file : getFileRequests()) {
                     try {
-                        file.abort();
+                        file.abort(reason);
                         hasSuccess = true;
                     } catch (SRMException e) {
                         hasFailure = true;
@@ -523,24 +523,6 @@ public final class PutRequest extends ContainerRequest<PutFileRequest> {
             return super.extendLifetimeMillis(newLifetimeInMillis);
         } catch(SRMReleasedException releasedException) {
             throw new SRMInvalidRequestException(releasedException.getMessage());
-        }
-    }
-
-    @Override
-    public void checkExpiration()
-    {
-        wlock();
-        try {
-            if (creationTime + lifetime < System.currentTimeMillis()) {
-                logger.debug("expiring job #{}", getId());
-                if (!getState().isFinal()) {
-                    setStateAndStatusCode(State.FAILED, "Total request time exceeded.", TStatusCode.SRM_REQUEST_TIMED_OUT);
-                }
-            }
-        } catch (IllegalStateTransition e) {
-            logger.error("Illegal state transition while expiring job: {}", e.toString());
-        } finally {
-            wunlock();
         }
     }
 

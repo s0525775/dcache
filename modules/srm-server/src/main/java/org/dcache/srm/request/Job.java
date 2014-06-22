@@ -63,13 +63,6 @@ COPYRIGHT STATUS:
   obligated to secure any necessary Government licenses before exporting
   documents or software obtained from this server.
  */
-
-/*
- * Job.java
- *
- * Created on March 22, 2004, 11:30 AM
- */
-
 package org.dcache.srm.request;
 
 import com.google.common.collect.Iterables;
@@ -181,15 +174,6 @@ public abstract class Job  {
         this.lastStateTransitionTime = lastStateTransitionTime;
         this.jdc = new JDC();
         if(jobHistoryArray != null) {
-            Arrays.sort(jobHistoryArray,new Comparator<JobHistory>(){
-                 @Override
-                 public int compare(JobHistory jobHistory1 , JobHistory jobHistory2) {
-                     long  transitionTime1 = jobHistory1.getTransitionTime();
-                     long  transitionTime2 = jobHistory2.getTransitionTime();
-                     if(transitionTime1<transitionTime2) { return -1  ;}
-                     if(transitionTime1==transitionTime2) { return 0  ;}
-                     return 1;
-                 } });
             Collections.addAll(jobHistory, jobHistoryArray);
         } else {
             jobHistory.add(new JobHistory(nextLong(), state, "Request restored from database", System.currentTimeMillis()));
@@ -355,13 +339,12 @@ public abstract class Job  {
             return newState == State.DONE
                     || newState == State.CANCELED
                     || newState == State.FAILED
-                    || newState == State.RUNNING
                     || newState == State.TQUEUED;
         case TQUEUED:
             return newState == State.CANCELED
                     || newState == State.FAILED
-                    || newState == State.RUNNING
-                    || newState == State.RESTORED;
+                    || newState == State.PRIORITYTQUEUED
+                    || newState == State.PENDING;
         case PRIORITYTQUEUED:
             return newState == State.CANCELED
                     || newState == State.FAILED
@@ -387,8 +370,7 @@ public abstract class Job  {
         case RETRYWAIT:
             return newState == State.CANCELED
                     || newState == State.FAILED
-                    || newState == State.RUNNING
-                    || newState == State.PRIORITYTQUEUED;
+                    || newState == State.TQUEUED;
         case RQUEUED:
             return newState == State.CANCELED
                     || newState == State.FAILED
@@ -677,11 +659,7 @@ public abstract class Job  {
                 // we need to save job every time the scheduler is set
                 // even if the jbbc monitoring log is disabled,
                 // as we use scheduler id to identify who this job belongs to.
-                try {
-                        getJobStorage().saveJob(this,true);
-                }catch (DataAccessException sqle) {
-                    logger.error(sqle.toString());
-                }
+                saveJob(true);
             }
         } finally {
             wunlock();
@@ -788,13 +766,9 @@ public abstract class Job  {
     {
         wlock();
         try {
-            if (creationTime + lifetime < System.currentTimeMillis()) {
-                logger.debug("expiring job #{}", getId());
-                if (state == State.READY || state == State.TRANSFERRING) {
-                    setState(State.DONE, "Request lifetime expired.");
-                } else if (!state.isFinal()) {
-                    setState(State.FAILED, "Request lifetime expired.");
-                }
+            if (creationTime + lifetime < System.currentTimeMillis() && !state.isFinal()) {
+                logger.info("expiring job #{}", getId());
+                setState(State.FAILED, "Request lifetime expired.");
             }
         } catch (IllegalStateTransition e) {
             logger.error("Illegal state transition while expiring job: {}", e.toString());
@@ -1002,12 +976,12 @@ public abstract class Job  {
     {
         wlock();
         try{
-            if(!State.PENDING.equals(state)) {
+            if(state != State.PENDING) {
                 throw new IllegalStateException("Job " +
                         getClass().getSimpleName() + " [" + this.getId() +
                         "] has state " + state + "(not PENDING)");
             }
-            setScheduler(scheduler.getId(), 0);
+            setScheduler(scheduler.getId(), scheduler.getTimestamp());
             scheduler.schedule(this);
         } finally {
             wunlock();
@@ -1121,6 +1095,11 @@ public abstract class Job  {
             switch (state) {
             // Pending jobs were never worked on before the SRM restart; we
             // simply schedule them now.
+            case TQUEUED:
+                setState(State.PENDING, "Restarting request.");
+                scheduler.schedule(this);
+                break;
+
             case PENDING:
                 scheduler.schedule(this);
                 break;

@@ -49,6 +49,8 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
     private final static Logger log =
         LoggerFactory.getLogger(DcacheResponseHandler.class);
 
+    private static final String HTML_TEMPLATE_NAME = "errorpage";
+
     private final static Splitter PATH_SPLITTER =
         Splitter.on('/').omitEmptyStrings();
 
@@ -82,6 +84,15 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
     {
         _templateGroup = new STGroupFile(resource.getURL(), "UTF-8", '$', '$');
         _templateGroup.setListener(new Slf4jSTErrorListener(log));
+
+        /* StringTemplate has lazy initialisation, but this is very racey and
+         * can break StringTemplate altogether:
+         *
+         *     https://github.com/antlr/stringtemplate4/issues/61
+         *
+         * here we force initialisation to work-around this.
+         */
+        _templateGroup.getInstanceOf(HTML_TEMPLATE_NAME);
     }
 
     /**
@@ -169,7 +180,13 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
         String[] base =
             Iterables.toArray(PATH_SPLITTER.split(path), String.class);
 
-        ST template = _templateGroup.getInstanceOf("errorpage");
+        ST template = _templateGroup.getInstanceOf(HTML_TEMPLATE_NAME);
+
+        if (template == null) {
+            log.error("template '{}' not found in templategroup: {}",
+                    HTML_TEMPLATE_NAME, _templateGroup.getFileName());
+            return templateNotFoundErrorPage(_templateGroup, HTML_TEMPLATE_NAME);
+        }
 
         template.add("path", UrlPathWrapper.forPaths(base));
         template.add("base", UrlPathWrapper.forEmptyPath());
@@ -183,6 +200,22 @@ public class DcacheResponseHandler extends AbstractWrappingResponseHandler
         }
 
         return template.render();
+    }
+
+    public static String templateNotFoundErrorPage(STGroup group, String template)
+    {
+        return "<html><head><title>Broken dCache installation</title></head>" +
+                "<body><div style='margin: 5px; border: 2px solid red; padding: 2px 10px;'>" +
+                "<h1>Broken dCache installation</h1>" +
+                "<p style='width: 50em'>The webdav service of your dCache " +
+                "installation cannot generate this page correctly because it could " +
+                "not find the <tt style='font-size: 120%; color: green;'>" + template +
+                "</tt> template.  Please check the file <tt>" +
+                group.getFileName() + "</tt> for a line that starts:</p>" +
+                "<code>" + template + "(...) ::= &lt;&lt;</code>" +
+                "<p style='width: 50em'>For more details on the format of this file, see the " +
+                "<a href='https://theantlrguy.atlassian.net/wiki/display/ST4/Group+file+syntax'>" +
+                "template language documentation</a>.</p></div></body></html>";
     }
 
     @Override

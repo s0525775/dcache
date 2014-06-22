@@ -1,6 +1,7 @@
 package org.dcache.chimera.namespace;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -220,8 +221,8 @@ public class ChimeraNameSpaceProvider
 
             ExtendedInode inode = parent.create(newEntryFile.getName(), uid, gid, mode);
             FileAttributes fileAttributes = getFileAttributes(inode, requestedAttributes);
-            if (inode.getTags().containsKey(TAG_EXPECTED_SIZE)) {
-                fileAttributes.setSize(Long.parseLong(getFirst(inode.getTag(TAG_EXPECTED_SIZE), "0")));
+            if (parent.getTags().containsKey(TAG_EXPECTED_SIZE)) {
+                fileAttributes.setSize(Long.parseLong(getFirst(parent.getTag(TAG_EXPECTED_SIZE), "0")));
             }
             return fileAttributes;
         } catch (NotDirChimeraException e) {
@@ -908,13 +909,12 @@ public class ChimeraNameSpaceProvider
                         break;
                     case CHECKSUM:
                         for (Checksum sum: attr.getChecksums()) {
-                            int type = sum.getType().getType();
+                            ChecksumType type = sum.getType();
                             String value = sum.getValue();
-                            String existingValue =
-                                _fs.getInodeChecksum(inode, type);
-                            if (existingValue == null) {
-                                _fs.setInodeChecksum(inode, type, value);
-                            } else if (!existingValue.equals(value)) {
+                            Optional<Checksum> existingSum = Checksum.forType(_fs.getInodeChecksums(inode),type);
+                            if (!existingSum.isPresent()) {
+                                _fs.setInodeChecksum(inode, type.getType(), value);
+                            } else if (!existingSum.get().equals(sum)) {
                                 throw new CacheException(CacheException.INVALID_ARGS,
                                                          "Checksum mismatch");
                             }
@@ -1119,7 +1119,7 @@ public class ChimeraNameSpaceProvider
             /* File must not exist unless overwrite is enabled.
              */
             try {
-                FsInode inodeOfPath = parentOfPath.inodeOf(path.getName());
+                ExtendedInode inodeOfPath = parentOfPath.inodeOf(path.getName());
                 if (!options.contains(CreateOption.OVERWRITE_EXISTING)) {
                     throw new FileExistsCacheException("File exists: " + path);
                 }
@@ -1292,7 +1292,7 @@ public class ChimeraNameSpaceProvider
                 uploadDirInode = _fs.path2inode(temporaryDir.getParent().toString());
                 temporaryDirInode = uploadDirInode.inodeOf(temporaryPath.getParent().getName());
             } catch (FileNotFoundHimeraFsException e) {
-                throw new FileNotFoundCacheException("No such file or directory: " + temporaryPath, e);
+                throw new FileNotFoundCacheException("No such file or directory: " + temporaryDir, e);
             }
 
             /* Subject must be authorized to cancel the upload.

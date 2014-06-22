@@ -68,6 +68,8 @@ class FsSqlDriver {
      */
     private final static int IOMODE_ENABLE = 1;
     private final static int IOMODE_DISABLE = 0;
+    public static final String DUPLICATE_KEY_ERROR = "23505";
+    public static final String FOREIGN_KEY_ERROR = "23503";
     private final int _ioMode;
 
     /**
@@ -2403,44 +2405,7 @@ class FsSqlDriver {
         }
 
     }
-    private static final String sqlGetInodeChecksum = "SELECT isum FROM t_inodes_checksum WHERE ipnfsid=? AND itype=?";
 
-    /**
-     *
-     * @param dbConnection
-     * @param inode
-     * @param type
-     * @return HEX presentation of the checksum value for the specific file and checksum type or null
-     * @throws SQLException
-     */
-    String getInodeChecksum(Connection dbConnection, FsInode inode, int type) throws SQLException {
-
-
-        String checksum = null;
-
-        PreparedStatement stGetInodeChecksum = null;
-        ResultSet getGetInodeChecksumResultSet = null;
-
-        try {
-
-            stGetInodeChecksum = dbConnection.prepareStatement(sqlGetInodeChecksum);
-            stGetInodeChecksum.setString(1, inode.toString());
-            stGetInodeChecksum.setInt(2, type);
-
-            getGetInodeChecksumResultSet = stGetInodeChecksum.executeQuery();
-
-            if (getGetInodeChecksumResultSet.next()) {
-                checksum = getGetInodeChecksumResultSet.getString("isum");
-            }
-
-        } finally {
-            SqlHelper.tryToClose(getGetInodeChecksumResultSet);
-            SqlHelper.tryToClose(stGetInodeChecksum);
-        }
-
-        return checksum;
-
-    }
     private static final String sqlGetInodeChecksums = "SELECT isum, itype FROM t_inodes_checksum WHERE ipnfsid=?";
     /**
      *
@@ -2728,7 +2693,7 @@ class FsSqlDriver {
       * @return true is sqlState is a unique key violation and false other wise
       */
     public boolean isDuplicatedKeyError(String sqlState) {
-        return sqlState.equals("23505");
+        return sqlState.equals(DUPLICATE_KEY_ERROR);
     }
 
     /**
@@ -2737,7 +2702,7 @@ class FsSqlDriver {
      * @return true is sqlState is a foreign key violation and false other wise
      */
     public boolean isForeignKeyError(String sqlState) {
-        return sqlState.equals("23503");
+        return sqlState.equals(FOREIGN_KEY_ERROR);
     }
 
     /**

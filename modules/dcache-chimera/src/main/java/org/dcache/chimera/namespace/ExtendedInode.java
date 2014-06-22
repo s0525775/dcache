@@ -44,7 +44,6 @@ import org.dcache.chimera.FsInodeType;
 import org.dcache.chimera.StorageLocatable;
 import org.dcache.chimera.store.InodeStorageInformation;
 import org.dcache.util.Checksum;
-import org.dcache.util.ChecksumType;
 
 import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Iterables.transform;
@@ -67,6 +66,13 @@ public class ExtendedInode extends FsInode
     private ACL acl;
     private HashMap<Integer, ExtendedInode> levels;
     private InodeStorageInformation storageInfo;
+    private Optional<ExtendedInode> parent;
+
+    public ExtendedInode(ExtendedInode parent, FsInode inode)
+    {
+        this(inode);
+        this.parent = Optional.of(parent);
+    }
 
     public ExtendedInode(FsInode inode)
     {
@@ -107,26 +113,35 @@ public class ExtendedInode extends FsInode
     @Override
     public ExtendedInode mkdir(String newDir) throws ChimeraFsException
     {
-        return new ExtendedInode(super.mkdir(newDir));
+        return new ExtendedInode(this, super.mkdir(newDir));
     }
 
     @Override
     public ExtendedInode mkdir(String name, int owner, int group, int mode) throws ChimeraFsException
     {
-        return new ExtendedInode(super.mkdir(name, owner, group, mode));
+        return new ExtendedInode(this, super.mkdir(name, owner, group, mode));
     }
 
     @Override
     public ExtendedInode create(String name, int uid, int gid, int mode) throws ChimeraFsException
     {
-        return new ExtendedInode(super.create(name, uid, gid, mode));
+        return new ExtendedInode(this, super.create(name, uid, gid, mode));
+    }
+
+    @Override
+    public ExtendedInode inodeOf(String name) throws ChimeraFsException
+    {
+        return new ExtendedInode(this, super.inodeOf(name));
     }
 
     @Override
     public ExtendedInode getParent()
     {
-        FsInode parent = super.getParent();
-        return (parent == null) ? null : new ExtendedInode(parent);
+        if (parent == null) {
+            FsInode actualParent = super.getParent();
+            parent = Optional.fromNullable(actualParent != null ? new ExtendedInode(actualParent) : null);
+        }
+        return parent.get();
     }
 
     public ImmutableMap<String,byte[]> getTags() throws ChimeraFsException
@@ -150,14 +165,7 @@ public class ExtendedInode extends FsInode
     public ImmutableCollection<Checksum> getChecksums() throws ChimeraFsException
     {
         if (checksums == null) {
-            ImmutableList.Builder<Checksum> builder = ImmutableList.builder();
-            for (ChecksumType type: ChecksumType.values()) {
-                String value = _fs.getInodeChecksum(this, type.getType());
-                if (value != null) {
-                    builder.add(new Checksum(type, value));
-                }
-            }
-            checksums = builder.build();
+            checksums = ImmutableList.copyOf(_fs.getInodeChecksums(this));
         }
         return checksums;
     }
