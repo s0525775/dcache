@@ -32,7 +32,6 @@
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.http.HttpEntity;
@@ -46,8 +45,11 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
 import java.security.KeyStore;
+import org.apache.http.conn.ClientConnectionManager;
 import org.apache.http.conn.scheme.Scheme;
+import org.apache.http.conn.scheme.SchemeRegistry;
 import org.apache.http.conn.ssl.SSLSocketFactory;
+import org.apache.http.impl.conn.PoolingClientConnectionManager;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -72,16 +74,20 @@ import org.junit.Test;
  *
  * @author Mark A. Carlson
  */
-public class CDMITlsPwTest {
-    private final static String KEYSTORE = "my.keystore";
-    private final static String PASSWORD = "nopassword";
+public class CDMITlsTwoWayTest {
+    private final static String KEYSTORE = "/home/Jana/grid-security/client.jks";
+    private final static String KEYSTORE_PASSWORD = "testing.1";
+    private final static String KEYSTORE_TYPE = "JKS";
+    private final static String TRUSTSTORE = "/home/Jana/grid-security/certificates.jks";
+    private final static String TRUSTSTORE_PASSWORD = "test123";
+    private final static String TRUSTSTORE_TYPE = "JKS";
 
     public static class HelperClass {
         public static void sleep(long ms) {
             try {
                 Thread.sleep(ms);
             } catch (InterruptedException ex) {
-                Logger.getLogger(CDMITlsPwTest.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(CDMITlsTwoWayTest.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }
@@ -89,23 +95,25 @@ public class CDMITlsPwTest {
     @Test
     public void testCapabilities() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
-            HttpGet httpget = new HttpGet("http://localhost:8543/cdmi_capabilities");
+            HttpGet httpget = new HttpGet("https://localhost:8543/cdmi_capabilities");
             httpget.setHeader("Accept", "application/cdmi-capability");
             httpget.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpget);
@@ -139,23 +147,25 @@ public class CDMITlsPwTest {
     @Test
     public void testContainerCreate() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
-            HttpPut httpput = new HttpPut("http://localhost:8543/TestContainer");
+            HttpPut httpput = new HttpPut("https://localhost:8543/TestContainer");
             httpput.setHeader("Content-Type", "application/cdmi-container");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             //httpput.setEntity(new StringEntity("{ \"metadata\" : { } }"));
@@ -191,23 +201,25 @@ public class CDMITlsPwTest {
     @Test
     public void testContainerUpdate() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
-            HttpPut httpput = new HttpPut("http://localhost:8543/TestContainer/");
+            HttpPut httpput = new HttpPut("https://localhost:8543/TestContainer/");
             httpput.setHeader("Content-Type", "application/cdmi-container");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             //httpput.setEntity(new StringEntity("{ \"metadata\" : { } }"));
@@ -243,24 +255,26 @@ public class CDMITlsPwTest {
     @Test
     public void testObjectCreate() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
             HttpPut httpput = new HttpPut(
-                    "http://localhost:8543/TestContainer/TestObject.txt");
+                    "https://localhost:8543/TestContainer/TestObject.txt");
             httpput.setHeader("Content-Type", "application/cdmi-object");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             String respStr = "{\n";
@@ -295,24 +309,26 @@ public class CDMITlsPwTest {
     @Test
     public void testObjectUpdate() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
             HttpPut httpput = new HttpPut(
-                    "http://localhost:8543/TestContainer/TestObject.txt");
+                    "https://localhost:8543/TestContainer/TestObject.txt");
             httpput.setHeader("Content-Type", "application/cdmi-object");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             String respStr = "{\n";
@@ -347,24 +363,26 @@ public class CDMITlsPwTest {
     @Test
     public void testObjectDelete() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
             HttpDelete httpdelete = new HttpDelete(
-                    "http://localhost:8543/TestContainer/TestObject.txt");
+                    "https://localhost:8543/TestContainer/TestObject.txt");
             httpdelete.setHeader("Content-Type", "application/cdmi-object");
             httpdelete.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpdelete);
@@ -391,24 +409,26 @@ public class CDMITlsPwTest {
     @Test
     public void testContainerDelete() throws Exception {
         HelperClass.sleep(3000);
-        HttpClient httpclient = new DefaultHttpClient();
+        HttpClient httpclient;
 
         try {
-            KeyStore trustStore  = KeyStore.getInstance(KeyStore.getDefaultType());
-            FileInputStream fis = new FileInputStream(new File(KEYSTORE));
-            try {
-                trustStore.load(fis, PASSWORD.toCharArray());
-            } finally {
-                try { fis.close(); } catch (IOException ignore) {}
-            }
-            SSLSocketFactory socketFactory = new SSLSocketFactory(trustStore);
-            Scheme sch = new Scheme("https", socketFactory, 8543);
-            httpclient.getConnectionManager().getSchemeRegistry().register(sch);
+            KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
+            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
+            KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
+            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+            SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
+            Scheme scheme = new Scheme("https", 8543, socketFactory);
+            SchemeRegistry registry = new SchemeRegistry();
+            registry.register(scheme);
+            ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
+            httpclient = new DefaultHttpClient(ccm);
 
             // Create the request
             HttpResponse response = null;
             HttpDelete httpdelete = new HttpDelete(
-                    "http://localhost:8543/TestContainer");
+                    "https://localhost:8543/TestContainer");
             httpdelete.setHeader("Content-Type", "application/cdmi-container");
             httpdelete.setHeader("X-CDMI-Specification-Version", "1.0.2");
             response = httpclient.execute(httpdelete);
@@ -431,4 +451,5 @@ public class CDMITlsPwTest {
             System.out.println(ex);
         }// exception
     }
+
 }
