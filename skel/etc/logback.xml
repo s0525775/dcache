@@ -206,8 +206,7 @@
     <threshold>
       <appender>events</appender>
       <logger>org.dcache.events</logger>
-      <!-- <level>${dcache.log.level.events}</level> -->
-      <level>debug</level>
+      <level>${dcache.log.level.events}</level>
     </threshold>
 
     <threshold>

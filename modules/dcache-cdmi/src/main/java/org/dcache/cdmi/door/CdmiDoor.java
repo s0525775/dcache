@@ -497,13 +497,13 @@ public class CdmiDoor
      * @throws java.net.URISyntaxException
      */
     public void readFile(FsPath path, PnfsId pnfsid,
-                         OutputStream outputStream, io.milton.http.Range range)
+                         OutputStream outputStream)
             throws CacheException, InterruptedException, IOException,
                    URISyntaxException
     {
         ReadTransfer transfer = beginRead(path, pnfsid, true);
         try {
-            transfer.relayData(outputStream, range);
+            transfer.relayData(outputStream);
         } catch (CacheException e) {
             transfer.notifyBilling(e.getRc(), e.getMessage());
             throw e;
@@ -798,7 +798,7 @@ public class CdmiDoor
             }
         }
 
-        public void relayData(OutputStream outputStream, io.milton.http.Range range)
+        public void relayData(OutputStream outputStream)
             throws IOException, CacheException, InterruptedException
         {
             setStatus("Mover " + getPool() + "/" + getMoverId() +
@@ -809,10 +809,6 @@ public class CdmiDoor
                     (HttpURLConnection) url.openConnection();
                 try {
                     connection.setRequestProperty("Connection", "Close");
-                    if (range != null) {
-                        connection.addRequestProperty("Range", String.format("bytes=%d-%d", range.getStart(), range.getFinish()));
-                    }
-
                     connection.connect();
                     try (InputStream inputStream = connection
                             .getInputStream()) {

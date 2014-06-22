@@ -308,7 +308,7 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
     {
         System.out.println("Here15...");
         Object object = request.getAttribute(X509_CERTIFICATE_ATTRIBUTE);
-        System.out.println("Here16...");
+        System.out.println("Here16: " + object.getClass());
         if (object instanceof X509Certificate[]) {
             System.out.println("Here17...");
             try {
