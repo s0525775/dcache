@@ -176,10 +176,25 @@
         </jaxrs:serviceBeans>
     </jaxrs:server>
 
+    <!--
+    <httpj:engine-factory id="https">
+        <httpj:engine port="8543">
+            <httpj:tlsServerParameters>
+                <sec:keyManagers keyPassword="${cdmi.authn.keystore.password}">
+                    <sec:keyStore type="PKCS12" file="${cdmi.authn.keystore}" password="${cdmi.authn.keystore.password}"/>
+                </sec:keyManagers>
+                <sec:trustManagers>
+                    <sec:keyStore file="${cdmi.authn.truststore}" password="${cdmi.authn.truststore.password}"/>
+                </sec:trustManagers>
+            </httpj:tlsServerParameters>
+        </httpj:engine>
+    </httpj:engine-factory>
+    -->
+
+    <!--
     <httpj:engine-factory id="https" bus="cxf">
         <httpj:identifiedTLSServerParameters id="secure">
             <httpj:tlsServerParameters>
-                <!-- workaround, not documented by Apache or Eclipse -->
             </httpj:tlsServerParameters>
         </httpj:identifiedTLSServerParameters>
         <httpj:engine port="${cdmi.net.ssl.port}">
@@ -209,6 +224,141 @@
             <httpj:sessionSupport>true</httpj:sessionSupport>
         </httpj:engine>
     </httpj:engine-factory>
+    -->
+
+    <httpj:engine-factory id="https" bus="cxf">
+        <httpj:identifiedTLSServerParameters id="secure">
+            <httpj:tlsServerParameters>
+                <sec:keyManagers keyPassword="test123">
+                    <sec:keyStore type="PKCS12" file="/certs/server/cert.p12" password="test123"/>
+                </sec:keyManagers>
+                <sec:trustManagers>
+                    <sec:keyStore file="/certs/server/truststore.jks" password="test123"/>
+                </sec:trustManagers>
+            </httpj:tlsServerParameters>
+        </httpj:identifiedTLSServerParameters>
+        <httpj:engine port="${cdmi.net.ssl.port}">
+            <httpj:tlsServerParametersRef id="secure" />
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
+            <httpj:connector>
+                <bean id="https-connector" class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
+                    <constructor-arg>
+                        <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
+                            <property name="keyStore" value="/certs/server/cert.p12"/>
+                            <property name="keyStoreType" value="PKCS12"/>
+                            <property name="keyStorePassword" value="test123"/>
+                            <property name="trustStore" value="/certs/server/truststore.jks"/>
+                            <property name="trustStorePassword" value="test123"/>
+                            <property name="wantClientAuth" value="true"/>
+                            <property name="needClientAuth" value="true"/>
+                            <property name="excludeCipherSuites" ref="banned-ciphers"/>
+                        </bean>
+                    </constructor-arg>
+                    <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
+                </bean>
+            </httpj:connector>
+            <httpj:handlers>
+                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+            </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
+        </httpj:engine>
+    </httpj:engine-factory>
+
+    <!--
+    <httpj:engine-factory id="https" bus="cxf">
+        <httpj:identifiedTLSServerParameters id="secure">
+            <httpj:tlsServerParameters>
+            </httpj:tlsServerParameters>
+        </httpj:identifiedTLSServerParameters>
+        <httpj:engine port="${cdmi.net.ssl.port}">
+            <httpj:tlsServerParametersRef id="secure"/>
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
+            <httpj:connector>
+                <bean id="https-connector" class="org.eclipse.jetty.server.ServerConnector">
+                    <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
+                    <property name="idleTimeout" value="30000"/>
+                    <property name="server" ref="sslServer"/>
+                    <property name="factories">
+                        <list>
+                            <bean id="sslContext" class="org.eclipse.jetty.http.ssl.SslContextFactory">
+                                <property name="keyStore" value="${cdmi.authn.keystore}"/>
+                                <property name="keyStoreType" value="PKCS12"/>
+                                <property name="keyStorePassword" value="${cdmi.authn.keystore.password}"/>
+                                <property name="trustStore" value="${cdmi.authn.truststore}"/>
+                                <property name="trustStorePassword" value="${cdmi.authn.truststore.password}"/>
+                                <property name="wantClientAuth" value="${cdmi.authn.accept-client-cert}"/>
+                                <property name="needClientAuth" value="${cdmi.authn.require-client-cert}"/>
+                                <property name="excludeCipherSuites" ref="banned-ciphers"/>
+                                <property name="protocol" value="TLSv1"/>
+                            </bean>
+                            <bean id="tlsHttpConfig" class="org.eclipse.jetty.server.HttpConfiguration">
+                                <property name="secureScheme" value="https"/>
+                                <property name="securePort" value="${cdmi.net.ssl.port}"/>
+                                <property name="customizer" ref="sslCustomizer"/>
+                                <replaced-method name="addCustomizer" replacer="sslCustomizer"/>
+                            </bean>
+                        </list>
+                    </property>
+                </bean>
+            </httpj:connector>
+            <httpj:handlers>
+                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+            </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
+        </httpj:engine>
+    </httpj:engine-factory>
+    -->
+
+    <!--
+    <bean id="sslServer" class="org.eclipse.jetty.server.Server"/>
+    <bean id="sslCustomizer" class="org.eclipse.jetty.server.SecureRequestCustomizer"/>
+
+    <httpj:engine-factory id="https" bus="cxf">
+        <httpj:identifiedTLSServerParameters id="secure">
+            <httpj:tlsServerParameters>
+            </httpj:tlsServerParameters>
+        </httpj:identifiedTLSServerParameters>
+        <httpj:engine port="${cdmi.net.ssl.port}">
+            <httpj:tlsServerParametersRef id="secure"/>
+            <httpj:threadingParameters minThreads="5" maxThreads="15" />
+            <httpj:connector>
+                <bean id="https-connector" class="org.eclipse.jetty.server.ServerConnector">
+                    <property name="port" value="${cdmi.net.ssl.port}"/>
+                    <property name="host" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
+                    <property name="idleTimeout" value="30000"/>
+                    <property name="server" ref="sslServer"/>
+                    <property name="factories">
+                        <list>
+                            <bean id="sslContext" class="org.eclipse.jetty.http.ssl.SslContextFactory">
+                                <property name="keyStore" value="${cdmi.authn.keystore}"/>
+                                <property name="keyStoreType" value="PKCS12"/>
+                                <property name="keyStorePassword" value="${cdmi.authn.keystore.password}"/>
+                                <property name="trustStore" value="${cdmi.authn.truststore}"/>
+                                <property name="trustStorePassword" value="${cdmi.authn.truststore.password}"/>
+                                <property name="wantClientAuth" value="${cdmi.authn.accept-client-cert}"/>
+                                <property name="needClientAuth" value="${cdmi.authn.require-client-cert}"/>
+                                <property name="excludeCipherSuites" ref="banned-ciphers"/>
+                                <property name="protocol" value="TLSv1"/>
+                            </bean>
+                            <bean id="tlsHttpConfig" class="org.eclipse.jetty.server.HttpConfiguration">
+                                <property name="secureScheme" value="https"/>
+                                <property name="securePort" value="${cdmi.net.ssl.port}"/>
+                                <property name="customizer" ref="sslCustomizer"/>
+                                <replaced-method name="addCustomizer" replacer="sslCustomizer"/>
+                            </bean>
+                        </list>
+                    </property>
+                </bean>
+            </httpj:connector>
+            <httpj:handlers>
+                <bean class="org.eclipse.jetty.server.handler.DefaultHandler"/>
+            </httpj:handlers>
+            <httpj:sessionSupport>true</httpj:sessionSupport>
+        </httpj:engine>
+    </httpj:engine-factory>
+    -->
 
     <jaxrs:server id="cdmiSSLService" address="https://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl.port}/"
                   depends-on="https" beanNames="objectIdResource pathResource">

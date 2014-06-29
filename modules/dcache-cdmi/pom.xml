@@ -41,17 +41,17 @@
     <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-rs-security-xml</artifactId>
-      <version>2.7.6</version>
+      <version>2.7.10</version>
     </dependency>
     <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-transports-http</artifactId>
-      <version>2.7.6</version>
+      <version>2.7.10</version>
     </dependency>
     <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-transports-http-jetty</artifactId>
-      <version>2.7.6</version>
+      <version>2.7.10</version>
     </dependency>
 
     <dependency>

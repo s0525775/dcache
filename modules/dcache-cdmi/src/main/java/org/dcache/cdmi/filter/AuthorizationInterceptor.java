@@ -50,6 +50,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import static java.util.Arrays.asList;
+import java.util.Enumeration;
 import java.util.Objects;
 import javax.security.auth.Subject;
 import javax.servlet.http.HttpServletRequest;
@@ -160,10 +161,12 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
     @Override
     public void handleMessage(Message msg) throws Fault
     {
+        System.setProperty("javax.net.debug", "ssl,handshake,record");
         Subject subject = new Subject();
         System.out.println("Here01...");
         HttpServletRequest servletRequest = (HttpServletRequest) msg.get("HTTP.REQUEST");
         System.out.println("Here02...");
+
 
         if (servletRequest == null) {
             _log.error("HttpServletRequest is null!");
@@ -307,8 +310,12 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
             throws CacheException
     {
         System.out.println("Here15...");
+        for (Enumeration requ = request.getAttributeNames(); requ.hasMoreElements() ;) System.out.println("Here15_1: " + requ.nextElement());
         Object object = request.getAttribute(X509_CERTIFICATE_ATTRIBUTE);
-        System.out.println("Here16: " + object.getClass());
+        System.out.println("Here16...");
+        if (request.getAttribute("SSL_PROTOCOL") != null) System.out.println("Here16_1: " + request.getAttribute("SSL_PROTOCOL"));
+        if (object != null) System.out.println("Here16_2: " + object.getClass());
+        if (object != null) System.out.println("Here16_3: " + object.toString());
         if (object instanceof X509Certificate[]) {
             System.out.println("Here17...");
             try {
@@ -342,9 +349,8 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         System.out.println("Here25...");
         AuthorizationPolicy auth = (AuthorizationPolicy) msg.get(AuthorizationPolicy.class);
         System.out.println("Here26...");
-        System.out.println("Here26_1: " + (auth != null));
-        if (auth != null) System.out.println("Here26_2: " + auth.getAuthorizationType().toUpperCase().equals(AUTH_BASIC));
-        System.out.println("Here26_3: " + _isBasicAuthenticationEnabled);
+        if (auth != null) System.out.println("Here26_1: " + auth.getAuthorizationType().toUpperCase());
+        System.out.println("Here26_2: " + _isBasicAuthenticationEnabled);
         if (auth != null && auth.getAuthorizationType().toUpperCase().equals(AUTH_BASIC) && _isBasicAuthenticationEnabled) {
             System.out.println("Here27...");
             PasswordCredential credential = new PasswordCredential(auth.getUserName(), auth.getPassword());
