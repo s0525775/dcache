@@ -32,11 +32,12 @@
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.http.HttpEntity;
-import org.apache.http.Header;
 import org.apache.http.HttpResponse;
+import org.apache.http.Header;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpPut;
@@ -45,11 +46,15 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
 import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import org.apache.http.conn.ClientConnectionManager;
 import org.apache.http.conn.scheme.Scheme;
 import org.apache.http.conn.scheme.SchemeRegistry;
 import org.apache.http.conn.ssl.SSLSocketFactory;
 import org.apache.http.impl.conn.PoolingClientConnectionManager;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpParams;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -75,12 +80,17 @@ import org.junit.Test;
  * @author Mark A. Carlson
  */
 public class CDMITlsTwoWayTest {
-    private final static String KEYSTORE = "/home/Jana/grid-security/client.jks";
-    private final static String KEYSTORE_PASSWORD = "testing.1";
+    private final static String X509_CERT = "/certs/client/mycert.p12";
+    private final static String KEYSTORE = "/certs/client/keystore.jks";
+    private final static String KEYSTORE_PASSWORD = "test123";
     private final static String KEYSTORE_TYPE = "JKS";
-    private final static String TRUSTSTORE = "/home/Jana/grid-security/certificates.jks";
+    private final static String TRUSTSTORE = "/certs/client/truststore.jks";
     private final static String TRUSTSTORE_PASSWORD = "test123";
     private final static String TRUSTSTORE_TYPE = "JKS";
+
+    static {
+        System.setProperty("javax.net.debug", "ssl,handshake,record");
+    }
 
     public static class HelperClass {
         public static void sleep(long ms) {
@@ -92,24 +102,32 @@ public class CDMITlsTwoWayTest {
         }
     }
 
-    @Test
+    @Ignore
     public void testCapabilities() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
 
         try {
             KeyStore keystore = KeyStore.getInstance(KEYSTORE_TYPE);
-            FileInputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
+            InputStream keystoreInput = new FileInputStream(new File(KEYSTORE));
             keystore.load(keystoreInput, KEYSTORE_PASSWORD.toCharArray());
             KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
-            FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
+            InputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
             truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+
+            InputStream certStream = new FileInputStream(X509_CERT);
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509Certificate cert = (X509Certificate)cf.generateCertificate(certStream);
+            certStream.close();
+            truststore.setCertificateEntry("x509", cert);
+
             SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
             Scheme scheme = new Scheme("https", 8543, socketFactory);
             SchemeRegistry registry = new SchemeRegistry();
             registry.register(scheme);
             ClientConnectionManager ccm = new PoolingClientConnectionManager(registry);
             httpclient = new DefaultHttpClient(ccm);
+            httpclient.getParams().setParameter(KEYSTORE, ccm);
 
             // Create the request
             HttpResponse response = null;
@@ -156,6 +174,7 @@ public class CDMITlsTwoWayTest {
             KeyStore truststore = KeyStore.getInstance(TRUSTSTORE_TYPE);
             FileInputStream truststoreIs = new FileInputStream(new File(TRUSTSTORE));
             truststore.load(truststoreIs, TRUSTSTORE_PASSWORD.toCharArray());
+
             SSLSocketFactory socketFactory = new SSLSocketFactory(keystore, KEYSTORE_PASSWORD, truststore);
             Scheme scheme = new Scheme("https", 8543, socketFactory);
             SchemeRegistry registry = new SchemeRegistry();
@@ -165,7 +184,7 @@ public class CDMITlsTwoWayTest {
 
             // Create the request
             HttpResponse response = null;
-            HttpPut httpput = new HttpPut("https://localhost:8543/TestContainer");
+            HttpPut httpput = new HttpPut("https://localhost:8543/TestContainer3");
             httpput.setHeader("Content-Type", "application/cdmi-container");
             httpput.setHeader("X-CDMI-Specification-Version", "1.0.2");
             //httpput.setEntity(new StringEntity("{ \"metadata\" : { } }"));
@@ -198,7 +217,7 @@ public class CDMITlsTwoWayTest {
         }// exception
     }
 
-    @Test
+    @Ignore
     public void testContainerUpdate() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
@@ -252,7 +271,7 @@ public class CDMITlsTwoWayTest {
         }// exception
     }
 
-    @Test
+    @Ignore
     public void testObjectCreate() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
@@ -306,7 +325,7 @@ public class CDMITlsTwoWayTest {
         }// exception
     }
 
-    @Test
+    @Ignore
     public void testObjectUpdate() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
@@ -360,7 +379,7 @@ public class CDMITlsTwoWayTest {
         }// exception
     }
 
-    @Test
+    @Ignore
     public void testObjectDelete() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
@@ -406,7 +425,7 @@ public class CDMITlsTwoWayTest {
         }// exception
     }
 
-    @Test
+    @Ignore
     public void testContainerDelete() throws Exception {
         HelperClass.sleep(3000);
         HttpClient httpclient;
