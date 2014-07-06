@@ -37,6 +37,7 @@ import org.dcache.cdmi.model.DcacheDataObject;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.dao.DataObjectDao;
+import org.snia.cdmiserver.exception.UnauthorizedException;
 import org.snia.cdmiserver.model.Container;
 import org.snia.cdmiserver.model.DataObject;
 
@@ -105,6 +106,10 @@ public class DcachePathResource
             containerDao.deleteByPath(path);
             return Response.noContent().header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
+        } catch (UnauthorizedException ex) {
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.UNAUTHORIZED).tag(
+                    "Object Delete Error: " + ex.toString()).build();
         } catch (Exception ex) {
             _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST).tag(
@@ -172,10 +177,14 @@ public class DcachePathResource
               return Response.ok(respStr).header(
                       "X-CDMI-Specification-Version", "1.0.2").build();
             }
+         } catch (UnauthorizedException ex) {
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .tag("Container Read Error: " + ex.toString()).build();
           } catch (Exception ex) {
             _log.trace(ex.toString());
-            return Response.status(Response.Status.NOT_FOUND).tag(
-                    "Container Read Error: " + ex.toString()).build();
+            return Response.status(Response.Status.NOT_FOUND)
+                    .tag("Container Read Error: " + ex.toString()).build();
           }
         }
         try {
@@ -189,10 +198,16 @@ public class DcachePathResource
             return Response.ok(respStr).header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
+        } catch (UnauthorizedException ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .tag("Object Fetch Error: " + ex.toString()).build();
         } catch (Exception ex) {
-          _log.trace(ex.toString());
-          return Response.status(Response.Status.BAD_REQUEST).tag(
-                  "Object Fetch Error: " + ex.toString()).build();
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .tag("Object Fetch Error: " + ex.toString()).build();
         }
     }
 
@@ -267,7 +282,13 @@ public class DcachePathResource
                     return Response.ok(respStr).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 }
+            } catch (UnauthorizedException ex) {
+                ex.printStackTrace();
+                _log.trace(ex.toString());
+                return Response.status(Response.Status.UNAUTHORIZED)
+                        .tag("Container Read Error: " + ex.toString()).build();
             } catch (Exception ex) {
+                ex.printStackTrace();
                 _log.trace(ex.toString());
                 return Response.status(Response.Status.NOT_FOUND)
                         .tag("Container Read Error: " + ex.toString()).build();
@@ -287,7 +308,13 @@ public class DcachePathResource
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 } // if/else
+            } catch (UnauthorizedException ex) {
+                ex.printStackTrace();
+                _log.trace(ex.toString());
+                return Response.status(Response.Status.UNAUTHORIZED)
+                        .tag("Object Fetch Error: " + ex.toString()).build();
             } catch (Exception ex) {
+                ex.printStackTrace();
                 _log.trace(ex.toString());
                 return Response.status(Response.Status.BAD_REQUEST)
                         .tag("Object Fetch Error: " + ex.toString()).build();
@@ -320,13 +347,12 @@ public class DcachePathResource
             @HeaderParam("X-CDMI-MustExist") @DefaultValue("false") String mustExist,
             byte[] bytes)
     {
-
         _log.trace("In DcachePathResource.putContainer, path={}", path);
 
         String inBuffer = new String(bytes);
         _log.trace("Request={}", inBuffer);
 
-        DcacheContainer containerRequest = new DcacheContainer();
+        Container containerRequest = new DcacheContainer();
 
         try {
             containerRequest.fromJson(bytes, false);
@@ -342,10 +368,16 @@ public class DcachePathResource
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
             } // if/else
+        } catch (UnauthorizedException ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .tag("Container Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
+            ex.printStackTrace();
             _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Object Creation Error: " + ex.toString()).build();
+                    .tag("Container Creation Error: " + ex.toString()).build();
         }
     }
 
@@ -401,10 +433,16 @@ public class DcachePathResource
             }
             dObj.fromJson(bytes,false);
             return Response.ok().build();
-        } catch (Exception ex) {
+        } catch (UnauthorizedException ex) {
+            ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST).tag(
-                  "Object PUT Error: " + ex.toString()).build();
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .tag("Object Creation Error: " + ex.toString()).build();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .tag("Object Creation Error: " + ex.toString()).build();
         }
     }
 
@@ -475,10 +513,16 @@ public class DcachePathResource
                         dObj.getObjectType()).build();
             }
             return Response.ok().build();
-        } catch (Exception ex) {
+        } catch (UnauthorizedException ex) {
+            ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST).
-              tag("Object Creation Error: " + ex.toString()).build();
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .tag("Object Creation Error: " + ex.toString()).build();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .tag("Object Creation Error: " + ex.toString()).build();
         }
     }
 

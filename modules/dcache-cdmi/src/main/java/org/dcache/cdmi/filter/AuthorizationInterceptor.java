@@ -17,7 +17,7 @@
  */
 
 // http://cxf.apache.org/docs/secure-jax-rs-services.html#SecureJAX-RSServices-Authentication
-// Has to be CXF 2.7.10 partially since it needs to be compatible with the newer Jetty-Server and since needs to be compatible
+// Has to be CXF 2.7.10 since it needs to be compatible with the newer Jetty-Server and since needs to be compatible
 // with JSR311 (version 1.1.1) as well. I can't use JSR311 (version 2.0) since it wouldn't be compatible with the dCache Core.
 
 // More Info: http://cxf.apache.org/docs/jax-rs.html#JAX-RS-FromJAX-RS1.1to2.0
@@ -40,32 +40,32 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PermissionDeniedCacheException;
-import java.lang.reflect.Method;
 import java.net.InetAddress;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.security.AccessController;
+import java.security.Principal;
 import java.security.PrivilegedAction;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import static java.util.Arrays.asList;
-import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import javax.security.auth.Subject;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.HttpMethod;
+import org.apache.cxf.common.security.SimplePrincipal;
 import org.apache.cxf.configuration.security.AuthorizationPolicy;
 import org.apache.cxf.interceptor.Fault;
 import org.apache.cxf.message.Message;
-import org.apache.cxf.security.SecurityContext;
+import org.apache.cxf.security.LoginSecurityContext;
 import org.apache.cxf.phase.AbstractPhaseInterceptor;
 import org.apache.cxf.phase.Phase;
 import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.Origin;
 import org.dcache.auth.PasswordCredential;
-import org.dcache.auth.attributes.HomeDirectory;
 import org.dcache.auth.attributes.LoginAttribute;
 import org.dcache.auth.attributes.ReadOnly;
 import org.dcache.auth.attributes.RootDirectory;
@@ -96,7 +96,7 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
     /**
      * <p>The realm name to use in authentication challenges.</p>
      */
-    private String _realm = "CDMI Service";
+    private String _realm = "dCache";
 
     public AuthorizationInterceptor()
     {
@@ -159,14 +159,10 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
     }
 
     @Override
-    public void handleMessage(Message msg) throws Fault
+    public void handleMessage(final Message msg) throws Fault
     {
-        System.setProperty("javax.net.debug", "ssl,handshake,record");
         Subject subject = new Subject();
-        System.out.println("Here01...");
         HttpServletRequest servletRequest = (HttpServletRequest) msg.get("HTTP.REQUEST");
-        System.out.println("Here02...");
-
 
         if (servletRequest == null) {
             _log.error("HttpServletRequest is null!");
@@ -180,58 +176,45 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
             throw new CdmiExceptionMapper(
                     new MethodNotAllowedException("Method " + msg.get(Message.HTTP_REQUEST_METHOD).toString() + " is not allowed"));
         }
-        System.out.println("Here03...");
 
         try {
-            System.out.println("Here04...");
-            addX509ChainToSubject(servletRequest, subject);
-            System.out.println("Here05...");
-            addOriginToSubject(servletRequest, subject);
-            System.out.println("Here06...");
-            addPasswordCredentialToSubject(msg, subject);
-            System.out.println("Here07...");
+            boolean certificate = false;
+            boolean origin = false;
+            boolean credentials = false;
+            certificate = addX509ChainToSubject(servletRequest, subject);
+            origin = addOriginToSubject(servletRequest, subject);
+            credentials = addPasswordCredentialToSubject(msg, subject);
 
-            LoginReply login = _loginStrategy.login(subject);
-            System.out.println("Here08...");
-            subject = login.getSubject();
-            System.out.println("Here09...");
+            if (certificate || credentials || origin) {
+                LoginReply login = _loginStrategy.login(subject);
+                subject = login.getSubject();
 
-            if (!isAuthorizedMethod(msg.get(Message.HTTP_REQUEST_METHOD).toString(), login)) {
+                if (!isAuthorizedMethod(msg.get(Message.HTTP_REQUEST_METHOD).toString(), login)) {
+                    throw new PermissionDeniedCacheException("Permission denied: read-only user");
+                }
+
+                checkRootPath(msg, login);
+
+                // Add the origin of the request to the subject. This
+                // ought to be processed in the LoginStrategy, but our
+                // LoginStrategies currently do not process the Origin.
+                addOriginToSubject(servletRequest, subject);
+
+                // Process the request as the authenticated user.
+                Subject.doAs(subject, new PrivilegedAction() {
+                    @Override
+                    public Object run() {
+                        ContextHolder.set(AccessController.getContext());
+                        Subject s1 = Subject.getSubject(AccessController.getContext());
+                        msg.put(LoginSecurityContext.class, createSecurityContext(s1));
+                        return s1;
+                    }
+                });
+
+            } else {
                 throw new PermissionDeniedCacheException("Permission denied: read-only user");
             }
 
-            System.out.println("Here10...");
-            checkRootPath(msg, login);
-            System.out.println("Here11...");
-
-            /* Add the origin of the request to the subject. This
-             * ought to be processed in the LoginStrategy, but our
-             * LoginStrategies currently do not process the Origin.
-             */
-            addOriginToSubject(servletRequest, subject);
-            System.out.println("Here12...");
-
-            //AuthorizationPolicy auth = (AuthorizationPolicy) msg.get(AuthorizationPolicy.class);
-            //Auth auth = request.getAuthorization();
-            //if (auth != null) {
-            //    auth.setTag(subject);
-            //}
-
-            /* Process the request as the authenticated user.
-             */
-            SecurityContext securityContext = (SecurityContext) msg.get(SecurityContext.class);
-            System.out.println("Here13...");
-            Subject.doAs(subject, new PrivilegedAction<Void>() {
-                    @Override
-                    public Void run()
-                        {
-                            //filterChain.process(request, response);
-                            return null;
-                        }
-                });
-            System.out.println("Here14...");
-        //} catch (RedirectException e) {
-        //    manager.getResponseHandler().respondRedirect(response, request, e.getUrl());
         } catch (PermissionDeniedCacheException e) {
             _log.warn("{} for path {} and {}", e.getMessage(), msg.get(Message.REQUEST_URI).toString(), subject);
             throw new CdmiExceptionMapper(
@@ -243,34 +226,58 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         }
     }
 
+    protected LoginSecurityContext createSecurityContext(final Subject subject)
+    {
+        return new LoginSecurityContext() {
+            @Override
+            public Subject getSubject() {
+                return subject;
+            }
+
+            @Override
+            public Set<Principal> getUserRoles() {
+                Set<Principal> principals = new HashSet<Principal>();
+                principals.add(new Principal() {
+                    @Override
+                    public String getName() {
+                        return "";
+                    }
+                });
+                return principals;
+            }
+
+            @Override
+            public Principal getUserPrincipal() {
+                String principal = null;
+                for (Principal prin : subject.getPrincipals()) {
+                    if ((prin != null) && (!prin.getName().isEmpty()))
+                        principal = prin.getName();
+                }
+                return new SimplePrincipal(principal);
+            }
+
+            @Override
+            public boolean isUserInRole(String role) {
+                return false;
+            }
+        };
+    }
+
     private void checkRootPath(Message msg, LoginReply login) throws CacheException
     {
         FsPath userRoot = new FsPath();
-        FsPath userHome = new FsPath();
         for (LoginAttribute attribute: login.getLoginAttributes()) {
             if (attribute instanceof RootDirectory) {
                 userRoot = new FsPath(((RootDirectory) attribute).getRoot());
-            } else if (attribute instanceof HomeDirectory) {
-                userHome = new FsPath(((HomeDirectory) attribute).getHome());
             }
         }
 
-        String path = msg.get(Message.REQUEST_URI).toString(); //absolutePath
+        String path = msg.get(Message.REQUEST_URI).toString();
         FsPath fullPath = new FsPath(_rootPath, new FsPath(path));
         if (!fullPath.startsWith(userRoot) &&
                 (_uploadPath == null || !fullPath.startsWith(_uploadPath))) {
             if (!path.equals("/")) {
                 throw new PermissionDeniedCacheException("Permission denied: path outside user's root");
-            }
-
-            try {
-                FsPath redirectFullPath = new FsPath(userRoot, userHome);
-                String redirectPath = _rootPath.relativize(redirectFullPath).toString();
-                URI uri = new URI(msg.get(Message.REQUEST_URI).toString());
-                URI redirect = new URI(uri.getScheme(), uri.getAuthority(), redirectPath, null, null);
-                //throw new RedirectException(null, redirect.toString());
-            } catch (URISyntaxException e) {
-                throw new CacheException(e.getMessage(), e);
             }
         }
     }
@@ -306,58 +313,46 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         }
     }
 
-    private void addX509ChainToSubject(HttpServletRequest request, Subject subject)
+    private boolean addX509ChainToSubject(HttpServletRequest request, Subject subject)
             throws CacheException
     {
-        System.out.println("Here15...");
-        for (Enumeration requ = request.getAttributeNames(); requ.hasMoreElements() ;) System.out.println("Here15_1: " + requ.nextElement());
+        boolean result = false;
         Object object = request.getAttribute(X509_CERTIFICATE_ATTRIBUTE);
-        System.out.println("Here16...");
-        if (request.getAttribute("SSL_PROTOCOL") != null) System.out.println("Here16_1: " + request.getAttribute("SSL_PROTOCOL"));
-        if (object != null) System.out.println("Here16_2: " + object.getClass());
-        if (object != null) System.out.println("Here16_3: " + object.toString());
         if (object instanceof X509Certificate[]) {
-            System.out.println("Here17...");
             try {
-                System.out.println("Here18...");
                 subject.getPublicCredentials().add(_cf.generateCertPath(asList((X509Certificate[]) object)));
-                System.out.println("Here19...");
+                result = true;
             } catch (CertificateException e) {
                 throw new CacheException("Failed to generate X.509 certificate path: " + e.getMessage(), e);
             }
         }
+        return result;
     }
 
-    private void addOriginToSubject(HttpServletRequest request, Subject subject)
+    private boolean addOriginToSubject(HttpServletRequest request, Subject subject)
     {
-        System.out.println("Here20...");
+        boolean result = false;
         String address = request.getRemoteAddr();
-        System.out.println("Here21...");
         try {
-            System.out.println("Here22...");
             Origin origin = new Origin(Origin.AuthType.ORIGIN_AUTHTYPE_STRONG, InetAddress.getByName(address));
-            System.out.println("Here23...");
             subject.getPrincipals().add(origin);
-            System.out.println("Here24...");
+            result = true;
         } catch (UnknownHostException e) {
             _log.warn("Failed to resolve " + address + ": " + e.getMessage());
         }
+        return result;
     }
 
-    private void addPasswordCredentialToSubject(Message msg, Subject subject)
+    private boolean addPasswordCredentialToSubject(Message msg, Subject subject)
     {
-        System.out.println("Here25...");
+        boolean result = false;
         AuthorizationPolicy auth = (AuthorizationPolicy) msg.get(AuthorizationPolicy.class);
-        System.out.println("Here26...");
-        if (auth != null) System.out.println("Here26_1: " + auth.getAuthorizationType().toUpperCase());
-        System.out.println("Here26_2: " + _isBasicAuthenticationEnabled);
-        if (auth != null && auth.getAuthorizationType().toUpperCase().equals(AUTH_BASIC) && _isBasicAuthenticationEnabled) {
-            System.out.println("Here27...");
+        if ((auth != null) && auth.getAuthorizationType().toUpperCase().equals(AUTH_BASIC) && _isBasicAuthenticationEnabled) {
             PasswordCredential credential = new PasswordCredential(auth.getUserName(), auth.getPassword());
-            System.out.println("Here28...");
             subject.getPrivateCredentials().add(credential);
-            System.out.println("Here29...");
+            result = true;
         }
+        return result;
     }
 
 }

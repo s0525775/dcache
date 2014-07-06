@@ -70,6 +70,7 @@ import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import org.apache.cxf.jaxrs.ext.MessageContext;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.cdmi.model.DcacheDataObject;
@@ -313,6 +314,25 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                       MILLISECONDS);
     }
 
+    /**
+     * Returns the current Subject of the calling thread.
+     */
+    private static Subject getSubject()
+    {
+        System.out.println("AccessController.GetContext: " + AccessController.getContext());
+        return Subject.getSubject(AccessController.getContext());
+    }
+
+    /**
+     * Returns the location URI of the current request. This is the
+     * full request URI excluding user information, query and fragments.
+     */
+    private static URI getLocation() throws URISyntaxException
+    {
+        URI uri = new URI("http://localhost:8543");
+        return new URI(uri.getScheme(), null, uri.getHost(),
+                uri.getPort(), uri.getPath(), null, null);
+    }
 
     /**
      * <p>
@@ -732,7 +752,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         FsPath fsPath = new FsPath(tmpPath);
         Map<String, FileAttributes> result = new HashMap<>();
         try {
-            listDirectoryHandler.printDirectory(Subjects.ROOT, new ListPrinter(result), fsPath, null, Range.<Integer>all());
+            listDirectoryHandler.printDirectory(getSubject(), new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
             _log.warn("DcacheDataObjectDao, Directory and file listing for path '{}' was not possible, internal error message={}", path, ex.getMessage());
         }
@@ -796,161 +816,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     }
 
     /**
-     * <p>
-     * Writes a File to dCache and fetches FileAttributes, simple way.
-     * </p>
-     * @param filePath
-     * @param data
-     * @return
-     */
-    public boolean writeFile2(String filePath, String data)
-    {
-        boolean result = false;
-        try {
-            //The order of all commands is very important!
-            Subject subject = Subjects.ROOT;
-            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
-            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            transfer.setPoolStub(poolStub);
-            transfer.setPoolManagerStub(poolMgrStub);
-            transfer.setBillingStub(billingStub);
-            transfer.setCellName(getCellName());
-            transfer.setDomainName(getCellDomainName());
-            transfer.setProtocolInfo(cdmiProtocolInfo);
-            transfer.setOverwriteAllowed(true);
-            try {
-                transfer.createNameSpaceEntryWithParents();
-                try {
-                    transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    write(data);
-                }
-                finally {
-                    pnfsId = transfer.getPnfsId();
-                }
-                if (pnfsId != null) _log.trace("DcacheDataObjectDao<Write>-pnfsId={}", pnfsId);
-                _log.trace("DcacheDataObjectDao<Write>-data={}", data);
-                result = true;
-            } finally {
-            }
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
-            _log.error("DcacheDataObjectDao, File could not become written, {}", ex.getMessage());
-        }
-        return result;
-    }
-
-    /**
-     * <p>
-     * Reads a File from dCache and fetches FileAttributes, simple way.
-     * </p>
-     * @param filePath
-     * @return
-     */
-    public String readFile2(String filePath)
-    {
-        String result = "";
-        try {
-            //The order of all commands is very important!
-            Subject subject = Subjects.ROOT;
-            CDMIProtocolInfo cdmiProtocolInfo = new CDMIProtocolInfo(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            Transfer transfer = new Transfer(pnfsHandler, subject, new FsPath(filePath));
-            transfer.setClientAddress(new InetSocketAddress(InetAddress.getLocalHost(), 0));
-            transfer.setPoolStub(poolStub);
-            transfer.setPoolManagerStub(poolMgrStub);
-            transfer.setBillingStub(billingStub);
-            transfer.setCellName(getCellName());
-            transfer.setDomainName(getCellDomainName());
-            transfer.setProtocolInfo(cdmiProtocolInfo);
-            try {
-                transfer.readNameSpaceEntry();
-                try {
-                    transfer.selectPoolAndStartMover(null, TransferRetryPolicies.tryOncePolicy(5000));
-                    result = read();
-                    _log.trace("DcacheDataObjectDao received data={}", result.toString());
-                }
-                finally {
-                    pnfsId = transfer.getFileAttributes().getPnfsId();
-                }
-                _log.trace("DcacheDataObjectDao<Read>-isWrite={}", transfer.isWrite());
-                if (pnfsId != null) _log.trace("DcacheDataObjectDao<Read>-pnfsId={}", pnfsId);
-                if (result != null) _log.trace("DcacheDataObjectDao<Read>-data={}", result.toString());
-            } finally {
-            }
-        } catch (CacheException | InterruptedException | UnknownHostException ex) {
-            _log.error("DcacheDataObjectDao, File could not become read, {}", ex.getMessage());
-        }
-        return result;
-    }
-
-    public synchronized void connect()
-    {
-        int tries = 0;
-        boolean connected = false;
-        try {
-            host = InetAddress.getLocalHost().getHostName();
-            while ((!connected) && (tries < maxTries)) {
-                try {
-                    socketChannel = SocketChannel.open();
-                    connected = socketChannel.connect(new InetSocketAddress(host, port));
-                    tries = tries + 1;
-                } catch (ConnectException ex) {
-                }
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-    }
-
-    private synchronized void write(String data)
-    {
-        connect();
-        try {
-            if ((socketChannel != null) && socketChannel.isConnected()) {
-                oos = new ObjectOutputStream(socketChannel.socket().getOutputStream());
-                String dataWrite1 = data;
-                oos.writeObject(dataWrite1);
-                oos.close();
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-        close();
-    }
-
-    private synchronized String read()
-    {
-        String data = "";
-        connect();
-        try {
-            if ((socketChannel != null) && socketChannel.isConnected()) {
-                ois = new ObjectInputStream(socketChannel.socket().getInputStream());
-                String dataRead1 = (String) ois.readObject();
-                data = dataRead1;
-                socketChannel.close();
-            }
-        } catch (ClassNotFoundException ex) {
-            ex.printStackTrace();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-        close();
-        return data;
-    }
-
-    private synchronized void close()
-    {
-        try {
-            if (socketChannel != null) socketChannel.close();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-    }
-
-    /**
      * Creates a new file. The door will relay all data to the pool.
      * @param path
      * @param inputStream
      * @param length
+     * @return
      * @throws diskCacheV111.util.CacheException
      * @throws java.lang.InterruptedException
      * @throws java.io.IOException
@@ -962,7 +832,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     {
         boolean success = false;
         Subject subject = getSubject();
-        subject = Subjects.ROOT;
 
         WriteTransfer transfer = new WriteTransfer(pnfsHandler, subject, path);
         _transfers.put((int) transfer.getSessionId(), transfer);
@@ -1115,7 +984,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             throws CacheException, InterruptedException, URISyntaxException
     {
         Subject subject = getSubject();
-        subject = Subjects.ROOT;
 
         String uri = null;
         ReadTransfer transfer = new ReadTransfer(pnfsHandler, subject, path, pnfsid);
@@ -1153,25 +1021,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             }
         }
         return transfer;
-    }
-
-    /**
-     * Returns the current Subject of the calling thread.
-     */
-    private static Subject getSubject()
-    {
-        return Subject.getSubject(AccessController.getContext());
-    }
-
-    /**
-     * Returns the location URI of the current request. This is the
-     * full request URI excluding user information, query and fragments.
-     */
-    private static URI getLocation() throws URISyntaxException
-    {
-        URI uri = new URI("http://localhost:8543");
-        return new URI(uri.getScheme(), null, uri.getHost(),
-                uri.getPort(), uri.getPath(), null, null);
     }
 
     private void initializeTransfer(HttpTransfer transfer, Subject subject)

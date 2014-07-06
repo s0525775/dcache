@@ -91,6 +91,12 @@ public class DcacheDataObject extends DataObject
         return pnfsID;
     }
 
+    @Override
+    public String getObjectID()
+    {
+        return objectID;
+    }
+
     public List<HashMap<String, String>> getSubMetadata_ACL()
     {
         return subMetadata_ACL;
@@ -117,6 +123,12 @@ public class DcacheDataObject extends DataObject
     public void setPnfsID(String pnfsId)
     {
         this.pnfsID = pnfsId;
+    }
+
+    @Override
+    public void setObjectID(String objectId)
+    {
+        this.objectID = objectId;
     }
 
     public void addSubMetadata_ACL(HashMap<String, String> metadata)
@@ -266,77 +278,90 @@ public class DcacheDataObject extends DataObject
             String key = jp.getCurrentName();
             switch (key) {
                 case "metadata":
-                    tolkein = jp.nextToken();
-                    while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                        key = jp.getCurrentName();
+                    {
                         tolkein = jp.nextToken();
-                        String value = jp.getText();
-                        _log.trace("- Key={} : Value={}", value);
-                        this.getMetadata().put(key, value);
-                    }//while
-                    break;
+                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                            key = jp.getCurrentName();
+                            tolkein = jp.nextToken();
+                            String value = jp.getText();
+                            _log.trace("- Key={} : Value={}", value);
+                            this.getMetadata().put(key, value);
+                        }//while
+                        break;
+                    }
                 case "value":
-                    jp.nextToken();
-                    String value1 = jp.getText();
-                    _log.trace("Key={} : Val={}", value1);
-                    this.setValue(value1);
-                    break;
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", value);
+                        this.setValue(value);
+                        break;
+                    }
                 case "mimetype":
-                    jp.nextToken();
-                    String value2 = jp.getText();
-                    _log.trace("Key={} : Val={}", value2);
-                    this.setMimetype(value2);
-                    break;
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", value);
+                        this.setMimetype(value);
+                        break;
+                    }
                 case "valuetransferencoding":
-                    jp.nextToken();
-                    // Ignore, it's from the Python CDMI test client
-                    break;
+                    {
+                        jp.nextToken();
+                        // Ignore, it's from the Python CDMI test client.
+                        // Regarding to the CDMI documentation, the client should put it
+                        // inside of the metadata and not outside of the metadata.
+                        // Usually, the CDMI server would have to throw an error message now.
+                        break;
+                    }
                 default:
                     if (fromFile) { // accept rest of key-values
                         switch (key) {
                             case "objectType":
-                            {
-                                jp.nextToken();
-                                String value3 = jp.getText();
-                                _log.trace("Key={} : Val={}", value3);
-                                this.setObjectType(value3);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", value);
+                                    setObjectType(value);
+                                    break;
+                                }
                             case "capabilitiesURI":
-                            {
-                                jp.nextToken();
-                                String value3 = jp.getText();
-                                _log.trace("Key={} : Val={}", value3);
-                                this.setCapabilitiesURI(value3);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", value);
+                                    setCapabilitiesURI(value);
+                                    break;
+                                }
                             case "objectID":
-                            {
-                                jp.nextToken();
-                                String value3 = jp.getText();
-                                _log.trace("Key={} : Val={}", value3);
-                                this.setObjectID(value3);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", value);
+                                    setObjectID(value);
+                                    break;
+                                }
                             case "pnfsID":
-                            {
-                                jp.nextToken();
-                                String value3 = jp.getText();
-                                _log.trace("Key={} : Val={}", value3);
-                                this.setPnfsID(value3);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", value);
+                                    setPnfsID(value);
+                                    break;
+                                }
                             case "valueRange":
-                            {
-                                jp.nextToken();
-                                String value3 = jp.getText();
-                                _log.trace("Key={} : Val={}", value3);
-                                this.setValuerange(value3);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", value);
+                                    setValuerange(value);
+                                    break;
+                                }
                             default:
-                                _log.trace("Invalid Key: {}", key);
-                                throw new BadRequestException("Invalid Key: " + key);
+                                {
+                                    _log.trace("Invalid Key: {}", key);
+                                    throw new BadRequestException("Invalid Key: " + key);
+                                }
                         }
                     } else {
                         _log.trace("Invalid Key: {}", key);

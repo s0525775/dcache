@@ -52,7 +52,7 @@ public class DcacheContainer extends Container
     private String capabilitiesURI;
     private String completionStatus;
     private String childrenrange;
-    private final List<String> children = new ArrayList<String>();
+    private List<String> children = new ArrayList<String>();
 
     private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
@@ -125,6 +125,12 @@ public class DcacheContainer extends Container
     }
 
     @Override
+    public String getObjectID()
+    {
+        return objectID;
+    }
+
+    @Override
     public void setObjectType(String objectType)
     {
         this.objectType = objectType;
@@ -160,9 +166,20 @@ public class DcacheContainer extends Container
         this.childrenrange = childrenrange;
     }
 
+    public void setChildren(List<String> children)
+    {
+        this.children = children;
+    }
+
     public void setPnfsID(String pnfsId)
     {
         this.pnfsID = pnfsId;
+    }
+
+    @Override
+    public void setObjectID(String objectId)
+    {
+        this.objectID = objectId;
     }
 
     public List<HashMap<String, String>> getSubMetadata_ACL()
@@ -326,73 +343,84 @@ public class DcacheContainer extends Container
             String key = jp.getCurrentName();
             switch (key) {
                 case "metadata":
-                    tolkein = jp.nextToken();
-                    while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                        key = jp.getCurrentName();
+                    {
                         tolkein = jp.nextToken();
-                        String value = jp.getText();
-                        _log.trace("- Key={} : Value={}", key, value);
-                        this.getMetadata().put(key, value);
-                    }   break;
+                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                            key = jp.getCurrentName();
+                            tolkein = jp.nextToken();
+                            String value = jp.getText();
+                            _log.trace("- Key={} : Value={}", key, value);
+                            getMetadata().put(key, value);
+                        }   break;
+                    }
                 case "exports":
-                    tolkein = jp.nextToken();
-                    while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
-                        key = jp.getCurrentName();
-                        tolkein = jp.nextToken(); // Start
-                        tolkein = jp.nextToken(); // End
-                        this.getExports().put(key, null);
-                    }// while
-                    break;
+                    {
+                        tolkein = jp.nextToken();
+                        while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
+                            key = jp.getCurrentName();
+                            tolkein = jp.nextToken(); // Start
+                            tolkein = jp.nextToken(); // End
+                            getExports().put(key, null);
+                        }// while
+                        break;
+                    }
                 case "capabilitiesURI":
                     {
                         jp.nextToken();
-                        String value2 = jp.getText();
-                        _log.trace("Key={} : Val={}", key, value2);
-                        this.setCapabilitiesURI(value2);
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setCapabilitiesURI(value);
                         break;
                     }
                 case "domainURI":
                     {
                         jp.nextToken();
-                        String value2 = jp.getText();
-                        _log.trace("Key={} : Val={}", key, value2);
-                        this.setDomainURI(value2);
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setDomainURI(value);
                         break;
                     }
                 case "move":
                     {
                         jp.nextToken();
-                        String value2 = jp.getText();
-                        _log.trace("Key={} : Val={}", key, value2);
-                        this.setMove(value2);
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setMove(value);
                         break;
                     }
                 case "valuetransferencoding":
-                    jp.nextToken();
-                    // Ignore, it's from the Python CDMI test client
-                    break;
+                    {
+                        jp.nextToken();
+                        // Ignore, it's from the Python CDMI test client.
+                        // Regarding to the CDMI documentation, the client should put it
+                        // inside of the metadata and not outside of the metadata.
+                        // Usually, the CDMI server would have to throw an error message now.
+                        break;
+                    }
                 default:
                     if (fromFile) { // accept rest of key-values
                         switch (key) {
                             case "objectID":
-                            {
-                                jp.nextToken();
-                                String value2 = jp.getText();
-                                _log.trace("Key={} : Val={}", key, value2);
-                                this.setObjectID(value2);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", key, value);
+                                    setObjectID(value);
+                                    break;
+                                }
                             case "pnfsID":
-                            {
-                                jp.nextToken();
-                                String value2 = jp.getText();
-                                _log.trace("Key={} : Val={}", key, value2);
-                                this.setPnfsID(value2);
-                                break;
-                            }
+                                {
+                                    jp.nextToken();
+                                    String value = jp.getText();
+                                    _log.trace("Key={} : Val={}", key, value);
+                                    setPnfsID(value);
+                                    break;
+                                }
                             default:
-                                _log.trace("Invalid Key: {}", key);
-                                throw new BadRequestException("Invalid Key: " + key);
+                                {
+                                    _log.trace("Invalid Key: {}", key);
+                                    throw new BadRequestException("Invalid Key: " + key);
+                                }
                         }
                     } else {
                         _log.trace("Invalid Key: {}", key);
