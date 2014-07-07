@@ -19,13 +19,10 @@ package org.dcache.cdmi.dao.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.Maps;
-import static org.dcache.namespace.FileAttribute.*;
 import com.google.common.collect.Range;
 import com.google.common.io.ByteStreams;
 import diskCacheV111.util.CacheException;
-import diskCacheV111.util.FileNotFoundCacheException;
 import diskCacheV111.util.FsPath;
-import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.TimeoutCacheException;
@@ -44,8 +41,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import javax.security.auth.Subject;
-import org.dcache.auth.Subjects;
-import org.dcache.cdmi.mover.CDMIProtocolInfo;
 import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
 import dmg.cells.nucleus.CellMessage;
@@ -53,31 +48,28 @@ import dmg.cells.nucleus.CellMessageReceiver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import org.apache.cxf.jaxrs.ext.MessageContext;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
+import org.dcache.auth.Subjects;
+import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheDataObject;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
-import org.dcache.namespace.FileType;
+import static org.dcache.namespace.FileAttribute.*;
+import static org.dcache.namespace.FileType.*;
 import org.dcache.util.PingMoversTask;
 import org.dcache.util.RedirectedTransfer;
 import org.dcache.util.Transfer;
@@ -92,6 +84,7 @@ import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.DataObjectDao;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.ConflictException;
+import org.snia.cdmiserver.exception.UnauthorizedException;
 import org.snia.cdmiserver.model.DataObject;
 
 /* This class is dCache's DAO implementation class for SNIA's DataObjectDao interface.
@@ -112,14 +105,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheDataObjectDao.class);
 
-    //
     // Properties and Dependency Injection Methods by CDMI
-    //
     private String baseDirectoryName = null;
 
-    //
     // Properties and Dependency Injection Methods by dCache
-    //
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES =
         EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, MODE, ACL, OWNER, OWNER_GROUP);
     private static final String PROTOCOL_INFO_NAME = "Http";
@@ -127,40 +116,27 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private static final int PROTOCOL_INFO_MINOR_VERSION = 1;
     private static final int PROTOCOL_INFO_UNKNOWN_PORT = 0;
     private static final long PING_DELAY = 300000;
-    private static final int NOTFOUND_ERROR = 1;
-    private static final int PERMISSION_ERROR = 2;
-    private static final int PROVIDER_ERROR = 3;
-    private final Map<Integer,HttpTransfer> _transfers = Maps.newConcurrentMap();
-    private ScheduledExecutorService _executor;
+    private final Map<Integer,HttpTransfer> transfers = Maps.newConcurrentMap();
+    private ScheduledExecutorService executor;
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
     private ListDirectoryHandler listDirectoryHandler;
     private CellStub poolStub;
     private CellStub poolMgrStub;
     private CellStub billingStub;
-    private PnfsId pnfsId;
-    private FileAttributes _attributes;
-    private SocketChannel socketChannel = null;
-    private ObjectOutputStream  oos = null;
-    private ObjectInputStream ois = null;
-    private String host = "localhost";
-    private static final int port = 9999;
-    private static final int maxTries = 5;
-    private int _moverTimeout = 180000;
-    private TimeUnit _moverTimeoutUnit = MILLISECONDS;
-    private long _killTimeout = 1500;
-    private TimeUnit _killTimeoutUnit = MILLISECONDS;
-    private long _transferConfirmationTimeout = 60000;
-    private TimeUnit _transferConfirmationTimeoutUnit = MILLISECONDS;
-    private int _bufferSize = 65536;
-    private String _ioQueue;
-    private InetAddress _internalAddress;
-    private boolean _doRedirectOnRead = true;
-    private boolean _doRedirectOnWrite = true;
-    private boolean _isOverwriteAllowed;
-    private boolean _isAnonymousListingAllowed;
-    private TransferRetryPolicy _retryPolicy =
-        TransferRetryPolicies.tryOncePolicy(_moverTimeout, _moverTimeoutUnit);
+    private int moverTimeout = 180000;
+    private TimeUnit moverTimeoutUnit = MILLISECONDS;
+    private long killTimeout = 1500;
+    private TimeUnit killTimeoutUnit = MILLISECONDS;
+    private long transferConfirmationTimeout = 60000;
+    private TimeUnit transferConfirmationTimeoutUnit = MILLISECONDS;
+    private String ioQueue;
+    private InetAddress internalAddress;
+    private boolean isOverwriteAllowed;
+    private boolean isAnonymousListingAllowed;
+    private String realm = "dCache";
+    private TransferRetryPolicy retryPolicy =
+        TransferRetryPolicies.tryOncePolicy(moverTimeout, moverTimeoutUnit);
 
     /**
      * <p>
@@ -236,19 +212,40 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         this.billingStub = checkNotNull(billingStub);
     }
 
+    /**
+     * <p>
+     * Set AnonymousListing for dCache.
+     * </p>
+     *
+     * @param isAllowed
+     */
     public void setAnonymousListing(boolean isAllowed)
     {
-        _isAnonymousListingAllowed = isAllowed;
+        this.isAnonymousListingAllowed = isAllowed;
     }
 
+    /**
+     * <p>
+     * Returns if AnonymousListing is allowed.
+     * </p>
+     *
+     * @return
+     */
     public boolean isAnonymousListing()
     {
-        return _isAnonymousListingAllowed;
+        return this.isAnonymousListingAllowed;
     }
 
+    /**
+     * <p>
+     * Returns the internal Host address.
+     * </p>
+     *
+     * @return
+     */
     public String getInternalAddress()
     {
-        return _internalAddress.getHostAddress();
+        return this.internalAddress.getHostAddress();
     }
 
     /**
@@ -259,7 +256,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     public void messageArrived(CellMessage envelope,
                                HttpDoorUrlInfoMessage message)
     {
-        HttpTransfer transfer = _transfers.get((int) message.getId());
+        HttpTransfer transfer = transfers.get((int) message.getId());
         if (transfer != null) {
             transfer.redirect(message.getUrl());
         }
@@ -272,7 +269,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      */
     public void messageArrived(DoorTransferFinishedMessage message)
     {
-        Transfer transfer = _transfers.get((int) message.getId());
+        Transfer transfer = transfers.get((int) message.getId());
         if (transfer != null) {
             transfer.finished(message);
         }
@@ -280,26 +277,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     public DcacheDataObjectDao() throws UnknownHostException
     {
-        _internalAddress = InetAddress.getLocalHost();
-    }
-
-    /**
-     * Returns a boolean indicating if the request should be redirected to a
-     * pool.
-     *
-     * @param request a Request
-     * @return a boolean indicating if the request should be redirected
-     */
-    public boolean shouldRedirect(String request)
-    {
-        switch (request) {
-        case "GET":
-            return _doRedirectOnRead;
-        case "PUT":
-            return _doRedirectOnWrite;
-        default:
-            return false;
-        }
+        this.internalAddress = InetAddress.getLocalHost();
     }
 
     /**
@@ -308,10 +286,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      */
     public void setExecutor(ScheduledExecutorService executor)
     {
-        _executor = executor;
-        _executor.scheduleAtFixedRate(new PingMoversTask<>(_transfers.values()),
-                                      PING_DELAY, PING_DELAY,
-                                      MILLISECONDS);
+        this.executor = executor;
+        executor.scheduleAtFixedRate(new PingMoversTask<>(transfers.values()),
+                                     PING_DELAY, PING_DELAY,
+                                     MILLISECONDS);
     }
 
     /**
@@ -320,7 +298,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private static Subject getSubject()
     {
         System.out.println("AccessController.GetContext: " + AccessController.getContext());
-        return Subject.getSubject(AccessController.getContext());
+        return Subject.getSubject(ContextHolder.get());
     }
 
     /**
@@ -358,21 +336,21 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         return containerName;
     }
 
-    //
     // DataObjectDao Methods invoked from PathResource
-    //
     @Override
-    public DcacheDataObject createByPath(String path, DataObject dObj) throws Exception {
-        //
-        String containerName = getcontainerName(path);
-
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-
-        DcacheDataObject newDObj = (DcacheDataObject) dObj;
-
-        //
-        File objFile, baseDirectory, containerDirectory;
+    public DcacheDataObject createByPath(String path, DataObject dObj) throws CacheException
+    {
+        _log.trace("In DCacheDataObjectDao.createByPath, Path={}", path);
         try {
+            String containerName = getcontainerName(path);
+
+            // ISO-8601 Date
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+            DcacheDataObject newDObj = (DcacheDataObject) dObj;
+
+            File objFile, baseDirectory, containerDirectory;
+
             _log.trace("baseDirectory={}", baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
             _log.trace("Base Directory AbsolutePath={}", baseDirectory.getAbsolutePath());
@@ -381,38 +359,47 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             //
             objFile = new File(baseDirectory, path);
             _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
-        } catch (Exception ex) {
-            _log.error("Exception while writing, {}", ex);
-            throw new IllegalArgumentException("Cannot write Object @" + path + ", error: " + ex);
-        }
 
-        // check for container
-        if (!checkIfDirectoryFileExists(containerDirectory.getAbsolutePath())) {
-            throw new ConflictException("Container <"
-                                        + containerDirectory.getAbsolutePath()
-                                        + "> doesn't exist");
-        }
-        if (checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
-            throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
-        }
-        try {
+            Subject subject = getSubject();
+            if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
+                throw new UnauthorizedException("Access denied", realm);
+            }
+
+            String base =  removeSlashesFromPath(baseDirectoryName);
+            String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+            if (!base.equals(parent)) {
+                if (!isUserAllowed(subject, parent)) {
+                    throw new UnauthorizedException("Access denied", realm);
+                }
+            }
+
+            // check for container
+            if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
+                throw new ConflictException("Container <"
+                                            + containerDirectory.getAbsolutePath()
+                                            + "> doesn't exist");
+            }
+            if (checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
+            }
+
             // Make object ID
             newDObj.setObjectType("application/cdmi-object");
             newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
             FsPath fsPath = new FsPath(objFile.getAbsolutePath());
             byte[] bytData = newDObj.getValue().getBytes(StandardCharsets.UTF_8);
             InputStream isData = new ByteArrayInputStream(bytData);
-            if (!writeFile(fsPath, isData, (long) bytData.length)) {
+            if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
                 _log.error("Exception while writing.");
-                throw new IllegalArgumentException("Cannot write Object file @"
-                                                   + path);
+                throw new IllegalArgumentException("Cannot write Object file @" + path);
             }
 
             //update ObjectID with correct ObjectID
+            PnfsId pnfsId = null;
             String objectID = "";
             int oowner = 0;
             ACL oacl = null;
-            FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
+            FileAttributes attr = getAttributesByPath(subject, objFile.getAbsolutePath());
             if (attr != null) {
                 pnfsId = attr.getPnfsId();
                 if (pnfsId != null) {
@@ -439,10 +426,9 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 _log.error("DCacheDataObjectDao<Create>, Cannot read meta information from directory {}", objFile.getAbsolutePath());
             }
 
-            // Add metadata
             newDObj.setMetadata("cdmi_acount", "0");
             newDObj.setMetadata("cdmi_mcount", "0");
-            newDObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentification and authorization first
+            newDObj.setMetadata("cdmi_owner", String.valueOf(oowner));
             if (oacl != null && !oacl.isEmpty()) {
                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 for (ACE ace : oacl.getList()) {
@@ -472,89 +458,80 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             newDObj.setMimetype(mimeType);
             newDObj.setMetadata("mimetype", mimeType);
             newDObj.setMetadata("fileName", objFile.getAbsolutePath());
-            //
-        } catch (IllegalArgumentException ex) {
+
+            return newDObj;
+
+        } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
             _log.error("Exception while writing={}", ex);
-            throw new IllegalArgumentException("Cannot write Object @" + path + ", error: " + ex);
+            throw new CacheException("Cannot write Object @" + path + ", error: " + ex);
         }
-        return newDObj;
     }
 
     @Override
     public void deleteByPath(String path)
     {
+        //please see DcacheContainerDao class for implementation
         throw new UnsupportedOperationException("DcacheDataObjectDao.deleteByPath()");
     }
 
     @Override
     public DcacheDataObject findByPath(String path)
     {
-
-        // ISO-8601 Date
-        Date now = new Date();
-        long nowAsLong = now.getTime();
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-
         _log.trace("In DCacheDataObjectDao.findByPath, Path={}", path);
-
-        String containerName = getcontainerName(path);
-
-        // Check for object file
-        File objFile, baseDirectory;
         try {
+            // ISO-8601 Date
+            Date now = new Date();
+            long nowAsLong = now.getTime();
+            DcacheDataObject dObj = new DcacheDataObject();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+            // Check for object file
+            File objFile, baseDirectory;
             _log.trace("baseDirectory={}", baseDirectoryName);
             baseDirectory = new File(baseDirectoryName + "/");
             objFile = new File(baseDirectory, path);
             _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
-        } catch (Exception ex) {
-            _log.error("Exception in findByPath={}", ex);
-            throw new IllegalArgumentException("Cannot get Object @" + path + ", error: " + ex);
-        }
 
-        if (!checkIfDirectoryFileExists(objFile.getAbsolutePath())) {
-            return null;
-        }
-        //
-        // Both Files are there. So open, read, create object and send out
-        //
-        DcacheDataObject dObj = new DcacheDataObject();
-        try {
-            // Read object from file
-            FsPath fsPath = new FsPath(objFile.getAbsolutePath());
-            if (getResource(fsPath) == 0) {
-                if (_attributes.getFileType() != FileType.DIR) {
-                    pnfsId = _attributes.getPnfsId();
-                    byte[] inBytes = readFile(fsPath, pnfsId);
+            Subject subject = getSubject();
+            if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
+                throw new UnauthorizedException("Access denied", realm);
+            }
+
+            if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                return null;
+            } else {
+                if (!isUserAllowed(subject, objFile.getAbsolutePath())) {
+                    throw new UnauthorizedException("Access denied", realm);
+                }
+            }
+
+            PnfsId pnfsId = null;
+            FileAttributes attributes = getAttributesByPath(subject, objFile.getAbsolutePath());
+            String objectID = "";
+            int oowner = 0;
+            ACL oacl = null;
+            if (attributes != null) {
+                // Read object from file
+                if (attributes.getFileType() != DIR) {
+                    pnfsId = attributes.getPnfsId();
+                    byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
                     if (inBytes != null) {
                         dObj.setValue(new String(inBytes));
                     }
                 }
-            }
-
-            dObj.setObjectType("application/cdmi-object");
-            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-
-            //update ObjectID with correct ObjectID
-            String objectID = "";
-            int oowner = 0;
-            ACL oacl = null;
-            FileAttributes attr = getAttributesByPath(objFile.getAbsolutePath());
-            if (attr != null) {
-                pnfsId = attr.getPnfsId();
+                pnfsId = attributes.getPnfsId();
                 if (pnfsId != null) {
-                    // update with real info
-                    _log.trace("DCacheDataObjectDao<Read>, setPnfsID={}", pnfsId.toIdString());
                     dObj.setPnfsID(pnfsId.toIdString());
-                    long ctime = attr.getCreationTime();
-                    long atime = attr.getAccessTime();
-                    long mtime = attr.getModificationTime();
-                    long osize = attr.getSize();
+                    long ctime = attributes.getCreationTime();
+                    long atime = attributes.getAccessTime();
+                    long mtime = attributes.getModificationTime();
+                    long osize = attributes.getSize();
                     dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
                     dObj.setMetadata("cdmi_atime", sdf.format(atime));
                     dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
                     dObj.setMetadata("cdmi_size", String.valueOf(osize));
-                    oowner = attr.getOwner();
-                    oacl = attr.getAcl();
+                    oowner = attributes.getOwner();
+                    oacl = attributes.getAcl();
                     objectID = new IdConverter().toObjectID(pnfsId.toIdString());
                     dObj.setObjectID(objectID);
                     _log.trace("DCacheDataObjectDao<Read>, setObjectID={}", objectID);
@@ -565,6 +542,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object {}", objFile.getAbsolutePath());
             }
 
+            dObj.setObjectType("application/cdmi-object");
+            dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
             dObj.setMetadata("cdmi_acount", "0");
             dObj.setMetadata("cdmi_mcount", "0");
             dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentication and autorization first
@@ -598,22 +577,17 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             dObj.setMetadata("mimetype", mimeType);
             dObj.setMetadata("fileName", objFile.getAbsolutePath());
 
-        } catch (Exception ex) {
-            _log.error("Exception while reading, {}", ex);
-            throw new IllegalArgumentException("Cannot read Object @" + path + " error: " + ex);
-        }
-
-        // change access time
-        try {
             FileAttributes attr = new FileAttributes();
             attr.setAccessTime(nowAsLong);
-            pnfsHandler.setFileAttributes(pnfsId, attr);
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            pnfs.setFileAttributes(pnfsId, attr);
             dObj.setMetadata("cdmi_atime", sdf.format(now));
-        } catch (CacheException ex) {
-            _log.error("DCacheDataObjectDao<Read>, Cannot update meta information for object with objectID {}", dObj.getObjectID());
-        }
 
-        return dObj;
+            return dObj;
+        } catch (CacheException | IOException | InterruptedException | URISyntaxException | UnauthorizedException ex) {
+            _log.error("Exception while reading, {}", ex);
+            throw new UnauthorizedException("Cannot read Object @" + path + " error: " + ex);
+        }
     }
 
     @Override
@@ -634,6 +608,29 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public void beforeStop()
     {
+    }
+
+    /**
+     * <p>
+     * Checks if a user is allowed to access a file path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private boolean isUserAllowed(Subject subject, String path) throws CacheException
+    {
+        boolean result = false;
+        String tmpPath = addPrefixSlashToPath(path);
+        PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+        FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
+        System.out.println(path);
+        System.out.println(Subjects.getUid(subject));
+        System.out.println(attr.getOwner());
+        if (Subjects.getUid(subject) == attr.getOwner()) {
+            result = true;
+        }
+        return result;
     }
 
     /**
@@ -702,12 +699,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param dirPath
      *            {@link String} identifying a directory path
      */
-    private boolean checkIfDirectoryFileExists(String dirPath)
+    private boolean checkIfDirectoryFileExists(Subject subject, String dirPath)
     {
         boolean result = false;
         String searchedItem = getItem(dirPath);
         String tmpDirPath = addPrefixSlashToPath(dirPath);
-        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
+        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(subject, getParentDirectory(tmpDirPath));
         for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
             if (entry.getKey().compareTo(searchedItem) == 0) {
                 result = true;
@@ -724,12 +721,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param path
      *            {@link String} identifying a directory path
      */
-    private FileAttributes getAttributesByPath(String path)
+    private FileAttributes getAttributesByPath(Subject subject, String path)
     {
         FileAttributes result = null;
         String searchedItem = getItem(path);
         String tmpDirPath = addPrefixSlashToPath(path);
-        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(getParentDirectory(tmpDirPath));
+        Map<String, FileAttributes> listing = listDirectoriesFilesByPath(subject, getParentDirectory(tmpDirPath));
         for (Map.Entry<String, FileAttributes> entry : listing.entrySet()) {
             if (entry.getKey().compareTo(searchedItem) == 0) {
                 result = entry.getValue();
@@ -746,13 +743,13 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param path
      *            {@link String} identifying a directory path
      */
-    private Map<String, FileAttributes> listDirectoriesFilesByPath(String path)
+    private Map<String, FileAttributes> listDirectoriesFilesByPath(Subject subject, String path)
     {
         String tmpPath = addPrefixSlashToPath(path);
         FsPath fsPath = new FsPath(tmpPath);
         Map<String, FileAttributes> result = new HashMap<>();
         try {
-            listDirectoryHandler.printDirectory(getSubject(), new ListPrinter(result), fsPath, null, Range.<Integer>all());
+            listDirectoryHandler.printDirectory(subject, new ListPrinter(result), fsPath, null, Range.<Integer>all());
         } catch (InterruptedException | CacheException ex) {
             _log.warn("DcacheDataObjectDao, Directory and file listing for path '{}' was not possible, internal error message={}", path, ex.getMessage());
         }
@@ -775,6 +772,30 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 result = "/" + path;
             } else {
                 result = path;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Removes prefix and suffix slashes from a directory path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private String removeSlashesFromPath(String path)
+    {
+        String result = "";
+        if (path != null && path.length() > 0) {
+            if (path.startsWith("/")) {
+                result = path.substring(1);
+            } else {
+                result = path;
+            }
+            if (result.endsWith("/")) {
+                result = result.substring(0, result.length()-1);
             }
         }
         return result;
@@ -817,6 +838,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     /**
      * Creates a new file. The door will relay all data to the pool.
+     * @param subject
      * @param path
      * @param inputStream
      * @param length
@@ -826,29 +848,27 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.io.IOException
      * @throws java.net.URISyntaxException
      */
-    public boolean writeFile(FsPath path, InputStream inputStream, Long length)
+    public boolean writeFile(Subject subject, FsPath path, InputStream inputStream, Long length)
             throws CacheException, InterruptedException, IOException,
                    URISyntaxException
     {
         boolean success = false;
-        Subject subject = getSubject();
-
-        WriteTransfer transfer = new WriteTransfer(pnfsHandler, subject, path);
-        _transfers.put((int) transfer.getSessionId(), transfer);
+        WriteTransfer transfer = new WriteTransfer(subject, pnfsHandler, path);
+        transfers.put((int) transfer.getSessionId(), transfer);
         try {
             transfer.setProxyTransfer(true);
             transfer.createNameSpaceEntry();
             try {
                 transfer.setLength(length);
                 try {
-                    transfer.selectPoolAndStartMover(_ioQueue, _retryPolicy);
-                    String uri = transfer.waitForRedirect(_moverTimeout, _moverTimeoutUnit);
+                    transfer.selectPoolAndStartMover(ioQueue, retryPolicy);
+                    String uri = transfer.waitForRedirect(moverTimeout, moverTimeoutUnit);
                     if (uri == null) {
                         throw new TimeoutCacheException("Server is busy (internal timeout)");
                     }
                     transfer.relayData(inputStream);
                 } finally {
-                    transfer.killMover(_killTimeout, _killTimeoutUnit);
+                    transfer.killMover(killTimeout, killTimeoutUnit);
                 }
                 success = true;
             } finally {
@@ -868,26 +888,24 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                    e.toString());
             throw e;
         } finally {
-            _transfers.remove((int) transfer.getSessionId());
+            transfers.remove((int) transfer.getSessionId());
         }
         return success;
     }
 
-    public String getWriteUrl(FsPath path, Long length)
+    public String getWriteUrl(Subject subject, FsPath path, Long length)
             throws CacheException, InterruptedException,
                    URISyntaxException
     {
-        Subject subject = getSubject();
-
         String uri = null;
-        WriteTransfer transfer = new WriteTransfer(pnfsHandler, subject, path);
-        _transfers.put((int) transfer.getSessionId(), transfer);
+        WriteTransfer transfer = new WriteTransfer(subject, pnfsHandler, path);
+        transfers.put((int) transfer.getSessionId(), transfer);
         try {
             transfer.createNameSpaceEntry();
             try {
                 transfer.setLength(length);
-                transfer.selectPoolAndStartMover(_ioQueue, _retryPolicy);
-                uri = transfer.waitForRedirect(_moverTimeout, _moverTimeoutUnit);
+                transfer.selectPoolAndStartMover(ioQueue, retryPolicy);
+                uri = transfer.waitForRedirect(moverTimeout, moverTimeoutUnit);
                 if (uri == null) {
                     throw new TimeoutCacheException("Server is busy (internal timeout)");
                 }
@@ -912,7 +930,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             throw e;
         } finally {
             if (uri == null) {
-                _transfers.remove((int) transfer.getSessionId());
+                transfers.remove((int) transfer.getSessionId());
             }
         }
         return uri;
@@ -930,13 +948,13 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.io.IOException
      * @throws java.net.URISyntaxException
      */
-    public byte[] readFile(FsPath path, PnfsId pnfsid)
+    public byte[] readFile(Subject subject, FsPath path, PnfsId pnfsid)
             throws CacheException, InterruptedException, IOException, URISyntaxException
     {
         byte[] result = null;
         ReadTransfer transfer = null;
         try {
-            transfer = beginRead(path, pnfsid, true);
+            transfer = beginRead(subject, path, pnfsid, true);
             result = transfer.relayData();
         } catch (CacheException e) {
             if (transfer != null) transfer.notifyBilling(e.getRc(), e.getMessage());
@@ -950,7 +968,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                    e.toString());
             throw e;
         } finally {
-            if (transfer != null) _transfers.remove((int) transfer.getSessionId());
+            if (transfer != null) transfers.remove((int) transfer.getSessionId());
         }
         return result;
     }
@@ -958,6 +976,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     /**
      * Returns a read URL for a file.
      *
+     * @param subject
      * @param path The full path of the file.
      * @param pnfsid The PNFS ID of the file.
      * @return
@@ -965,10 +984,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.lang.InterruptedException
      * @throws java.net.URISyntaxException
      */
-    public String getReadUrl(FsPath path, PnfsId pnfsid)
+    public String getReadUrl(Subject subject, FsPath path, PnfsId pnfsid)
             throws CacheException, InterruptedException, URISyntaxException
     {
-        return beginRead(path, pnfsid, false).getRedirect();
+        return beginRead(subject, path, pnfsid, false).getRedirect();
     }
 
     /**
@@ -980,22 +999,18 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param isProxyTransfer
      * @return ReadTransfer encapsulating the read operation
      */
-    private ReadTransfer beginRead(FsPath path, PnfsId pnfsid, boolean isProxyTransfer)
+    private ReadTransfer beginRead(Subject subject, FsPath path, PnfsId pnfsid, boolean isProxyTransfer)
             throws CacheException, InterruptedException, URISyntaxException
     {
-        Subject subject = getSubject();
-
         String uri = null;
         ReadTransfer transfer = new ReadTransfer(pnfsHandler, subject, path, pnfsid);
-        //transfer.setIsChecksumNeeded(isDigestRequested());
-        transfer.setIsChecksumNeeded(false);
-        _transfers.put((int) transfer.getSessionId(), transfer);
+        transfers.put((int) transfer.getSessionId(), transfer);
         try {
             transfer.setProxyTransfer(isProxyTransfer);
             transfer.readNameSpaceEntry();
             try {
-                transfer.selectPoolAndStartMover(_ioQueue, _retryPolicy);
-                uri = transfer.waitForRedirect(_moverTimeout, _moverTimeoutUnit);
+                transfer.selectPoolAndStartMover(ioQueue, retryPolicy);
+                uri = transfer.waitForRedirect(moverTimeout, moverTimeoutUnit);
                 if (uri == null) {
                     throw new TimeoutCacheException("Server is busy (internal timeout)");
                 }
@@ -1017,13 +1032,13 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             throw e;
         } finally {
             if (uri == null) {
-                _transfers.remove((int) transfer.getSessionId());
+                transfers.remove((int) transfer.getSessionId());
             }
         }
         return transfer;
     }
 
-    private void initializeTransfer(HttpTransfer transfer, Subject subject)
+    private void initializeTransfer(Subject subject, HttpTransfer transfer)
             throws URISyntaxException
     {
         transfer.setLocation(getLocation());
@@ -1032,12 +1047,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         transfer.setPoolManagerStub(poolMgrStub);
         transfer.setPoolStub(poolStub);
         transfer.setBillingStub(billingStub);
-        //transfer.setClientAddress(new InetSocketAddress(Subjects
-        //        .getOrigin(subject).getAddress(),
-        //        PROTOCOL_INFO_UNKNOWN_PORT));
-        transfer.setClientAddress(new InetSocketAddress(_internalAddress,
+        transfer.setClientAddress(new InetSocketAddress(Subjects
+                .getOrigin(subject).getAddress(),
                 PROTOCOL_INFO_UNKNOWN_PORT));
-        transfer.setOverwriteAllowed(_isOverwriteAllowed);
+        transfer.setOverwriteAllowed(isOverwriteAllowed);
     }
 
     /**
@@ -1048,11 +1061,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         private URI _location;
         private InetSocketAddress _clientAddressForPool;
 
-        public HttpTransfer(PnfsHandler pnfs, Subject subject, FsPath path)
+        public HttpTransfer(Subject subject, PnfsHandler pnfs, FsPath path)
                 throws URISyntaxException
         {
             super(pnfs, subject, path);
-            initializeTransfer(this, subject);
+            initializeTransfer(subject, this);
             _clientAddressForPool = getClientAddress();
         }
 
@@ -1091,7 +1104,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         public void setProxyTransfer(boolean isProxyTransfer)
         {
             if (isProxyTransfer) {
-                _clientAddressForPool = new InetSocketAddress(_internalAddress, 0);
+                _clientAddressForPool = new InetSocketAddress(internalAddress, 0);
             } else {
                 _clientAddressForPool = getClientAddress();
             }
@@ -1107,17 +1120,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             FsPath path, PnfsId pnfsid)
                 throws URISyntaxException
         {
-            super(pnfs, subject, path);
+            super(subject, pnfs, path);
             setPnfsId(pnfsid);
-        }
-
-        public void setIsChecksumNeeded(boolean isChecksumNeeded)
-        {
-            if(isChecksumNeeded) {
-                setAdditionalAttributes(Collections.singleton(CHECKSUM));
-            } else {
-                setAdditionalAttributes(Collections.<FileAttribute>emptySet());
-            }
         }
 
         public byte[] relayData()
@@ -1145,7 +1149,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     connection.disconnect();
                 }
 
-                if (!waitForMover(_transferConfirmationTimeout, _transferConfirmationTimeoutUnit)) {
+                if (!waitForMover(transferConfirmationTimeout, transferConfirmationTimeoutUnit)) {
                     throw new CacheException("Missing transfer confirmation from pool");
                 }
             } catch (SocketTimeoutException e) {
@@ -1161,7 +1165,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         {
             super.finished(error);
 
-            _transfers.remove((int) getSessionId());
+            transfers.remove((int) getSessionId());
 
             if (error == null) {
                 notifyBilling(0, "");
@@ -1176,10 +1180,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      */
     private class WriteTransfer extends HttpTransfer
     {
-        public WriteTransfer(PnfsHandler pnfs, Subject subject, FsPath path)
+        public WriteTransfer(Subject subject, PnfsHandler pnfs, FsPath path)
                 throws URISyntaxException
         {
-            super(pnfs, subject, path);
+            super(subject, pnfs, path);
         }
 
         public void relayData(InputStream inputStream)
@@ -1214,7 +1218,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     connection.disconnect();
                 }
 
-                if (!waitForMover(_transferConfirmationTimeout, _transferConfirmationTimeoutUnit)) {
+                if (!waitForMover(transferConfirmationTimeout, transferConfirmationTimeoutUnit)) {
                     throw new CacheException("Missing transfer confirmation from pool");
                 }
             } catch (SocketTimeoutException e) {
@@ -1239,9 +1243,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         public synchronized void finished(CacheException error)
         {
             super.finished(error);
-
-            _transfers.remove((int) getSessionId());
-
+            transfers.remove((int) getSessionId());
             if (error == null) {
                 notifyBilling(0, "");
             } else {
@@ -1249,48 +1251,4 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             }
         }
     }
-
-    private Set<FileAttribute> buildRequestedAttributes()
-    {
-        Set<FileAttribute> attributes = EnumSet.copyOf(REQUIRED_ATTRIBUTES);
-        /*
-        if (isDigestRequested()) {
-            attributes.add(CHECKSUM);
-        }
-        */
-        return attributes;
-    }
-
-
-    /**
-     * Returns the resource object for a path.
-     *
-     * @param path The full path
-     * @return
-     */
-    public int getResource(FsPath path)
-    {
-        int result = PROVIDER_ERROR;
-        int tries = 0;
-        Subject subject = getSubject();
-        try {
-            do {
-                try {
-                    PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-                    Set<FileAttribute> requestedAttributes = buildRequestedAttributes();
-                    _attributes = pnfs.getFileAttributes(path.toString(), requestedAttributes);
-                    result = 0;
-                } catch (FileNotFoundCacheException e) {
-                    result = NOTFOUND_ERROR;
-                }
-                tries = tries + 1;
-            } while ((result > 0) && (tries < maxTries));
-        } catch (PermissionDeniedCacheException e) {
-            result = PERMISSION_ERROR;
-        } catch (CacheException e) {
-            result = PROVIDER_ERROR;
-        }
-        return result;
-    }
-
 }

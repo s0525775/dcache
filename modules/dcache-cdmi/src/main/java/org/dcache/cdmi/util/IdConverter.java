@@ -18,7 +18,7 @@
 package org.dcache.cdmi.util;
 
 import java.math.BigInteger;
-import static org.dcache.cdmi.util.CRC16Calculator.doCRC;
+import static org.dcache.cdmi.util.Crc16Calculator.doCRC;
 import com.google.common.io.BaseEncoding;
 
 /* This class converts between dCache's PnfsID and CDMI's ObjectID and the other way around.

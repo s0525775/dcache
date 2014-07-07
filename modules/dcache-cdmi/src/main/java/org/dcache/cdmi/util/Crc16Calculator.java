@@ -14,7 +14,7 @@ package org.dcache.cdmi.util;
 /* This class calculates the correct CRC-16 for 123456789 with the result 0xbb3d regarding the CDMI specification from ISO/IEC.
 */
 
-public class CRC16Calculator
+public class Crc16Calculator
 {
 
     public static long doCRC(byte[] data, long poly, int pbits, long initS, boolean lsbfirst, boolean reflect, boolean xor)
