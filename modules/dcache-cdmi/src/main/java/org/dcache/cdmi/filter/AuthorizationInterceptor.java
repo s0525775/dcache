@@ -50,6 +50,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import static java.util.Arrays.asList;
 import java.util.HashSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import javax.security.auth.Subject;
@@ -66,6 +67,7 @@ import org.dcache.auth.LoginReply;
 import org.dcache.auth.LoginStrategy;
 import org.dcache.auth.Origin;
 import org.dcache.auth.PasswordCredential;
+import org.dcache.auth.Subjects;
 import org.dcache.auth.attributes.LoginAttribute;
 import org.dcache.auth.attributes.ReadOnly;
 import org.dcache.auth.attributes.RootDirectory;
@@ -74,6 +76,7 @@ import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.util.CertificateFactories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.snia.cdmiserver.exception.ForbiddenException;
 import org.snia.cdmiserver.exception.UnauthorizedException;
 
 /**
@@ -188,9 +191,14 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
             if (certificate || credentials || origin) {
                 LoginReply login = _loginStrategy.login(subject);
                 subject = login.getSubject();
+                try {
+                    Subjects.getUid(subject);
+                } catch (NoSuchElementException | IllegalArgumentException ex) {
+                    throw new ForbiddenException("Permission denied");
+                }
 
                 if (!isAuthorizedMethod(msg.get(Message.HTTP_REQUEST_METHOD).toString(), login)) {
-                    throw new PermissionDeniedCacheException("Permission denied: read-only user");
+                    throw new ForbiddenException("Permission denied: read-only user");
                 }
 
                 checkRootPath(msg, login);

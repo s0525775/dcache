@@ -37,7 +37,7 @@ import org.dcache.cdmi.model.DcacheDataObject;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.ContainerDao;
 import org.snia.cdmiserver.dao.DataObjectDao;
-import org.snia.cdmiserver.exception.UnauthorizedException;
+import org.snia.cdmiserver.exception.ForbiddenException;
 import org.snia.cdmiserver.model.Container;
 import org.snia.cdmiserver.model.DataObject;
 
@@ -106,11 +106,13 @@ public class DcachePathResource
             containerDao.deleteByPath(path);
             return Response.noContent().header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
-        } catch (UnauthorizedException ex) {
+        } catch (ForbiddenException ex) {
+            ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED).tag(
+            return Response.status(Response.Status.FORBIDDEN).tag(
                     "Object Delete Error: " + ex.toString()).build();
         } catch (Exception ex) {
+            ex.printStackTrace();
             _log.trace(ex.toString());
             return Response.status(Response.Status.BAD_REQUEST).tag(
                     "Object Delete Error: " + ex.toString()).build();
@@ -177,9 +179,9 @@ public class DcachePathResource
               return Response.ok(respStr).header(
                       "X-CDMI-Specification-Version", "1.0.2").build();
             }
-         } catch (UnauthorizedException ex) {
+         } catch (ForbiddenException ex) {
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED)
+            return Response.status(Response.Status.FORBIDDEN)
                     .tag("Container Read Error: " + ex.toString()).build();
           } catch (Exception ex) {
             _log.trace(ex.toString());
@@ -198,10 +200,10 @@ public class DcachePathResource
             return Response.ok(respStr).header(
                     "X-CDMI-Specification-Version", "1.0.2").build();
           } // if/else
-        } catch (UnauthorizedException ex) {
+        } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED)
+            return Response.status(Response.Status.FORBIDDEN)
                     .tag("Object Fetch Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -282,10 +284,10 @@ public class DcachePathResource
                     return Response.ok(respStr).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 }
-            } catch (UnauthorizedException ex) {
+            } catch (ForbiddenException ex) {
                 ex.printStackTrace();
                 _log.trace(ex.toString());
-                return Response.status(Response.Status.UNAUTHORIZED)
+                return Response.status(Response.Status.FORBIDDEN)
                         .tag("Container Read Error: " + ex.toString()).build();
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -308,16 +310,18 @@ public class DcachePathResource
                     return Response.ok(respStr).type(dObj.getMimetype()).header(
                             "X-CDMI-Specification-Version", "1.0.2").build();
                 } // if/else
-            } catch (UnauthorizedException ex) {
+            } catch (ForbiddenException ex) {
                 ex.printStackTrace();
                 _log.trace(ex.toString());
-                return Response.status(Response.Status.UNAUTHORIZED)
-                        .tag("Object Fetch Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Fetch Error: " + ex.toString()).build();
             } catch (Exception ex) {
                 ex.printStackTrace();
                 _log.trace(ex.toString());
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .tag("Object Fetch Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Fetch Error: " + ex.toString()).build();
             }
         }
     }
@@ -368,10 +372,10 @@ public class DcachePathResource
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
             } // if/else
-        } catch (UnauthorizedException ex) {
+        } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED)
+            return Response.status(Response.Status.FORBIDDEN)
                     .tag("Container Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -422,27 +426,58 @@ public class DcachePathResource
                 if (dObj.getValue() == null) {
                     dObj.setValue("== N/A ==");
                 }
+                if (dObj.getMove() == null) {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Created");
+                    ResponseBuilder builder = Response.created(new URI(path));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                } else {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Ok");
+                    ResponseBuilder builder = Response.ok(new URI(path));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                }
+            } else {
+                dObj = new DcacheDataObject();
+
+                dObj.setObjectType("application/cdmi-object");
+                // parse json
+                dObj.fromJson(bytes, false);
+                if (dObj.getValue() == null) {
+                    dObj.setValue("== N/A ==");
+                }
                 dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
                 // return representation
                 String respStr = dObj.toJson();
                 // make http response
                 // build a JSON representation
-                ResponseBuilder builder = Response.created(new URI(path));
+                System.out.println("Ok");
+                ResponseBuilder builder = Response.ok(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
             }
-            dObj.fromJson(bytes,false);
-            return Response.ok().build();
-        } catch (UnauthorizedException ex) {
+        } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED)
-                    .tag("Object Creation Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Object Creation Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Creation Error: " + ex.toString()).build();
         }
     }
 
@@ -513,10 +548,10 @@ public class DcachePathResource
                         dObj.getObjectType()).build();
             }
             return Response.ok().build();
-        } catch (UnauthorizedException ex) {
+        } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.UNAUTHORIZED)
+            return Response.status(Response.Status.FORBIDDEN)
                     .tag("Object Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();

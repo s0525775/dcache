@@ -385,6 +385,7 @@ public class DcacheContainer extends Container
                         jp.nextToken();
                         String value = jp.getText();
                         _log.trace("Key={} : Val={}", key, value);
+                        super.setMove(value);
                         setMove(value);
                         break;
                     }

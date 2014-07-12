@@ -284,7 +284,7 @@ public class DcacheDataObject extends DataObject
                             key = jp.getCurrentName();
                             tolkein = jp.nextToken();
                             String value = jp.getText();
-                            _log.trace("- Key={} : Value={}", value);
+                            _log.trace("- Key={} : Value={}", key, value);
                             this.getMetadata().put(key, value);
                         }//while
                         break;
@@ -293,7 +293,7 @@ public class DcacheDataObject extends DataObject
                     {
                         jp.nextToken();
                         String value = jp.getText();
-                        _log.trace("Key={} : Val={}", value);
+                        _log.trace("Key={} : Val={}", key, value);
                         this.setValue(value);
                         break;
                     }
@@ -301,8 +301,17 @@ public class DcacheDataObject extends DataObject
                     {
                         jp.nextToken();
                         String value = jp.getText();
-                        _log.trace("Key={} : Val={}", value);
+                        _log.trace("Key={} : Val={}", key, value);
                         this.setMimetype(value);
+                        break;
+                    }
+                case "move":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        super.setMove(value);
+                        setMove(value);
                         break;
                     }
                 case "valuetransferencoding":
@@ -321,7 +330,7 @@ public class DcacheDataObject extends DataObject
                                 {
                                     jp.nextToken();
                                     String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", value);
+                                    _log.trace("Key={} : Val={}", key, value);
                                     setObjectType(value);
                                     break;
                                 }
@@ -329,7 +338,7 @@ public class DcacheDataObject extends DataObject
                                 {
                                     jp.nextToken();
                                     String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", value);
+                                    _log.trace("Key={} : Val={}", key, value);
                                     setCapabilitiesURI(value);
                                     break;
                                 }
@@ -337,7 +346,7 @@ public class DcacheDataObject extends DataObject
                                 {
                                     jp.nextToken();
                                     String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", value);
+                                    _log.trace("Key={} : Val={}", key, value);
                                     setObjectID(value);
                                     break;
                                 }
@@ -345,7 +354,7 @@ public class DcacheDataObject extends DataObject
                                 {
                                     jp.nextToken();
                                     String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", value);
+                                    _log.trace("Key={} : Val={}", key, value);
                                     setPnfsID(value);
                                     break;
                                 }
@@ -353,7 +362,7 @@ public class DcacheDataObject extends DataObject
                                 {
                                     jp.nextToken();
                                     String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", value);
+                                    _log.trace("Key={} : Val={}", key, value);
                                     setValuerange(value);
                                     break;
                                 }
