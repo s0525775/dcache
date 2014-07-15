@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonParser;
@@ -42,19 +43,6 @@ public class DcacheContainer extends Container
 
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheContainer.class);
 
-    // Container creation fields
-    private Map<String, Object> exports = new HashMap<String, Object>();
-    private String objectType;
-    private String objectID;
-    private String pnfsID;
-    private String parentURI;
-    private String domainURI;
-    private String capabilitiesURI;
-    private String completionStatus;
-    private String childrenrange;
-    private List<String> children = new ArrayList<String>();
-
-    private Map<String, String> metadata = new HashMap<String, String>();
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
 
     private final static List<String> IGNORE_LIST = new ArrayList() {{
@@ -66,120 +54,12 @@ public class DcacheContainer extends Container
         add("cdmi_acl");
     }};
 
-    @Override
-    public Map<String, Object> getExports() {
-        return exports;
-    }
-
-    @Override
-    public String getObjectType()
-    {
-        return objectType;
-    }
-
-    @Override
-    public String getCapabilitiesURI()
-    {
-        return capabilitiesURI;
-    }
-
-    @Override
-    public String getParentURI()
-    {
-        return parentURI;
-    }
-
-    @Override
-    public String getDomainURI()
-    {
-        return domainURI;
-    }
-
-    @Override
-    public String getCompletionStatus()
-    {
-        return completionStatus;
-    }
-
-    @Override
-    public String getChildrenrange()
-    {
-        return childrenrange;
-    }
-
-    @Override
-    public List<String> getChildren()
-    {
-        return children;
-    }
-
-    @Override
-    public Map<String, String> getMetadata()
-    {
-        return metadata;
-    }
-
-    public String getPnfsID()
-    {
-        return pnfsID;
-    }
-
-    @Override
-    public String getObjectID()
-    {
-        return objectID;
-    }
-
-    @Override
-    public void setObjectType(String objectType)
-    {
-        this.objectType = objectType;
-    }
-
-    @Override
-    public void setCapabilitiesURI(String capabilitiesURI)
-    {
-        this.capabilitiesURI = capabilitiesURI;
-    }
-
-    @Override
-    public void setParentURI(String parentURI)
-    {
-        this.parentURI = parentURI;
-    }
-
-    @Override
-    public void setDomainURI(String domainURI)
-    {
-        this.domainURI = domainURI;
-    }
-
-    @Override
-    public void setCompletionStatus(String completionStatus)
-    {
-        this.completionStatus = completionStatus;
-    }
-
-    @Override
-    public void setChildrenrange(String childrenrange)
-    {
-        this.childrenrange = childrenrange;
-    }
-
     public void setChildren(List<String> children)
     {
-        this.children = children;
-    }
-
-    public void setPnfsID(String pnfsId)
-    {
-        this.pnfsID = pnfsId;
-    }
-
-    @Override
-    public void setObjectID(String objectId)
-    {
-        this.objectID = objectId;
+        getChildren().clear();
+        for (String child : children) {
+            getChildren().add(child);
+        }
     }
 
     public List<HashMap<String, String>> getSubMetadata_ACL()
@@ -199,12 +79,15 @@ public class DcacheContainer extends Container
 
     public void setMetadata(String key, String val)
     {
-        metadata.put(key, val);
+        getMetadata().put(key, val);
     }
 
     public void setMetadata(Map<String, String> metadata)
     {
-        this.metadata = metadata;
+        getMetadata().clear();
+        for (Entry<String, String> entry : metadata.entrySet()) {
+            setMetadata(entry.getKey(), entry.getValue());
+        }
     }
 
     public void setSubMetadata_ACL(List<HashMap<String, String>> metadata)
@@ -239,19 +122,19 @@ public class DcacheContainer extends Container
             g.useDefaultPrettyPrinter();
             g.writeStartObject();
 
-            g.writeStringField("objectID", objectID);
+            g.writeStringField("objectID", getObjectID());
 
-            g.writeStringField("capabilitiesURI", capabilitiesURI);
-            g.writeStringField("domainURI", domainURI);
+            g.writeStringField("capabilitiesURI", getCapabilitiesURI());
+            g.writeStringField("domainURI", getDomainURI());
 
             g.writeObjectFieldStart("exports");
-            for (Map.Entry<String, Object> entry : exports.entrySet()) {
+            for (Map.Entry<String, Object> entry : getExports().entrySet()) {
                 g.writeObjectFieldStart(entry.getKey());
                 g.writeEndObject();
             }
             g.writeEndObject();
             g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : metadata.entrySet()) {
+            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
                 g.writeStringField(entry.getKey(), entry.getValue());
             }
             if (!subMetadata_ACL.isEmpty() && isValidSubMetadata_ACL()) {
@@ -267,17 +150,17 @@ public class DcacheContainer extends Container
             g.writeEndObject();
 
             if (!toFile) {
-                g.writeStringField("objectType", objectType);
-                g.writeStringField("parentURI", parentURI);
+                g.writeStringField("objectType", getObjectType());
+                g.writeStringField("parentURI", getParentURI());
                 g.writeArrayFieldStart("children");
-                ListIterator<String> it = children.listIterator();
+                ListIterator<String> it = getChildren().listIterator();
                 while (it.hasNext()) {
                     g.writeString((String) it.next());
                 }
                 g.writeEndArray();
-                g.writeStringField("childrenrange", childrenrange);
-                if (completionStatus != null)
-                    g.writeStringField("completionStatus", completionStatus);
+                g.writeStringField("childrenrange", getChildrenrange());
+                if (getCompletionStatus() != null)
+                    g.writeStringField("completionStatus", getCompletionStatus());
             }
 
             g.writeEndObject();
@@ -298,12 +181,10 @@ public class DcacheContainer extends Container
             g.useDefaultPrettyPrinter();
 
             g.writeStartObject();
-            if (objectID != null)
-                g.writeStringField("objectID", objectID);
-            if (pnfsID != null)
-                g.writeStringField("pnfsID", pnfsID);
+            if (getObjectID() != null)
+                g.writeStringField("objectID", getObjectID());
             g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : metadata.entrySet()) {
+            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
                 if (!IGNORE_LIST.contains(entry.getKey())) {
                     g.writeStringField(entry.getKey(), entry.getValue());
                 }
@@ -391,11 +272,8 @@ public class DcacheContainer extends Container
                     }
                 case "valuetransferencoding":
                     {
+                        //Ignore
                         jp.nextToken();
-                        // Ignore, it's from the Python CDMI test client.
-                        // Regarding to the CDMI documentation, the client should put it
-                        // inside of the metadata and not outside of the metadata.
-                        // Usually, the CDMI server would have to throw an error message now.
                         break;
                     }
                 default:
@@ -407,14 +285,6 @@ public class DcacheContainer extends Container
                                     String value = jp.getText();
                                     _log.trace("Key={} : Val={}", key, value);
                                     setObjectID(value);
-                                    break;
-                                }
-                            case "pnfsID":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setPnfsID(value);
                                     break;
                                 }
                             default:

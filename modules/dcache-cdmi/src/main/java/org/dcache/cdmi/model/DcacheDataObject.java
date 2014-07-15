@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.JsonParser;
@@ -38,20 +39,10 @@ import org.snia.cdmiserver.model.DataObject;
 
 public class DcacheDataObject extends DataObject
 {
-
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheDataObject.class);
 
-    // DataObject creation fields
-    private String mimetype;
-    // DataObject representation fields
-    private String objectType;
-    private String objectID;
-    private String pnfsID;
-    private String capabilitiesURI;
-
-    // Representation also includes "mimetype", "metadata", and "value" from creation fields
-
-    private Map<String, String> metadata = new HashMap<String, String>();
+    private String valueTransferEncoding;
+    private String domainURI;
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
 
     private final static List<String> IGNORE_LIST = new ArrayList() {{
@@ -62,39 +53,14 @@ public class DcacheDataObject extends DataObject
         add("cdmi_owner");
     }};
 
-    @Override
-    public String getObjectType()
+    public String getValueTransferEncoding()
     {
-        return objectType;
+        return valueTransferEncoding;
     }
 
-    @Override
-    public String getCapabilitiesURI()
+    public String getDomainURI()
     {
-        return capabilitiesURI;
-    }
-
-    @Override
-    public String getMimetype()
-    {
-        return mimetype;
-    }
-
-    @Override
-    public Map<String, String> getMetadata()
-    {
-        return metadata;
-    }
-
-    public String getPnfsID()
-    {
-        return pnfsID;
-    }
-
-    @Override
-    public String getObjectID()
-    {
-        return objectID;
+        return domainURI;
     }
 
     public List<HashMap<String, String>> getSubMetadata_ACL()
@@ -102,33 +68,14 @@ public class DcacheDataObject extends DataObject
         return subMetadata_ACL;
     }
 
-    @Override
-    public void setObjectType(String objectType)
+    public void setValueTransferEncoding(String valueTransferEncoding)
     {
-        this.objectType = objectType;
+        this.valueTransferEncoding = valueTransferEncoding;
     }
 
-    @Override
-    public void setCapabilitiesURI(String capabilitiesURI)
+    public void setDomainURI(String domainURI)
     {
-        this.capabilitiesURI = capabilitiesURI;
-    }
-
-    @Override
-    public void setMimetype(String mimetype)
-    {
-        this.mimetype = mimetype;
-    }
-
-    public void setPnfsID(String pnfsId)
-    {
-        this.pnfsID = pnfsId;
-    }
-
-    @Override
-    public void setObjectID(String objectId)
-    {
-        this.objectID = objectId;
+        this.domainURI = domainURI;
     }
 
     public void addSubMetadata_ACL(HashMap<String, String> metadata)
@@ -141,15 +88,12 @@ public class DcacheDataObject extends DataObject
         subMetadata_ACL.add(mainKey, metadata);
     }
 
-    @Override
-    public void setMetadata(String key, String val)
-    {
-        metadata.put(key, val);
-    }
-
     public void setMetadata(Map<String, String> metadata)
     {
-        this.metadata = metadata;
+        getMetadata().clear();
+        for (Entry<String, String> entry : metadata.entrySet()) {
+            setMetadata(entry.getKey(), entry.getValue());
+        }
     }
 
     public void setSubMetadata_ACL(List<HashMap<String, String>> metadata)
@@ -184,17 +128,17 @@ public class DcacheDataObject extends DataObject
 
             g.writeStartObject();
             // get top level metadata
-            if (objectType != null)
-                g.writeStringField("objectType", objectType);
-            if (capabilitiesURI != null)
-                g.writeStringField("capabilitiesURI", capabilitiesURI);
-            if (objectID != null)
-                g.writeStringField("objectID", objectID);
-            if (mimetype != null)
-                g.writeStringField("mimetype", mimetype);
+            if (getObjectType() != null)
+                g.writeStringField("objectType", getObjectType());
+            if (getCapabilitiesURI() != null)
+                g.writeStringField("capabilitiesURI", getCapabilitiesURI());
+            if (getObjectID() != null)
+                g.writeStringField("objectID", getObjectID());
+            if (getMimetype() != null)
+                g.writeStringField("mimetype", getMimetype());
             //
             g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : metadata.entrySet()) {
+            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
                 g.writeStringField(entry.getKey(), entry.getValue());
             }
             if (!subMetadata_ACL.isEmpty() && isValidSubMetadata_ACL()) {
@@ -230,13 +174,11 @@ public class DcacheDataObject extends DataObject
 
             g.writeStartObject();
             // get top level metadata
-            if (objectID != null)
-                g.writeStringField("objectID", objectID);
-            if (pnfsID != null)
-                g.writeStringField("pnfsID", pnfsID);
+            if (getObjectID() != null)
+                g.writeStringField("objectID", getObjectID());
             //
             g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : metadata.entrySet()) {
+            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
                 if (!IGNORE_LIST.contains(entry.getKey())) {
                     g.writeStringField(entry.getKey(), entry.getValue());
                 }
@@ -314,13 +256,50 @@ public class DcacheDataObject extends DataObject
                         setMove(value);
                         break;
                     }
-                case "valuetransferencoding":
+                case "domainURI":
                     {
                         jp.nextToken();
-                        // Ignore, it's from the Python CDMI test client.
-                        // Regarding to the CDMI documentation, the client should put it
-                        // inside of the metadata and not outside of the metadata.
-                        // Usually, the CDMI server would have to throw an error message now.
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setDomainURI(value);
+                        break;
+                    }
+                case "deserialize":
+                    {
+                        //not supported yet, but process it to prevent an error message
+                        jp.nextToken();
+                        break;
+                    }
+                case "serialize":
+                    {
+                        //not supported yet, but process it to prevent an error message
+                        jp.nextToken();
+                        break;
+                    }
+                case "copy":
+                    {
+                        //not supported yet, but process it to prevent an error message
+                        jp.nextToken();
+                        break;
+                    }
+                case "reference":
+                    {
+                        //not supported yet, but process it to prevent an error message
+                        jp.nextToken();
+                        break;
+                    }
+                case "deserializevalue":
+                    {
+                        //not supported yet, but process it to prevent an error message
+                        jp.nextToken();
+                        break;
+                    }
+                case "valuetransferencoding":
+                    {
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setValueTransferEncoding(value);
+                        jp.nextToken();
                         break;
                     }
                 default:
@@ -348,14 +327,6 @@ public class DcacheDataObject extends DataObject
                                     String value = jp.getText();
                                     _log.trace("Key={} : Val={}", key, value);
                                     setObjectID(value);
-                                    break;
-                                }
-                            case "pnfsID":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setPnfsID(value);
                                     break;
                                 }
                             case "valueRange":

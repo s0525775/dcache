@@ -18,6 +18,7 @@
 package org.dcache.cdmi.resource;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -104,18 +105,21 @@ public class DcachePathResource
 
         try {
             containerDao.deleteByPath(path);
-            return Response.noContent().header(
-                    "X-CDMI-Specification-Version", "1.0.2").build();
+            ResponseBuilder builder = Response.status(Response.Status.NO_CONTENT);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("No Content").build();
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.FORBIDDEN).tag(
-                    "Object Delete Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Delete Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST).tag(
-                    "Object Delete Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Delete Error: " + ex.toString()).build();
         }
     }
 
@@ -132,8 +136,9 @@ public class DcachePathResource
     @Path("/")
     public Response deleteRootContainer(@PathParam("path") String path)
     {
-        return Response.status(Response.Status.BAD_REQUEST).tag(
-                "Can not delete root container").build();
+        ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+        builder.header("X-CDMI-Specification-Version", "1.0.2");
+        return builder.entity("Can not delete root container").build();
     }
 
     /**
@@ -173,43 +178,53 @@ public class DcachePathResource
           try {
             Container container = (DcacheContainer) containerDao.findByPath(path);
             if (container == null) {
-              return Response.status(Response.Status.NOT_FOUND).build();
+              ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+              builder.header("X-CDMI-Specification-Version", "1.0.2");
+              return builder.entity("Not Found").build();
             } else {
               String respStr = container.toJson(false);
-              return Response.ok(respStr).header(
-                      "X-CDMI-Specification-Version", "1.0.2").build();
+              ResponseBuilder builder = Response.ok(new URI(path));
+              builder.header("X-CDMI-Specification-Version", "1.0.2");
+              return builder.entity(respStr).build();
             }
          } catch (ForbiddenException ex) {
             _log.trace(ex.toString());
-            return Response.status(Response.Status.FORBIDDEN)
-                    .tag("Container Read Error: " + ex.toString()).build();
-          } catch (Exception ex) {
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Container Read Error: " + ex.toString()).build();
+          } catch (URISyntaxException ex) {
             _log.trace(ex.toString());
-            return Response.status(Response.Status.NOT_FOUND)
-                    .tag("Container Read Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Container Read Error: " + ex.toString()).build();
           }
         }
         try {
           DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
           if (dObj == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+            ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Not Found").build();
           } else {
             // make http response
             // build a JSON representation
             String respStr = dObj.toJson();
-            return Response.ok(respStr).header(
-                    "X-CDMI-Specification-Version", "1.0.2").build();
+            ResponseBuilder builder = Response.ok(new URI(path));
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity(respStr).build();
           } // if/else
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.FORBIDDEN)
-                    .tag("Object Fetch Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Fetch Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Object Fetch Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Fetch Error: " + ex.toString()).build();
         }
     }
 
@@ -278,37 +293,46 @@ public class DcachePathResource
             try {
                 Container container = (DcacheContainer) containerDao.findByPath(path);
                 if (container == null) {
-                    return Response.status(Response.Status.NOT_FOUND).build();
+                    ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity("Not Found").build();
                 } else {
                     String respStr = container.toJson(false);
-                    return Response.ok(respStr).header(
-                            "X-CDMI-Specification-Version", "1.0.2").build();
+                    ResponseBuilder builder = Response.ok();
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
                 }
             } catch (ForbiddenException ex) {
                 ex.printStackTrace();
                 _log.trace(ex.toString());
-                return Response.status(Response.Status.FORBIDDEN)
-                        .tag("Container Read Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Container Read Error: " + ex.toString()).build();
             } catch (Exception ex) {
                 ex.printStackTrace();
                 _log.trace(ex.toString());
-                return Response.status(Response.Status.NOT_FOUND)
-                        .tag("Container Read Error: " + ex.toString()).build();
+                ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Container Read Error: " + ex.toString()).build();
             }
         } else {
             // if object, send out the object in it's native form
             try {
                 DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
                 if (dObj == null) {
-                    return Response.status(Response.Status.NOT_FOUND).build();
+                    ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity("Not Found").build();
                 } else {
                     // make http response
                     // build a JSON representation
                     //String respStr = dObj.getValue();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
                     String respStr = dObj.toJson();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
                     _log.trace("MimeType={}", dObj.getMimetype());
-                    return Response.ok(respStr).type(dObj.getMimetype()).header(
-                            "X-CDMI-Specification-Version", "1.0.2").build();
+                    ResponseBuilder builder = Response.ok(new URI(path));
+                    builder.type(dObj.getMimetype());
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
                 } // if/else
             } catch (ForbiddenException ex) {
                 ex.printStackTrace();
@@ -363,7 +387,9 @@ public class DcachePathResource
             Container container = (DcacheContainer) containerDao.createByPath(path,
                     containerRequest);
             if (container == null) {
-                return Response.status(Response.Status.BAD_REQUEST).build();
+                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Container Read Error").build();
             } else {
                 // make http response
                 // build a JSON representation
@@ -375,13 +401,15 @@ public class DcachePathResource
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.FORBIDDEN)
-                    .tag("Container Creation Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Container Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Container Creation Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Container Creation Error: " + ex.toString()).build();
         }
     }
 
@@ -544,20 +572,24 @@ public class DcachePathResource
             dObj = (DcacheDataObject) dataObjectDao.createByPath(objectPath, dObj);
 
             if (containerRequest) {
-                return Response.ok().header("Location",
-                        dObj.getObjectType()).build();
+                ResponseBuilder builder = Response.ok(new URI(path));
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                builder.header("Location", dObj.getObjectType());
+                return builder.build();
             }
             return Response.ok().build();
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.FORBIDDEN)
-                    .tag("Object Creation Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Creation Error: " + ex.toString()).build();
         } catch (Exception ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .tag("Object Creation Error: " + ex.toString()).build();
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Creation Error: " + ex.toString()).build();
         }
     }
 

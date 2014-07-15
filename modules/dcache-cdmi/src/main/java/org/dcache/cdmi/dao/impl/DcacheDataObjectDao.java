@@ -408,7 +408,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 if (attributes != null) {
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
-                        newDObj.setPnfsID(pnfsId.toIdString());
                         newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                         newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
                         newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
@@ -493,7 +492,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     currentDObj.setValue(new String(inBytes));
                                 }
                             }
-                            currentDObj.setPnfsID(pnfsId.toIdString());
                             currentDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                             currentDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
                             currentDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
@@ -562,7 +560,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             if (attributes != null) {
                                 pnfsId = attributes.getPnfsId();
                                 if (pnfsId != null) {
-                                    newDObj.setPnfsID(pnfsId.toIdString());
                                     newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                                     newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
                                     newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
@@ -688,7 +685,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     for (String key : dObj.getMetadata().keySet()) {
                         movedDObj.setMetadata(key, dObj.getMetadata().get(key));
                     }
-                    movedDObj.setPnfsID(pnfsId.toIdString());
                     movedDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                     movedDObj.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                     movedDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -816,7 +812,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 }
                 pnfsId = attributes.getPnfsId();
                 if (pnfsId != null) {
-                    dObj.setPnfsID(pnfsId.toIdString());
                     long ctime = attributes.getCreationTime();
                     long atime = attributes.getAccessTime();
                     long mtime = attributes.getModificationTime();
@@ -934,7 +929,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     }
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
-                        dObj.setPnfsID(pnfsId.toIdString());
                         long ctime = attributes.getCreationTime();
                         long atime = attributes.getAccessTime();
                         long mtime = attributes.getModificationTime();

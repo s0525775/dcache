@@ -216,7 +216,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 if (attributes != null) {
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
-                        newContainer.setPnfsID(pnfsId.toIdString());
                         newContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                         newContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                         newContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -284,7 +283,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 if (attributes != null) {
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
-                        currentContainer.setPnfsID(pnfsId.toIdString());
                         currentContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                         currentContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                         currentContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -324,7 +322,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                             subMetadata_ACL.add(subMetadataEntry_ACL);
                             currentContainer.setSubMetadata_ACL(subMetadata_ACL);
                         }
-                        newContainer.setPnfsID(pnfsId.toIdString());
                         newContainer.setObjectID(objectId);
                         newContainer.setCapabilitiesURI(currentContainer.getCapabilitiesURI());
                         newContainer.setDomainURI(currentContainer.getDomainURI());
@@ -424,7 +421,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                     for (String key : containerRequest.getMetadata().keySet()) {
                         movedContainer.setMetadata(key, containerRequest.getMetadata().get(key));
                     }
-                    movedContainer.setPnfsID(pnfsId.toIdString());
                     movedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                     movedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                     movedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -529,7 +525,6 @@ public class DcacheContainerDao extends AbstractCellComponent
         if (attributes != null) {
             pnfsId = attributes.getPnfsId();
             if (pnfsId != null) {
-                requestedContainer.setPnfsID(pnfsId.toIdString());
                 requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                 requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                 requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -592,7 +587,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 if (attributes.getLocations().iterator().hasNext()) {
                     path = attributes.getLocations().iterator().next();
                 }
-                requestedContainer.setPnfsID(pnfsid.toIdString());
                 requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                 requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                 requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -672,7 +666,6 @@ public class DcacheContainerDao extends AbstractCellComponent
             if (attributes != null) {
                 pnfsId = attributes.getPnfsId();
                 if (pnfsId != null) {
-                    requestedContainer.setPnfsID(pnfsId.toIdString());
                     requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                     requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                     requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
