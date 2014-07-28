@@ -297,9 +297,14 @@ public class DcacheObjectIdResource
             _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
 
+        String path = "";
         String theObjectId = "";
         String restPath = "";
-        String path = "/cdmi_objectid/" + objectId;
+        if (!objectId.startsWith("/cdmi_objectid/")) {
+            path = "/cdmi_objectid/" + objectId;
+        } else {
+            path = objectId;
+        }
         int slashIndex = objectId.indexOf("/");
         if (slashIndex > 0) {
             theObjectId = objectId.substring(0, slashIndex);

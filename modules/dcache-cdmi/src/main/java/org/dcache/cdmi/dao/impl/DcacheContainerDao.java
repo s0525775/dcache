@@ -561,14 +561,15 @@ public class DcacheContainerDao extends AbstractCellComponent
         System.out.println("In DcacheContainerDAO.findByPath, Path=" + path);
         _log.trace("In DcacheContainerDAO.findByPath, Path={}", path);
 
+        File directory;
         Subject subject = getSubject();
+        directory = absoluteFile(path);
         DcacheContainer requestedContainer = new DcacheContainer();
         if (path != null) {
             if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
                 throw new ForbiddenException("Permission denied");
             }
 
-            File directory;
             String checkPath = path;
             if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
                 String objectId = "";
@@ -695,7 +696,7 @@ public class DcacheContainerDao extends AbstractCellComponent
             // root container
             requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
             requestedContainer.setDomainURI("/cdmi_domains/default_domain");
-            return completeContainer(subject, requestedContainer, null, "");
+            return completeContainer(subject, requestedContainer, directory, path);
         }
     }
 
@@ -946,6 +947,9 @@ public class DcacheContainerDao extends AbstractCellComponent
                 // Derive ParentURI
                 String parentURI = "/";
                 if (path != null) {
+                    if (path.contains("/" + removeSlashesFromPath(baseDirectoryName))) {
+                        path = path.replace("/" + removeSlashesFromPath(baseDirectoryName), "");
+                    }
                     String[] tokens = path.split("[/]+");
                     String containerName = tokens[tokens.length - 1];
                     // FIXME : This is the kludge way !
