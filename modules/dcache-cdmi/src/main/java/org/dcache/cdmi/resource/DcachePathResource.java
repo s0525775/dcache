@@ -60,6 +60,7 @@ public class DcachePathResource
     // Properties and Dependency Injection Methods
     //
     private ContainerDao containerDao;
+    private DataObjectDao dataObjectDao;
 
     /**
     * <p>
@@ -71,8 +72,6 @@ public class DcachePathResource
     {
         this.containerDao = containerDao;
     }
-
-    private DataObjectDao dataObjectDao;
 
     /**
     * <p>
@@ -160,7 +159,6 @@ public class DcachePathResource
             @PathParam("path") String path,
             @Context HttpHeaders headers)
     {
-
         _log.trace("In DcachePathResource.getContainerOrObject, path={}", path);
 
         //print headers for debug
@@ -280,6 +278,7 @@ public class DcachePathResource
             @Context HttpHeaders headers)
     {
 
+        System.out.println("In DcachePathResource.getDataObjectOrContainer, path=" + path);
         _log.trace("In DcachePathResource.getDataObjectOrContainer, path={}", path);
 
         // print headers for debug
@@ -327,7 +326,7 @@ public class DcachePathResource
                     // make http response
                     // build a JSON representation
                     //String respStr = dObj.getValue();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
-                    String respStr = dObj.toJson();//Remark: Switch to dObj.toJson() if Metadata shall be showed instead
+                    String respStr = dObj.toJson();
                     _log.trace("MimeType={}", dObj.getMimetype());
                     ResponseBuilder builder = Response.ok(new URI(path));
                     builder.type(dObj.getMimetype());
@@ -550,6 +549,76 @@ public class DcachePathResource
             byte[] bytes)
     {
 
+        String inBuffer = new String(bytes);
+        _log.trace("Path={}\n{}", path, inBuffer);
+
+        boolean containerRequest = false;
+        if (containerDao.isContainer(path)) {
+            containerRequest = true;
+        }
+
+        try {
+            String objectId = ObjectID.getObjectID(11);
+            String objectPath = path + "/" + objectId;
+
+            DataObject dObj = new DcacheDataObject();
+            dObj.setObjectID(objectId);
+            dObj.setObjectType(objectPath);
+            dObj.setValue(inBuffer);
+
+            _log.trace("objectId={}, objectPath={}", objectId, objectPath);
+
+            dObj = (DcacheDataObject) dataObjectDao.createByPath(objectPath, dObj);
+
+            if (containerRequest) {
+                ResponseBuilder builder = Response.ok(new URI(path));
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                builder.header("Location", dObj.getObjectType());
+                return builder.build();
+            }
+            return Response.ok().build();
+        } catch (ForbiddenException ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Creation Error: " + ex.toString()).build();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Creation Error: " + ex.toString()).build();
+        }
+    }
+
+    /**
+    * <p>
+    * [8.2] Create a Data Object (CDMI Content Type)
+    * [8.6] Update Data Object (CDMI Content Type)
+    * </p>
+    *
+    * @param headers
+    * @param path
+    * Path to the parent container for the new data object
+    * @param bytes
+    * @return
+    */
+    @POST
+    @Path("/{path:.+}")
+    @Consumes(MediaTypes.DATA_OBJECT)
+    @Produces(MediaTypes.DATA_OBJECT)
+    public Response postDataObject(
+            @Context HttpHeaders headers,
+            @PathParam("path") String path,
+            byte[] bytes)
+    {
+
+        _log.trace("postDataObject():");
+        // print headers for debug
+        for (String hdr : headers.getRequestHeaders().keySet()) {
+            _log.trace("{} - {}", hdr, headers.getRequestHeader(hdr));
+        }
         String inBuffer = new String(bytes);
         _log.trace("Path={}\n{}", path, inBuffer);
 

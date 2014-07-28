@@ -18,6 +18,7 @@
 package org.dcache.cdmi.dao.impl;
 
 import com.google.common.collect.ImmutableMap;
+import org.dcache.cdmi.model.DcacheCapability;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
@@ -109,9 +110,9 @@ public class DcacheCapabilityDao implements CapabilityDao
     @Override
     public Capability findByPath(String path)
     {
-        Capability capability = new Capability();
+        DcacheCapability capability = new DcacheCapability();
 
-        _log.trace("In Capability.findByPath, path={" + path + "}");
+        _log.trace("In DcacheCapabilityDao.findByPath, path={" + path + "}");
         switch (path) {
             case "container/":
                 _log.trace("Container Capabilities");
@@ -149,7 +150,7 @@ public class DcacheCapabilityDao implements CapabilityDao
                 break;
         }
         capability.setObjectType("application/cdmi-capability");
-        return (capability);
+        return (Capability) capability;
     }
 
 }

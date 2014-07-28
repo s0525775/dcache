@@ -57,7 +57,6 @@ import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import dmg.cells.nucleus.NoRouteToCellException;
 import java.text.ParseException;
 import java.util.Collections;
-import java.util.NoSuchElementException;
 import javax.security.auth.Subject;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
@@ -101,7 +100,7 @@ public class DcacheContainerDao extends AbstractCellComponent
 
     // Properties and Dependency Injection Methods by dCache
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES =
-        EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, MODE, ACL, OWNER, OWNER_GROUP);
+        EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, MODE, ACL, OWNER, OWNER_GROUP, STORAGEINFO);
     private CellStub pnfsStub;
     private CellStub billingStub;
     private PnfsHandler pnfsHandler;
@@ -172,7 +171,7 @@ public class DcacheContainerDao extends AbstractCellComponent
         this.isAnonymousListingAllowed = isAllowed;
     }
 
-    public boolean isAnonymousListing()
+    private boolean isAnonymousListing()
     {
         return this.isAnonymousListingAllowed;
     }
@@ -556,88 +555,60 @@ public class DcacheContainerDao extends AbstractCellComponent
         }
     }
 
-    //
-    // For now this method supports both Container and Object delete.
-    //
-    // Improper requests directed at the root container are not routed here by
-    // PathResource.
-    //
-    public void deleteById(PnfsId pnfsid)
-    {
-        _log.trace("Delete container/object, PnfsId={}", pnfsid);
-        Subject subject = getSubject();
-        if ((subject == null) || Subjects.isNobody(subject)) {
-            throw new ForbiddenException("Permission denied");
-        }
-
-        if (!isUserAllowed(subject, pnfsid)) {
-            throw new ForbiddenException("Permission denied");
-        }
-
-        // Setup ISO-8601 Date
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-
-        String path = "";
-        String objectID = "";
-        DcacheContainer requestedContainer = new DcacheContainer();
-        FileAttributes attributes = getAttributes(subject, pnfsid);
-        if (attributes != null) {
-            pnfsid = attributes.getPnfsId();
-            if (pnfsid != null) {
-                if (attributes.getLocations().iterator().hasNext()) {
-                    path = attributes.getLocations().iterator().next();
-                }
-                requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
-                requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
-                requestedContainer.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                objectID = new IdConverter().toObjectID(pnfsid.toIdString());
-                requestedContainer.setObjectID(objectID);
-                _log.trace("DcacheContainerDao<Delete>, setObjectID={}", objectID);
-                requestedContainer.setMetadata("cdmi_acount", "0");
-                requestedContainer.setMetadata("cdmi_mcount", "0");
-                // set default ACL
-                List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                subMetadataEntry_ACL.put("acetype", "ALLOW");
-                subMetadataEntry_ACL.put("identifier", "OWNER@");
-                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                subMetadata_ACL.add(subMetadataEntry_ACL);
-                requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
-                if (checkIfDirectoryExists(subject, pnfsid)) {
-                    deleteDirectory(subject, pnfsid, path);
-                } else {
-                    deleteFile(subject, pnfsid, path);
-                }
-            } else {
-                throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
-            }
-        } else {
-            throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot read PnfsId from meta information, ObjectID will be empty");
-        }
-    }
-
-    @Override
-    public DcacheContainer findByObjectId(String objectId)
-    {
-        throw new UnsupportedOperationException("DcacheContainerDao.findByObjectId()");
-    }
-
     @Override
     public DcacheContainer findByPath(String path)
     {
+        System.out.println("In DcacheContainerDAO.findByPath, Path=" + path);
         _log.trace("In DcacheContainerDAO.findByPath, Path={}", path);
 
-        DcacheContainer requestedContainer = new DcacheContainer();
         Subject subject = getSubject();
-        File directory;
-        directory = absoluteFile(path);
-
+        DcacheContainer requestedContainer = new DcacheContainer();
         if (path != null) {
             if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
                 throw new ForbiddenException("Permission denied");
             }
+
+            File directory;
+            String checkPath = path;
+            if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
+                String objectId = "";
+                String restPath = "";
+                String tempPath = "";
+                IdConverter idc = new IdConverter();
+                if (path.startsWith("cdmi_objectid/")) {
+                    tempPath = path.replace("cdmi_objectid/", "");
+                } else {
+                    tempPath = path.replace("/cdmi_objectid/", "");
+                }
+                int slashIndex = tempPath.indexOf("/");
+                if (slashIndex > 0) {
+                    objectId = tempPath.substring(0, slashIndex);
+                    restPath = tempPath.substring(slashIndex + 1);
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
+                        }
+                    }
+                } else {
+                    objectId = tempPath;
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath;
+                        }
+                    }
+                }
+            }
+            directory = absoluteFile(checkPath);
 
             if (!isUserAllowed(subject, directory.getAbsolutePath())) {
                 throw new ForbiddenException("Permission denied");
@@ -716,7 +687,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                 } else {
                     throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
-                return completeContainer(subject, requestedContainer, directory, path);
+                return completeContainer(subject, requestedContainer, directory, checkPath);
             } else {
                 throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory '" + directory.getAbsolutePath() + "'");
             }
@@ -724,7 +695,116 @@ public class DcacheContainerDao extends AbstractCellComponent
             // root container
             requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
             requestedContainer.setDomainURI("/cdmi_domains/default_domain");
-            return completeContainer(subject, requestedContainer, directory, path);
+            return completeContainer(subject, requestedContainer, null, "");
+        }
+    }
+
+    @Override
+    public DcacheContainer findByObjectId(String objectId)
+    {
+        System.out.println("In DcacheContainerDAO.findByObjectId, ObjectID=" + removeSlashesFromPath(objectId));
+        _log.trace("In DcacheContainerDAO.findByObjectId, ObjectID={}", removeSlashesFromPath(objectId));
+
+        DcacheContainer requestedContainer = new DcacheContainer();
+        Subject subject = getSubject();
+        IdConverter idc = new IdConverter();
+        String strPnfsId = idc.toPnfsID(removeSlashesFromPath(objectId));
+
+        if (strPnfsId != null && !strPnfsId.isEmpty()) {
+            PnfsId pnfsId = new PnfsId(strPnfsId);
+
+            if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
+                throw new ForbiddenException("Permission denied");
+            }
+
+            if (!isUserAllowed(subject, pnfsId)) {
+                throw new ForbiddenException("Permission denied");
+            }
+
+            if (!checkIfDirectoryFileExists(subject, pnfsId)) {
+                throw new NotFoundException("Object with ObjectId '" + removeSlashesFromPath(objectId)
+                        + "' does not identify an existing container");
+            }
+            if (!checkIfDirectoryExists(subject, pnfsId)) {
+                throw new BadRequestException("Object with ObjectId '" + removeSlashesFromPath(objectId)
+                        + "' does not identify a container");
+            }
+
+            // Setup ISO-8601 Date
+            Date now = new Date();
+            long nowAsLong = now.getTime();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+            FileAttributes attributes = getAttributes(subject, pnfsId);
+
+            String path = "";
+            String objectID = "";
+            int cowner = 0;
+            ACL cacl = null;
+            if (attributes != null) {
+                pnfsId = attributes.getPnfsId();
+                if (pnfsId != null) {
+                    path = getPnfsPath(subject, pnfsId).toString();
+                    System.out.println("Path=" + path);
+                    requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
+                    requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
+                    requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
+                    requestedContainer.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
+                    cowner = attributes.getOwner();
+                    cacl = attributes.getAcl();
+                    objectID = new IdConverter().toObjectID(pnfsId.toIdString());
+                    requestedContainer.setObjectID(objectID);
+                    _log.trace("DcacheContainerDao<Read>, setObjectID={}", objectID);
+
+                    requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
+                    requestedContainer.setDomainURI("/cdmi_domains/default_domain");
+                    requestedContainer.setMetadata("cdmi_acount", "0");
+                    requestedContainer.setMetadata("cdmi_mcount", "0");
+                    requestedContainer.setMetadata("cdmi_owner", String.valueOf(cowner));  //TODO
+                    if (cacl != null && !cacl.isEmpty()) {
+                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                        for (ACE ace : cacl.getList()) {
+                            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
+                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
+                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
+                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                            subMetadata_ACL.add(subMetadataEntry_ACL);
+                        }
+                        requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
+                    } else {
+                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                        HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                        subMetadataEntry_ACL.put("acetype", "ALLOW");
+                        subMetadataEntry_ACL.put("identifier", "OWNER@");
+                        subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                        subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                        subMetadata_ACL.add(subMetadataEntry_ACL);
+                        requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
+                    }
+
+                    // update meta information
+                    try {
+                        FileAttributes attr2 = new FileAttributes();
+                        attr2.setAccessTime(nowAsLong);
+                        PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+                        pnfs.setFileAttributes(pnfsId, attr2);
+                        requestedContainer.setMetadata("cdmi_atime", sdf.format(now));
+                    } catch (CacheException ex) {
+                        throw new ServerErrorException("DcacheContainerDao<Read>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
+                    }
+                    return completeContainer(subject, requestedContainer, removeSlashesFromPath(objectId));
+                } else {
+                    throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                }
+            } else {
+                throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory with ObjectID '" + removeSlashesFromPath(objectId) + "'");
+            }
+        } else {
+            // root container
+            requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
+            requestedContainer.setDomainURI("/cdmi_domains/default_domain");
+            return completeContainer(subject, requestedContainer, removeSlashesFromPath(objectId));
         }
     }
 
@@ -738,7 +818,7 @@ public class DcacheContainerDao extends AbstractCellComponent
      *            Path of the requested file or directory.
      * @return
      */
-    public File absoluteFile(String path)
+    private File absoluteFile(String path)
     {
         if (path == null) {
             return baseDirectory();
@@ -829,6 +909,87 @@ public class DcacheContainerDao extends AbstractCellComponent
 
     /**
      * <p>
+     * Return the {@link Container} identified by the specified <code>path</code>.
+     * </p>
+     *
+     * @param container
+     *            The requested container with persisted fields
+     * @param directory
+     *            Directory of the requested container
+     * @param path
+     *            Path of the requested container
+     *
+     * @exception NotFoundException
+     *                if the specified path does not identify a valid resource
+     * @exception BadRequestException
+     *                if the specified path identifies a data object instead of a container
+     */
+    private DcacheContainer completeContainer(Subject subject, DcacheContainer container, String objectId)
+    {
+        IdConverter idc = new IdConverter();
+        String strPnfsId = idc.toPnfsID(objectId);
+        PnfsId pnfsId = new PnfsId(strPnfsId);
+        _log.trace("In DcacheContainerDao.Container, ObjectID={}", objectId);
+        _log.trace("In DcacheContainerDao.Container, PnfsID={}", pnfsId.toIdString());
+
+        FileAttributes attributes = getAttributes(subject, pnfsId);
+
+        String path = "";
+        if (attributes != null) {
+            pnfsId = attributes.getPnfsId();
+            if (pnfsId != null) {
+                path = getPnfsPath(subject, pnfsId).toString();
+                System.out.println("In DcacheContainerDao.Container, Path=" + path);
+                _log.trace("In DcacheContainerDao.Container, Path={}", path);
+                container.setObjectType("application/cdmi-container");
+
+                // Derive ParentURI
+                String parentURI = "/";
+                if (path != null) {
+                    String[] tokens = path.split("[/]+");
+                    String containerName = tokens[tokens.length - 1];
+                    // FIXME : This is the kludge way !
+                    for (int i = 0; i <= tokens.length - 2; i++) {
+                        parentURI += tokens[i] + "/";
+                    }
+                    _log.trace("In DcacheContainerDao.Container, ParentURI={}, Container Name={}", parentURI, containerName);
+                    // Check for illegal top level container names
+                    if (parentURI.matches("/") && containerName.startsWith("cdmi")) {
+                        throw new BadRequestException("Root container names must not start with cdmi");
+                    }
+                }
+                container.setParentURI(parentURI);
+
+                // Add children containers and/or objects representing subdirectories or files
+                List<String> children = container.getChildren();
+                if (isAnonymousListingAllowed || ((subject != null) && !Subjects.isNobody(subject))) {
+                    for (Map.Entry<String, FileAttributes> entry : listDirectoriesFilesByPath(subject, path).entrySet()) {
+                        if (entry.getValue().getFileType() == DIR) {
+                            children.add(entry.getKey() + "/");
+                        } else {
+                            if (!entry.getKey().startsWith(".")) {
+                                children.add(entry.getKey());
+                            }
+                        }
+                    }
+                }
+                if (children.size() > 0) {
+                    // has children - set the range
+                    int lastindex = children.size() - 1;
+                    String childrange = "0-" + lastindex;
+                    container.setChildrenrange(childrange);
+                }
+                return container;
+            } else {
+                throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+            }
+        } else {
+            throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory with ObjectID '" + objectId + "'");
+        }
+    }
+
+    /**
+     * <p>
      * Returns true if object is a container.
      * </p>
      *
@@ -839,7 +1000,52 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public boolean isContainer(String path)
     {
-        return path == null || isDirectory(getSubject(), path);
+        String checkPath = path;
+        Subject subject = getSubject();
+        if (checkPath != null) {
+            if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
+                String objectId = "";
+                String restPath = "";
+                String tempPath = "";
+                IdConverter idc = new IdConverter();
+                if (path.startsWith("cdmi_objectid/")) {
+                    tempPath = path.replace("cdmi_objectid/", "");
+                } else {
+                    tempPath = path.replace("/cdmi_objectid/", "");
+                }
+                int slashIndex = tempPath.indexOf("/");
+                if (slashIndex > 0) {
+                    objectId = tempPath.substring(0, slashIndex);
+                    restPath = tempPath.substring(slashIndex + 1);
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    System.out.println("0001:" + strPnfsId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
+                        }
+                    }
+                } else {
+                    objectId = tempPath;
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    System.out.println("0002:" + strPnfsId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath;
+                        }
+                    }
+                }
+            }
+            System.out.println("CheckPath: " + checkPath);
+        }
+        return (checkPath == null || isDirectory(subject, checkPath));
     }
 
     /**
@@ -942,6 +1148,7 @@ public class DcacheContainerDao extends AbstractCellComponent
     private boolean isDirectory(Subject subject, String dirPath)
     {
         String tmpDirPath = addPrefixSlashToPath(dirPath);
+        System.out.println("Check: " + (baseDirectoryName + tmpDirPath));
         return checkIfDirectoryExists(subject, baseDirectoryName + tmpDirPath);
     }
 
@@ -1014,6 +1221,30 @@ public class DcacheContainerDao extends AbstractCellComponent
             FileAttributes attributes = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
+            if (attributes != null) {
+                result = true;
+            }
+            return result;
+        } catch (CacheException ignore) {
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Checks if a Directory or File exists in a specific path.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private boolean checkIfDirectoryFileExists(Subject subject, PnfsId pnfsid)
+    {
+        boolean result = false;
+        try {
+            FileAttributes attributes = null;
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            attributes = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
             if (attributes != null) {
                 result = true;
             }
@@ -1100,9 +1331,30 @@ public class DcacheContainerDao extends AbstractCellComponent
         try {
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             PnfsCreateEntryMessage reply = pnfs.createPnfsDirectory(tmpDirPath);
+            reply.getPnfsPath();
             result = pnfs.getFileAttributes(reply.getPnfsId(), REQUIRED_ATTRIBUTES);
         } catch (CacheException ex) {
             _log.warn("Directory '{}' could not get created, {}", dirPath, ex.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Retrieves the PnfsPath for a specific PnfsId.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private FsPath getPnfsPath(Subject subject, PnfsId pnfsid)
+    {
+        FsPath result = null;
+        try {
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            result = pnfs.getPathByPnfsId(pnfsid);
+        } catch (CacheException ex) {
+            _log.warn("PnfsPath for PnfsId '{}' could not get retrieved, {}", pnfsid, ex.getMessage());
         }
         return result;
     }
@@ -1291,7 +1543,7 @@ public class DcacheContainerDao extends AbstractCellComponent
         }
     }
 
-    public void removeDirectory(Subject subject, String path, boolean recursive)
+    private void removeDirectory(Subject subject, String path, boolean recursive)
     {
         if (path.isEmpty()) {
             throw new ForbiddenException("Permission denied");
@@ -1415,7 +1667,7 @@ public class DcacheContainerDao extends AbstractCellComponent
         }
     }
 
-    public class NullListPrinter implements DirectoryListPrinter
+    private class NullListPrinter implements DirectoryListPrinter
     {
         @Override
         public Set<FileAttribute> getRequiredAttributes()

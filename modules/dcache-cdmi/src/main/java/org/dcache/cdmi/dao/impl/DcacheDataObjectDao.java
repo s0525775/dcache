@@ -61,9 +61,12 @@ import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.auth.Subjects;
+import org.dcache.cdmi.exception.MethodNotAllowedException;
 import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheDataObject;
@@ -112,7 +115,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     // Properties and Dependency Injection Methods by dCache
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES =
-        EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, MODE, ACL, OWNER, OWNER_GROUP);
+        EnumSet.of(PNFSID, CREATION_TIME, ACCESS_TIME, CHANGE_TIME, MODIFICATION_TIME, TYPE, SIZE, MODE, ACL, OWNER, OWNER_GROUP, STORAGEINFO);
     private static final String PROTOCOL_INFO_NAME = "Http";
     private static final int PROTOCOL_INFO_MAJOR_VERSION = 1;
     private static final int PROTOCOL_INFO_MINOR_VERSION = 1;
@@ -233,7 +236,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      *
      * @return
      */
-    public boolean isAnonymousListing()
+    private boolean isAnonymousListing()
     {
         return this.isAnonymousListingAllowed;
     }
@@ -245,7 +248,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      *
      * @return
      */
-    public String getInternalAddress()
+    private String getInternalAddress()
     {
         return this.internalAddress.getHostAddress();
     }
@@ -277,9 +280,13 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         }
     }
 
-    public DcacheDataObjectDao() throws UnknownHostException
+    public DcacheDataObjectDao()
     {
-        this.internalAddress = InetAddress.getLocalHost();
+        try {
+            this.internalAddress = InetAddress.getLocalHost();
+        } catch (UnknownHostException ex) {
+            _log.error(realm);
+        }
     }
 
     /**
@@ -306,9 +313,9 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * Returns the location URI of the current request. This is the
      * full request URI excluding user information, query and fragments.
      */
-    private static URI getLocation() throws URISyntaxException
+    private URI getLocation() throws URISyntaxException
     {
-        URI uri = new URI("http://localhost:8543");
+        URI uri = new URI("http://" + internalAddress.getHostName() + ":8543");
         return new URI(uri.getScheme(), null, uri.getHost(),
                 uri.getPort(), uri.getPath(), null, null);
     }
@@ -320,7 +327,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      *
      * @param path
      */
-    String getcontainerName(String path)
+    private String getcontainerName(String path)
     {
         // Make sure we have a file name for the object
         // check for file name
@@ -776,17 +783,62 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             DcacheDataObject dObj = new DcacheDataObject();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-            // Check for object file
-            File objFile, baseDirectory;
-            _log.trace("baseDirectory={}", baseDirectoryName);
-            baseDirectory = new File(baseDirectoryName + "/");
-            objFile = new File(baseDirectory, path);
-            _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
-
             Subject subject = getSubject();
             if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
                 throw new UnauthorizedException("Access denied", realm);
             }
+
+            System.out.println("Object AbsolutePath=" + path);
+            // Check for object file
+            File objFile, baseDirectory;
+            _log.trace("baseDirectory={}", baseDirectoryName);
+            baseDirectory = new File(baseDirectoryName + "/");
+            String checkPath = path;
+            if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
+                String objectId = "";
+                String restPath = "";
+                String tempPath = "";
+                IdConverter idc = new IdConverter();
+                if (path.startsWith("cdmi_objectid/")) {
+                    tempPath = path.replace("cdmi_objectid/", "");
+                } else {
+                    tempPath = path.replace("/cdmi_objectid/", "");
+                }
+                System.out.println("Object AbsolutePath=" + tempPath);
+                int slashIndex = tempPath.indexOf("/");
+                if (slashIndex > 0) {
+                    objectId = tempPath.substring(0, slashIndex);
+                    restPath = tempPath.substring(slashIndex + 1);
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
+                        }
+                    }
+                } else {
+                    objectId = tempPath;
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath;
+                        }
+                    }
+                }
+                System.out.println("Object AbsolutePath=" + objectId);
+                System.out.println("Object AbsolutePath=" + restPath);
+            }
+            objFile = new File(baseDirectory, checkPath);
+            System.out.println("Object AbsolutePath=" + checkPath);
+            System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
+            _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
 
             if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
                 return null;
@@ -886,7 +938,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public DcacheDataObject findByObjectId(String objectId)
     {
-        _log.trace("In DCacheDataObjectDao.findByObjectId, ObjectID={}", objectId);
+        System.out.println("In DCacheDataObjectDao.findByObjectId, ObjectID=" + removeSlashesFromPath(objectId));
+        _log.trace("In DCacheDataObjectDao.findByObjectId, ObjectID={}", removeSlashesFromPath(objectId));
         try {
             // ISO-8601 Date
             Date now = new Date();
@@ -895,7 +948,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
             IdConverter idconverter = new IdConverter();
-            String strPnfsId = idconverter.toPnfsID(objectId);
+            String strPnfsId = idconverter.toPnfsID(removeSlashesFromPath(objectId));
             PnfsId pnfsId = new PnfsId(strPnfsId);
 
             Subject subject = getSubject();
@@ -918,10 +971,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             ACL oacl = null;
             if (attributes != null) {
                 if (attributes.getFileType() != DIR) {
-                    if (attributes.getLocations().iterator().hasNext()) {
-                        path = attributes.getLocations().iterator().next();
-                    }
-                    pnfsId = attributes.getPnfsId();
                     // Read object from file
                     byte[] inBytes = readFile(subject, new FsPath(path), pnfsId);
                     if (inBytes != null) {
@@ -929,6 +978,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     }
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
+                        path = getPnfsPath(subject, pnfsId).toString();
+                        System.out.println("Path=" + path);
                         long ctime = attributes.getCreationTime();
                         long atime = attributes.getAccessTime();
                         long mtime = attributes.getModificationTime();
@@ -984,22 +1035,29 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         dObj.setMetadata("cdmi_atime", sdf.format(now));
                         return dObj;
                     } else {
-                        throw new ServerErrorException("Exception while reading dataobject with objectId " + objectId
+                        throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                                     + ", metadata could not become read");
                     }
                 } else {
-                    throw new ServerErrorException("Exception while reading dataobject with objectId " + objectId
+                    throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                                 + ", object is a directory");
                 }
             } else {
-                throw new ServerErrorException("Exception while reading dataobject with objectId " + objectId
+                throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                             + ", metadata could not become read");
             }
         } catch (UnauthorizedException ex) {
             throw new UnauthorizedException("Access denied", realm);
         } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
-            throw new ServerErrorException("Exception while reading dataobject with objectId " + objectId);
+            throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId));
         }
+    }
+
+    @Override
+    public DcacheDataObject createById(String string, DataObject d)
+    {
+        //This method is not supported by dCache, dCache would have to allow a user-defined PnfsID
+        throw new MethodNotAllowedException("Method not allowed"); //To change body of generated methods, choose Tools | Templates.
     }
 
     /**
@@ -1026,7 +1084,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      *            Path of the requested file or directory.
      * @return
      */
-    public File absoluteFile(String path)
+    private File absoluteFile(String path)
     {
         if (path == null) {
             return baseDirectory();
@@ -1113,33 +1171,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 } else {
                     result = parent;
                 }
-            }
-        }
-        return result;
-    }
-
-    /**
-     * <p>
-     * Gets the last item (file or directory) of a file path, opposite of getParentDirectory.
-     * </p>
-     *
-     * @param path
-     *            {@link String} identifying a directory path
-     */
-    private String getItem(String path)
-    {
-        String result = "";
-        String tempPath = path;
-        if (path != null) {
-            if (path.endsWith("/")) {
-                tempPath = path.substring(0, path.length() - 1);
-            }
-            String item = tempPath;
-            if (tempPath.contains("/")) {
-                item = tempPath.substring(tempPath.lastIndexOf("/") + 1, tempPath.length());
-            }
-            if (item != null) {
-                result = item;
             }
         }
         return result;
@@ -1236,6 +1267,26 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     /**
      * <p>
+     * Retrieves the PnfsPath for a specific PnfsId.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private FsPath getPnfsPath(Subject subject, PnfsId pnfsid)
+    {
+        FsPath result = null;
+        try {
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            result = pnfs.getPathByPnfsId(pnfsid);
+        } catch (CacheException ex) {
+            _log.warn("PnfsPath for PnfsId '{}' could not get retrieved, {}", pnfsid, ex.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * <p>
      * Adds a prefix slash to a directory path if there isn't a slash already.
      * </p>
      *
@@ -1277,12 +1328,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             }
         }
         return result;
-    }
-
-    @Override
-    public DcacheDataObject createById(String string, DataObject d)
-    {
-        throw new UnsupportedOperationException("DcacheDataObjectDao, Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     /**
@@ -1382,7 +1427,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.io.IOException
      * @throws java.net.URISyntaxException
      */
-    public boolean writeFile(Subject subject, FsPath path, InputStream inputStream, Long length)
+    private boolean writeFile(Subject subject, FsPath path, InputStream inputStream, Long length)
             throws CacheException, InterruptedException, IOException,
                    URISyntaxException
     {
@@ -1427,7 +1472,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         return success;
     }
 
-    public String getWriteUrl(Subject subject, FsPath path, Long length)
+    private String getWriteUrl(Subject subject, FsPath path, Long length)
             throws CacheException, InterruptedException,
                    URISyntaxException
     {
@@ -1481,7 +1526,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.io.IOException
      * @throws java.net.URISyntaxException
      */
-    public byte[] readFile(Subject subject, FsPath path, PnfsId pnfsid)
+    private byte[] readFile(Subject subject, FsPath path, PnfsId pnfsid)
             throws CacheException, InterruptedException, IOException, URISyntaxException
     {
         byte[] result = null;
@@ -1517,7 +1562,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @throws java.lang.InterruptedException
      * @throws java.net.URISyntaxException
      */
-    public String getReadUrl(Subject subject, FsPath path, PnfsId pnfsid)
+    private String getReadUrl(Subject subject, FsPath path, PnfsId pnfsid)
             throws CacheException, InterruptedException, URISyntaxException
     {
         return beginRead(subject, path, pnfsid, false).getRedirect();

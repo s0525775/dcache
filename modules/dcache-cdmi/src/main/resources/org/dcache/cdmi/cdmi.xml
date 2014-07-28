@@ -289,11 +289,11 @@
         </jaxrs:serviceBeans>
     </jaxrs:server>
 
-    <bean id="objectIdResource" class="org.snia.cdmiserver.resource.ObjectIdResource" scope="prototype">
+    <bean id="objectIdResource" class="org.dcache.cdmi.resource.DcacheObjectIdResource" scope="prototype">
+        <property name="containerDao" ref="containerDao"/>
         <property name="dataObjectDao" ref="dataObjectDao"/>
     </bean>
-
-    <bean id="capabilityResource" class="org.snia.cdmiserver.resource.CapabilityResource" scope="prototype">
+    <bean id="capabilityResource" class="org.dcache.cdmi.resource.DcacheCapabilityResource" scope="prototype">
          <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
     <bean id="pathResource" class="org.dcache.cdmi.resource.DcachePathResource" scope="prototype">
