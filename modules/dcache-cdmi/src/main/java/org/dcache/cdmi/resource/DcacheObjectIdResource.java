@@ -289,8 +289,8 @@ public class DcacheObjectIdResource
             @Context HttpHeaders headers)
     {
 
-        System.out.println("In DcacheObjectIDResource.getDataObjectOrContainerByID, path=" + objectId);
-        _log.trace("In DcacheObjectIDResource.getDataObjectOrContainerByID, path={}", objectId);
+        System.out.println("In DcacheObjectIdResource.getDataObjectOrContainerByID, path=" + objectId);
+        _log.trace("In DcacheObjectIdResource.getDataObjectOrContainerByID, path={}", objectId);
 
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {
@@ -305,12 +305,20 @@ public class DcacheObjectIdResource
         } else {
             path = objectId;
         }
-        int slashIndex = objectId.indexOf("/");
+        String testPath = objectId;
+        if (objectId.startsWith("/cdmi_objectid/") || objectId.startsWith("cdmi_objectid/")) {
+            if (objectId.startsWith("/cdmi_objectid/")) {
+                testPath = objectId.replace("/cdmi_objectid/", "");
+            } else {
+                testPath = objectId.replace("cdmi_objectid/", "");
+            }
+        }
+        int slashIndex = testPath.indexOf("/");
         if (slashIndex > 0) {
-            theObjectId = objectId.substring(0, slashIndex);
-            restPath = objectId.substring(slashIndex + 1);
+            theObjectId = testPath.substring(0, slashIndex);
+            restPath = testPath.substring(slashIndex + 1);
         } else {
-            theObjectId = objectId;
+            theObjectId = testPath;
         }
         if (!restPath.isEmpty()) {
             // Check for container vs object
@@ -485,8 +493,7 @@ public class DcacheObjectIdResource
 
     @DELETE
     // @Consumes("application/json")
-    @Consumes(MediaTypes.DATA_OBJECT)
-    public Response deleteDataObjectByID(
+    public Response deleteDataObjectOrContainerByID(
             @Context HttpHeaders headers,
             @PathParam("objectId") String objectId,
             byte[] bytes) {
@@ -496,11 +503,26 @@ public class DcacheObjectIdResource
         }
         String inBuffer = new String(bytes);
         System.out.println("Object Id = " + objectId + "\n" + inBuffer);
-        DcachePathResource pathResource = new DcachePathResource();
-        String objectPath = "/cdmi_objectid" + objectId;
-        System.out.println("In DcachePathResource.deleteDataObjectByID, path=" + objectPath);
-        _log.trace("In DcachePathResource.deleteDataObjectByID, path={}", objectPath);
-        Response resp = pathResource.postDataObject(objectPath,bytes);
-        return resp;
+        String objectPath = "/cdmi_objectid/" + objectId;
+        System.out.println("In DcacheObjectIdResource.deleteDataObjectByID, path=" + objectPath);
+        _log.trace("In DcacheObjectIdResource.deleteDataObjectByID, path={}", objectPath);
+        try {
+            containerDao.deleteByPath(objectPath);
+            ResponseBuilder builder = Response.status(Response.Status.NO_CONTENT);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("No Content").build();
+        } catch (ForbiddenException ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Delete Error: " + ex.toString()).build();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+            ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity("Object Delete Error: " + ex.toString()).build();
+        }
     }
 }

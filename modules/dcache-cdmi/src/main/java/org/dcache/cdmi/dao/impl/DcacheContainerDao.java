@@ -500,58 +500,121 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public void deleteByPath(String path)
     {
-        File directoryOrFile;
-        directoryOrFile = absoluteFile(path);
-
-        _log.trace("Delete container/object, path={}", directoryOrFile.getAbsolutePath());
-
-        Subject subject = getSubject();
-        if ((subject == null) || Subjects.isNobody(subject)) {
-            throw new ForbiddenException("Permission denied");
-        }
-
-        if (!isUserAllowed(subject, directoryOrFile.getAbsolutePath())) {
-            throw new ForbiddenException("Permission denied");
-        }
-
-        // Setup ISO-8601 Date
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-
-        PnfsId pnfsId = null;
-        String objectID = "";
-        DcacheContainer requestedContainer = new DcacheContainer();
-        FileAttributes attributes = getAttributes(subject, directoryOrFile.getAbsolutePath());
-        if (attributes != null) {
-            pnfsId = attributes.getPnfsId();
-            if (pnfsId != null) {
-                requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
-                requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
-                requestedContainer.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                objectID = new IdConverter().toObjectID(pnfsId.toIdString());
-                requestedContainer.setObjectID(objectID);
-                _log.trace("DcacheContainerDao<Delete>, setObjectID={}", objectID);
-                requestedContainer.setMetadata("cdmi_acount", "0");
-                requestedContainer.setMetadata("cdmi_mcount", "0");
-                // set default ACL
-                List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                subMetadataEntry_ACL.put("acetype", "ALLOW");
-                subMetadataEntry_ACL.put("identifier", "OWNER@");
-                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                subMetadata_ACL.add(subMetadataEntry_ACL);
-                requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
-                if (checkIfDirectoryExists(subject, directoryOrFile.getAbsolutePath())) {
-                    deleteDirectory(subject, pnfsId, directoryOrFile.getAbsolutePath());
+        System.out.println("Delete container/object, path=" + path);
+        if (path != null) {
+            if (path.startsWith("/cdmi_objectid/") || path.startsWith("cdmi_objectid/")) {
+                String newPath = "";
+                if (path.startsWith("/cdmi_objectid/")) {
+                    newPath = path.replace("/cdmi_objectid/", "");
                 } else {
-                    deleteFile(subject, pnfsId, directoryOrFile.getAbsolutePath());
+                    newPath = path.replace("cdmi_objectid/", "");
+                }
+                deleteByObjectId(newPath);
+            } else {
+                File directoryOrFile;
+                directoryOrFile = absoluteFile(path);
+
+                _log.trace("Delete container/object, path={}", directoryOrFile.getAbsolutePath());
+
+                Subject subject = getSubject();
+                if ((subject == null) || Subjects.isNobody(subject)) {
+                    throw new ForbiddenException("Permission denied");
+                }
+
+                if (!isUserAllowed(subject, directoryOrFile.getAbsolutePath())) {
+                    throw new ForbiddenException("Permission denied");
+                }
+
+                PnfsId pnfsId = null;
+                FileAttributes attributes = getAttributes(subject, directoryOrFile.getAbsolutePath());
+                if (attributes != null) {
+                    pnfsId = attributes.getPnfsId();
+                    if (pnfsId != null) {
+                        if (checkIfDirectoryExists(subject, directoryOrFile.getAbsolutePath())) {
+                            deleteDirectory(subject, pnfsId, directoryOrFile.getAbsolutePath());
+                        } else {
+                            deleteFile(subject, pnfsId, directoryOrFile.getAbsolutePath());
+                        }
+                    } else {
+                        throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                    }
+                } else {
+                    throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                }
+            }
+        }
+    }
+
+    private void deleteByObjectId(String path)
+    {
+        if (path != null) {
+            System.out.println("Delete container/object, path=" + path);
+            _log.trace("Delete container/object, path={}", path);
+
+            String checkPath = "";
+            String objectId = "";
+            String restPath = "";
+            Subject subject = getSubject();
+            IdConverter idc = new IdConverter();
+            int slashIndex = path.indexOf("/");
+            if (slashIndex > 0) {
+                objectId = path.substring(0, slashIndex);
+                restPath = path.substring(slashIndex + 1);
+                String strPnfsId = idc.toPnfsID(objectId);
+                System.out.println("0005:" + strPnfsId);
+                PnfsId pnfsId = new PnfsId(strPnfsId);
+                FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                if (pnfsPath != null) {
+                    String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                    if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                        checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
+                    }
                 }
             } else {
-                throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
+                objectId = path;
+                String strPnfsId = idc.toPnfsID(objectId);
+                System.out.println("0006:" + strPnfsId);
+                PnfsId pnfsId = new PnfsId(strPnfsId);
+                FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                if (pnfsPath != null) {
+                    String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                    if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                        checkPath = "/" + tmpBasePath;
+                    }
+                }
             }
-        } else {
-            throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot read PnfsId from meta information, ObjectID will be empty");
+            System.out.println("CheckPath: " + checkPath);
+
+            if (checkPath != null) {
+                File directoryOrFile;
+                directoryOrFile = absoluteFile(checkPath);
+                if ((subject == null) || Subjects.isNobody(subject)) {
+                    throw new ForbiddenException("Permission denied");
+                }
+
+                if (!isUserAllowed(subject, directoryOrFile.getAbsolutePath())) {
+                    throw new ForbiddenException("Permission denied");
+                }
+
+                PnfsId pnfsId = null;
+                FileAttributes attributes = getAttributes(subject, directoryOrFile.getAbsolutePath());
+                if (attributes != null) {
+                    pnfsId = attributes.getPnfsId();
+                    if (pnfsId != null) {
+                        if (checkIfDirectoryExists(subject, directoryOrFile.getAbsolutePath())) {
+                            deleteDirectory(subject, pnfsId, directoryOrFile.getAbsolutePath());
+                        } else {
+                            deleteFile(subject, pnfsId, directoryOrFile.getAbsolutePath());
+                        }
+                    } else {
+                        throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                    }
+                } else {
+                    throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                }
+            }
         }
     }
 
