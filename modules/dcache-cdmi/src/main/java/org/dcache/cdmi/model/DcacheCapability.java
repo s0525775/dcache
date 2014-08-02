@@ -1,48 +1,86 @@
-/*
- * Copyright (c) 2010, Sun Microsystems, Inc.
- * Copyright (c) 2010, The Storage Networking Industry Association.
+/* dCache - http://www.dcache.org/
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Copyright (C) 2014 Deutsches Elektronen-Synchrotron
  *
- * Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- * Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
  *
- * Neither the name of The Storage Networking Industry Association (SNIA) nor
- * the names of its contributors may be used to endorse or promote products
- * derived from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- *  THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.dcache.cdmi.model;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.HashMap;
+import java.util.ListIterator;
+import java.util.Map;
+import org.codehaus.jackson.JsonFactory;
+import org.codehaus.jackson.JsonGenerator;
 import org.snia.cdmiserver.model.Capability;
 
 /**
  * <p>
- * Representation of a CDMI <em>DcacheCapability</em>.
+ * Representation of a CDMI <em>Capability</em>.
  * </p>
  */
 public class DcacheCapability extends Capability
 {
-    @Override
-    public Capability getByPath(String path)
+    private String childrenrange;
+
+    public String getChildrenrange()
     {
-        return (Capability) this;
+        return childrenrange;
+    }
+
+    public void setChildrenrange(String childrenrange)
+    {
+        this.childrenrange = childrenrange;
+    }
+
+    public String toJson()
+    {
+        //
+        StringWriter outBuffer = new StringWriter();
+        try {
+            JsonFactory f = new JsonFactory();
+            JsonGenerator g = f.createJsonGenerator(outBuffer);
+            g.useDefaultPrettyPrinter();
+            g.writeStartObject();
+
+            g.writeStringField("objectID", getObjectID());
+            g.writeStringField("objectType", getObjectType());
+            g.writeStringField("parentURI", getParentURI());
+            g.writeStringField("capabilities", getCapabilities());
+
+            g.writeObjectFieldStart("metadata");
+            for (Map.Entry<String, String> entry : super.getMetadata().entrySet()) {
+                g.writeStringField(entry.getKey(), entry.getValue());
+            }
+            g.writeEndObject();
+
+            g.writeStringField("objectType", getObjectType());
+            g.writeStringField("parentID", getParentID());
+            g.writeStringField("parentURI", getParentURI());
+            g.writeArrayFieldStart("children");
+            ListIterator<String> it = getChildren().listIterator();
+            while (it.hasNext()) {
+                g.writeString((String) it.next());
+            }
+            g.writeEndArray();
+            g.writeStringField("childrenrange", getChildrenrange());
+            g.flush();
+        } catch (IOException ex) {
+            return ("Error: " + ex);
+        }
+        //
+        return outBuffer.toString();
     }
 }

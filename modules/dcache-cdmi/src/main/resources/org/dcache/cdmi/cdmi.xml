@@ -333,6 +333,9 @@
         <property name="billingStub" ref="billing-stub"/>
     </bean>
 
-    <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DcacheCapabilityDao"/>
+    <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DcacheCapabilityDao">
+        <property name="baseDirectoryName" value="/public"/>
+        <property name="pnfsStub" ref="pnfs-stub"/>
+    </bean>
 
 </beans>
