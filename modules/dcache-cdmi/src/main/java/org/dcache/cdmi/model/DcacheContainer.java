@@ -43,6 +43,7 @@ public class DcacheContainer extends Container
 
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheContainer.class);
 
+    private String parentID;
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
 
     private final static List<String> IGNORE_LIST = new ArrayList() {{
@@ -67,6 +68,11 @@ public class DcacheContainer extends Container
         return subMetadata_ACL;
     }
 
+    public String getParentID()
+    {
+        return parentID;
+    }
+
     public void addSubMetadata_ACL(HashMap<String, String> metadata)
     {
         subMetadata_ACL.add(metadata);
@@ -80,6 +86,11 @@ public class DcacheContainer extends Container
     public void setMetadata(String key, String val)
     {
         getMetadata().put(key, val);
+    }
+
+    public void setParentID(String id)
+    {
+        parentID = id;
     }
 
     public void setMetadata(Map<String, String> metadata)
@@ -150,8 +161,14 @@ public class DcacheContainer extends Container
             g.writeEndObject();
 
             if (!toFile) {
-                g.writeStringField("objectType", getObjectType());
-                g.writeStringField("parentURI", getParentURI());
+                if (getObjectType() != null)
+                    g.writeStringField("objectType", getObjectType());
+                if (getCapabilitiesURI() != null)
+                    g.writeStringField("capabilitiesURI", getCapabilitiesURI());
+                if (getObjectID() != null)
+                    g.writeStringField("parentID", getParentID());
+                if (getObjectID() != null)
+                    g.writeStringField("parentURI", getParentURI());
                 g.writeArrayFieldStart("children");
                 ListIterator<String> it = getChildren().listIterator();
                 while (it.hasNext()) {

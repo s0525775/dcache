@@ -29,30 +29,16 @@ import dmg.cells.nucleus.CellLifeCycleAware;
 import java.io.File;
 import java.util.EnumSet;
 import java.util.Set;
-import javax.security.auth.Subject;
 import org.dcache.auth.Subjects;
-import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.model.DcacheCapability;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
-import static org.dcache.namespace.FileAttribute.ACCESS_TIME;
-import static org.dcache.namespace.FileAttribute.ACL;
-import static org.dcache.namespace.FileAttribute.CHANGE_TIME;
-import static org.dcache.namespace.FileAttribute.CREATION_TIME;
-import static org.dcache.namespace.FileAttribute.MODE;
-import static org.dcache.namespace.FileAttribute.MODIFICATION_TIME;
-import static org.dcache.namespace.FileAttribute.OWNER;
-import static org.dcache.namespace.FileAttribute.OWNER_GROUP;
-import static org.dcache.namespace.FileAttribute.PNFSID;
-import static org.dcache.namespace.FileAttribute.SIZE;
-import static org.dcache.namespace.FileAttribute.STORAGEINFO;
-import static org.dcache.namespace.FileAttribute.TYPE;
+import static org.dcache.namespace.FileAttribute.*;
 import org.dcache.vehicles.FileAttributes;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
-import org.snia.cdmiserver.util.ObjectID;
 
 /* This class is dCache's DAO implementation class for SNIA's CapabilityDao interface.
    Capabilities represents the functionalities of a Cloud System of a Container and of a DataObject,

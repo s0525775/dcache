@@ -43,6 +43,7 @@ public class DcacheDataObject extends DataObject
 
     private String valueTransferEncoding;
     private String domainURI;
+    private String parentID;
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
 
     private final static List<String> IGNORE_LIST = new ArrayList() {{
@@ -61,6 +62,11 @@ public class DcacheDataObject extends DataObject
     public String getDomainURI()
     {
         return domainURI;
+    }
+
+    public String getParentID()
+    {
+        return parentID;
     }
 
     public List<HashMap<String, String>> getSubMetadata_ACL()
@@ -101,6 +107,11 @@ public class DcacheDataObject extends DataObject
         this.subMetadata_ACL = metadata;
     }
 
+    public void setParentID(String id)
+    {
+        parentID = id;
+    }
+
     private boolean isValidSubMetadata_ACL()
     {
         boolean result = true;
@@ -134,6 +145,10 @@ public class DcacheDataObject extends DataObject
                 g.writeStringField("capabilitiesURI", getCapabilitiesURI());
             if (getObjectID() != null)
                 g.writeStringField("objectID", getObjectID());
+            if (getObjectID() != null)
+                g.writeStringField("parentID", getParentID());
+            if (getObjectID() != null)
+                g.writeStringField("parentURI", getParentURI());
             if (getMimetype() != null)
                 g.writeStringField("mimetype", getMimetype());
             //

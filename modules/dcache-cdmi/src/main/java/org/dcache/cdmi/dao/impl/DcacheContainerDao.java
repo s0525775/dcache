@@ -57,14 +57,19 @@ import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import dmg.cells.nucleus.NoRouteToCellException;
 import java.text.ParseException;
 import java.util.Collections;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.security.auth.Subject;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
+import org.dcache.acl.enums.AccessMask;
+import org.dcache.acl.enums.AceFlags;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.exception.MethodNotAllowedException;
 import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheContainer;
+import org.dcache.cdmi.util.AceConverter;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.util.list.DirectoryStream;
 import org.snia.cdmiserver.exception.ConflictException;
@@ -171,11 +176,6 @@ public class DcacheContainerDao extends AbstractCellComponent
         this.isAnonymousListingAllowed = isAllowed;
     }
 
-    private boolean isAnonymousListing()
-    {
-        return this.isAnonymousListingAllowed;
-    }
-
     // ContainerDao Methods invoked from PathResource
     @Override
     public DcacheContainer createByPath(String path, Container containerRequest)
@@ -238,11 +238,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (cacl != null && !cacl.isEmpty()) {
                             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                             for (ACE ace : cacl.getList()) {
+                                AceConverter ac = new AceConverter();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
                             }
                             newContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -303,11 +304,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (cacl != null && !cacl.isEmpty()) {
                             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                             for (ACE ace : cacl.getList()) {
+                                AceConverter ac = new AceConverter();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
                             }
                             currentContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -339,11 +341,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (cacl != null && !cacl.isEmpty()) {
                             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                             for (ACE ace : cacl.getList()) {
+                                AceConverter ac = new AceConverter();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
                             }
                             newContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -443,11 +446,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                     if (cacl != null && !cacl.isEmpty()) {
                         ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                         for (ACE ace : cacl.getList()) {
+                            AceConverter ac = new AceConverter();
                             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                             subMetadata_ACL.add(subMetadataEntry_ACL);
                         }
                         movedContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -674,10 +678,6 @@ public class DcacheContainerDao extends AbstractCellComponent
             }
             directory = absoluteFile(checkPath);
 
-            if (!isUserAllowed(subject, directory.getAbsolutePath())) {
-                throw new ForbiddenException("Permission denied");
-            }
-
             if (!checkIfDirectoryFileExists(subject, directory.getAbsolutePath())) {
                 throw new NotFoundException("Path '" + directory.getAbsolutePath()
                         + "' does not identify an existing container");
@@ -685,6 +685,9 @@ public class DcacheContainerDao extends AbstractCellComponent
             if (!checkIfDirectoryExists(subject, directory.getAbsolutePath())) {
                 throw new BadRequestException("Path '" + directory.getAbsolutePath()
                         + "' does not identify a container");
+            }
+            if (!isUserAllowed(subject, directory.getAbsolutePath())) {
+                throw new ForbiddenException("Permission denied");
             }
 
             // Setup ISO-8601 Date
@@ -719,11 +722,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                     if (cacl != null && !cacl.isEmpty()) {
                         ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                         for (ACE ace : cacl.getList()) {
+                            AceConverter ac = new AceConverter();
                             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                             subMetadata_ACL.add(subMetadataEntry_ACL);
                         }
                         requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -828,11 +832,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                     if (cacl != null && !cacl.isEmpty()) {
                         ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                         for (ACE ace : cacl.getList()) {
+                            AceConverter ac = new AceConverter();
                             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                             subMetadata_ACL.add(subMetadataEntry_ACL);
                         }
                         requestedContainer.setSubMetadata_ACL(subMetadata_ACL);
@@ -896,7 +901,7 @@ public class DcacheContainerDao extends AbstractCellComponent
      * Return a {@link File} instance for the base directory.
      * </p>
      */
-    private File baseDirectory()  //TODO!!!
+    private File baseDirectory()
     {
         if (baseDirectory == null) {
             baseDirectory = new File(baseDirectoryName);
@@ -945,6 +950,10 @@ public class DcacheContainerDao extends AbstractCellComponent
         }
 
         container.setParentURI(parentURI);
+        String parent = "/" + removeSlashesFromPath(baseDirectoryName) + "/" + removeSlashesFromPath(parentURI);
+        PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+        String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+        container.setParentID(parentObjectId);
 
         // Add children containers and/or objects representing subdirectories or files
         List<String> children = container.getChildren();
@@ -1121,6 +1130,7 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public void afterStart()
     {
+        System.out.println("CDMI service is started");
         _log.trace("Start DcacheContainerDao");
     }
 
@@ -1168,6 +1178,29 @@ public class DcacheContainerDao extends AbstractCellComponent
             FileAttributes attr = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
             if (Subjects.getUid(subject) == attr.getOwner()) {
                 result = true;
+            }
+        } catch (CacheException ignore) {
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Get the PnfsId of a path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private PnfsId getPnfsIDByPath(Subject subject, String path)
+    {
+        PnfsId result = null;
+        try {
+            String tmpPath = addPrefixSlashToPath(path);
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
+            if (attr.getFileType() == DIR) {
+                result = attr.getPnfsId();
             }
         } catch (CacheException ignore) {
         }

@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
+import org.snia.cdmiserver.util.MediaTypes;
 
 /**
  * <p>
@@ -68,6 +69,7 @@ public class DcacheCapabilityResource {
      * <p>
      * Injected {@link Capability} instance.
      * </p>
+     * @param capabilityDao
      */
     public void setCapabilityDao(CapabilityDao capabilityDao) {
         this.capabilityDao = capabilityDao;
@@ -83,12 +85,14 @@ public class DcacheCapabilityResource {
      * @return
      */
     @GET
+    //@Produces(MediaTypes.CAPABILITY)
     public Response getCapabilityDao(@PathParam("path") String path) {
         System.out.println("In CapabilityResource.getCapabilityDao, path is: " + path);
+        Capability capability = (DcacheCapability) capabilityDao.findByPath(path);
         try {
-            Capability capability = (DcacheCapability) capabilityDao.findByPath(path);
             if (capability instanceof DcacheCapability) {
                 String respStr = ((DcacheCapability) capability).toJson();
+                //Response.ResponseBuilder builder = Response.ok(capability).type(MediaTypes.CAPABILITY);
                 Response.ResponseBuilder builder = Response.ok(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
@@ -98,10 +102,9 @@ public class DcacheCapabilityResource {
                 return builder.entity("Capability Fetch Error").build();
             }
         } catch (URISyntaxException ex) {
-            _log.trace(ex.toString());
             Response.ResponseBuilder builder = Response.status(Response.Status.NOT_FOUND);
             builder.header("X-CDMI-Specification-Version", "1.0.2");
-            return builder.entity("Capability Fetch Error: " + ex.toString()).build();
+            return builder.entity("Capability Fetch Error: " + ex.getMessage()).build();
         }
     }
 

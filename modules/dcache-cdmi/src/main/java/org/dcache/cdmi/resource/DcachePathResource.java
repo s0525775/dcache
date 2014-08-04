@@ -17,8 +17,10 @@
  */
 package org.dcache.cdmi.resource;
 
+import com.google.common.collect.ImmutableList;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -33,6 +35,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
+import javax.ws.rs.core.UriInfo;
 import org.dcache.cdmi.model.DcacheContainer;
 import org.dcache.cdmi.model.DcacheDataObject;
 import org.slf4j.LoggerFactory;
@@ -55,6 +58,30 @@ public class DcachePathResource
 {
 
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcachePathResource.class);
+
+    private final static ImmutableList<String> CONTAINER_CAPABILITIES = new ImmutableList.Builder<String>()
+        .add("objectID")
+        .add("capabilitiesURI")
+        .add("domainURI")
+        .add("exports")
+        .add("metadata")
+        .add("parentID")
+        .add("parentURI")
+        .add("children")
+        .add("childrenrange")
+        .build();
+
+    private final static ImmutableList<String> DATAOBJECT_CAPABILITIES = new ImmutableList.Builder<String>()
+        .add("objectID")
+        .add("objectType")
+        .add("capabilitiesURI")
+        .add("mimetype")
+        .add("metadata")
+        .add("parentID")
+        .add("parentURI")
+        .add("children")
+        .add("childrenrange")
+        .build();
 
     //
     // Properties and Dependency Injection Methods
@@ -148,6 +175,7 @@ public class DcachePathResource
     *
     * @param path
     * Path to the existing non-root container
+     * @param uriInfo
     * @param headers
     * @return
     */
@@ -157,6 +185,7 @@ public class DcachePathResource
     @Consumes(MediaTypes.OBJECT)
     public Response getContainerOrDataObject(
             @PathParam("path") String path,
+            @Context UriInfo uriInfo,
             @Context HttpHeaders headers)
     {
         _log.trace("In DcachePathResource.getContainerOrObject, path={}", path);
@@ -167,7 +196,7 @@ public class DcachePathResource
         }
 
         if (headers.getRequestHeader(HttpHeaders.CONTENT_TYPE).isEmpty()) {
-          return getDataObjectOrContainer(path,headers);
+          return getDataObjectOrContainer(path, uriInfo, headers);
         }
 
         // Check for container vs object
@@ -234,6 +263,7 @@ public class DcachePathResource
     *
     * @param path
     * Path to the root container
+     * @param uriInfo
     * @param headers
     * @return
     */
@@ -242,11 +272,12 @@ public class DcachePathResource
     @Consumes(MediaTypes.CONTAINER)
     public Response getRootContainer(
             @PathParam("path") String path,
+            @Context UriInfo uriInfo,
             @Context HttpHeaders headers)
     {
 
         _log.trace("In DcachePathResource.getRootContainer");
-        return getContainerOrDataObject(path, headers);
+        return getContainerOrDataObject(path, uriInfo, headers);
 
     }
 
@@ -268,6 +299,7 @@ public class DcachePathResource
     *
     * @param path
     * Path to the existing data object or container
+     * @param uriInfo
     * @param headers
     * @return
     */
@@ -275,11 +307,32 @@ public class DcachePathResource
     @Path("/{path:.+}")
     public Response getDataObjectOrContainer(
             @PathParam("path") String path,
+            @Context UriInfo uriInfo,
             @Context HttpHeaders headers)
     {
 
         System.out.println("In DcachePathResource.getDataObjectOrContainer, path=" + path);
         _log.trace("In DcachePathResource.getDataObjectOrContainer, path={}", path);
+        String query = uriInfo.getRequestUri().getQuery();
+
+        // print queryparams for debug - TODO! See http://cdmi.sniacloud.com/cdmi_spec/9-container_objects/9-container_objects.htm (chapter 9.4.1)
+        if (query != null) {
+            if (!query.isEmpty()) {
+                String queries[] = uriInfo.getRequestUri().getQuery().split(";");
+                for (String item : queries) {
+                    if (item != null) {
+                        if (item.isEmpty()) {
+                            String values[] = item.split(":");
+                            if (values.length > 1) {
+                                _log.trace("Query: {} - {}", values[0], values[1]);
+                            } else if (values.length > 0) {
+                                _log.trace("Query: {}", values[0]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // print headers for debug
         for (String hdr : headers.getRequestHeaders().keySet()) {

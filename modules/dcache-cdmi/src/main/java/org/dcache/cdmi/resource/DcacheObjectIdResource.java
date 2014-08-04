@@ -447,6 +447,102 @@ public class DcacheObjectIdResource
         }
     }
 
+    /**
+    * <p>
+    * [8.2] Create a Data Object (CDMI Content Type)
+    * [8.6] Update Data Object (CDMI Content Type)
+    * </p>
+    *
+    * @param headers
+    * @param path
+    * Path to the parent container for the new data object
+    * @param bytes
+    * @return
+    */
+    @PUT
+    @Path("/{path:.+}")
+    @Consumes(MediaTypes.DATA_OBJECT)
+    @Produces(MediaTypes.DATA_OBJECT)
+    public Response putDataObject(
+            @Context HttpHeaders headers,
+            @PathParam("path") String path,
+            byte[] bytes)
+    {
+
+        _log.trace("putDataObject():");
+        // print headers for debug
+        for (String hdr : headers.getRequestHeaders().keySet()) {
+            _log.trace("{} - {}", hdr, headers.getRequestHeader(hdr));
+        }
+        String inBuffer = new String(bytes);
+        _log.trace("Path={}\n{}", path, inBuffer);
+
+        try {
+            DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(path);
+            if (dObj == null) {
+                dObj = new DcacheDataObject();
+
+                dObj.setObjectType("application/cdmi-object");
+                // parse json
+                dObj.fromJson(bytes, false);
+                if (dObj.getValue() == null) {
+                    dObj.setValue("== N/A ==");
+                }
+                if (dObj.getMove() == null) {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Created");
+                    ResponseBuilder builder = Response.created(new URI(path));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                } else {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Ok");
+                    ResponseBuilder builder = Response.ok(new URI(path));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                }
+            } else {
+                dObj = new DcacheDataObject();
+
+                dObj.setObjectType("application/cdmi-object");
+                // parse json
+                dObj.fromJson(bytes, false);
+                if (dObj.getValue() == null) {
+                    dObj.setValue("== N/A ==");
+                }
+                dObj = (DcacheDataObject) dataObjectDao.createByPath(path, dObj);
+                // return representation
+                String respStr = dObj.toJson();
+                // make http response
+                // build a JSON representation
+                System.out.println("Ok");
+                ResponseBuilder builder = Response.ok(new URI(path));
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity(respStr).build();
+            }
+        } catch (ForbiddenException ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+                ResponseBuilder builder = Response.status(Response.Status.FORBIDDEN);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Creation Error: " + ex.toString()).build();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            _log.trace(ex.toString());
+                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                builder.header("X-CDMI-Specification-Version", "1.0.2");
+                return builder.entity("Object Creation Error: " + ex.toString()).build();
+        }
+    }
+
     @PUT
     // @Consumes("application/json")
     @Consumes(MediaTypes.DATA_OBJECT)

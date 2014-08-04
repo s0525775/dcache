@@ -65,11 +65,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
+import org.dcache.acl.enums.AccessMask;
+import org.dcache.acl.enums.AceFlags;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.exception.MethodNotAllowedException;
 import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheDataObject;
+import org.dcache.cdmi.util.AceConverter;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
@@ -231,18 +234,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
     /**
      * <p>
-     * Returns if AnonymousListing is allowed.
-     * </p>
-     *
-     * @return
-     */
-    private boolean isAnonymousListing()
-    {
-        return this.isAnonymousListingAllowed;
-    }
-
-    /**
-     * <p>
      * Returns the internal Host address.
      * </p>
      *
@@ -383,7 +374,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         throw new UnauthorizedException("Access denied", realm);
                     }
                 }
-
                 // check for container
                 if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
                     throw new ConflictException("Container <"
@@ -425,6 +415,17 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         newDObj.setObjectID(objectID);
                         _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
 
+                        String parentPath = "";
+                        PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                        String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                        if (parent.contains(baseDirectoryName + "/")) {
+                            parentPath = parent.replace(baseDirectoryName + "/", "");
+                        } else {
+                            parentPath = parent;
+                        }
+                        newDObj.setParentID(parentObjectId);
+                        newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+
                         newDObj.setObjectType("application/cdmi-object");
                         newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                         newDObj.setMetadata("cdmi_acount", "0");
@@ -432,11 +433,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         if (oacl != null && !oacl.isEmpty()) {
                             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                             for (ACE ace : oacl.getList()) {
+                                AceConverter ac = new AceConverter();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
                             }
                             newDObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -459,6 +461,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         newDObj.setMetadata("mimetype", mimeType);
                         newDObj.setMetadata("fileName", objFile.getAbsolutePath());
 
+                        newDObj.setCompletionStatus("Complete");
                         return newDObj;
                     } else {
                         throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
@@ -516,11 +519,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             if (oacl != null && !oacl.isEmpty()) {
                                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                                 for (ACE ace : oacl.getList()) {
+                                    AceConverter ac = new AceConverter();
                                     HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                    subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                    subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                    subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                    subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                    subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                    subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                    subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                    subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                     subMetadata_ACL.add(subMetadataEntry_ACL);
                                 }
                                 currentDObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -577,6 +581,18 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     newDObj.setObjectID(objectID);
                                     _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
 
+                                    String parentPath = "";
+                                    String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                                    PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                                    String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                                    if (parent.contains(baseDirectoryName + "/")) {
+                                        parentPath = parent.replace(baseDirectoryName + "/", "");
+                                    } else {
+                                        parentPath = parent;
+                                    }
+                                    newDObj.setParentID(parentObjectId);
+                                    newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+
                                     newDObj.setObjectType("application/cdmi-object");
                                     newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                                     newDObj.setMetadata("cdmi_acount", "0");
@@ -584,11 +600,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     if (oacl != null && !oacl.isEmpty()) {
                                         ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                                         for (ACE ace : oacl.getList()) {
+                                            AceConverter ac = new AceConverter();
                                             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                             subMetadata_ACL.add(subMetadataEntry_ACL);
                                         }
                                         newDObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -626,6 +643,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                         ex.printStackTrace();
                                         _log.error("DcacheDataObjectDao<Update>, Cannot update meta information for object with objectID {}", newDObj.getObjectID());
                                     }
+                                    newDObj.setCompletionStatus("Complete");
                                     return newDObj;
                                 } else {
                                     throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
@@ -702,6 +720,18 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     movedDObj.setObjectID(objectId);
                     _log.trace("DcacheContainerDao<Move>, setObjectID={}", objectId);
 
+                    String parentPath = "";
+                    String parent2 = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                    PnfsId parentPnfsId = getPnfsIDByPath(subject, parent2);
+                    String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                    if (parent.contains(baseDirectoryName + "/")) {
+                        parentPath = parent2.replace(baseDirectoryName + "/", "");
+                    } else {
+                        parentPath = parent2;
+                    }
+                    movedDObj.setParentID(parentObjectId);
+                    movedDObj.setParentURI(addPrefixSlashToPath(parentPath));
+
                     movedDObj.setCapabilitiesURI("/cdmi_capabilities/container/default");
                     movedDObj.setMetadata("cdmi_ctime", sdf.format(now));
                     movedDObj.setMetadata("cdmi_atime", sdf.format(now));
@@ -710,11 +740,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     if (cacl != null && !cacl.isEmpty()) {
                         ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                         for (ACE ace : cacl.getList()) {
+                            AceConverter ac = new AceConverter();
                             HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                            subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                            subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                            subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                            subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                             subMetadata_ACL.add(subMetadataEntry_ACL);
                         }
                         movedDObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -892,11 +923,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             if (oacl != null && !oacl.isEmpty()) {
                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                 for (ACE ace : oacl.getList()) {
+                    AceConverter ac = new AceConverter();
                     HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                    subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                    subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                    subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                    subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                    subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                    subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                    subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                    subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                     subMetadata_ACL.add(subMetadataEntry_ACL);
                 }
                 dObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -910,6 +942,18 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 subMetadata_ACL.add(subMetadataEntry_ACL);
                 dObj.setSubMetadata_ACL(subMetadata_ACL);
             }
+
+            String parentPath = "";
+            String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+            PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+            String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+            if (parent.contains(baseDirectoryName + "/")) {
+                parentPath = parent.replace(baseDirectoryName + "/", "");
+            } else {
+                parentPath = parent;
+            }
+            dObj.setParentID(parentObjectId);
+            dObj.setParentURI(addPrefixSlashToPath(parentPath));
 
             String mimeType = dObj.getMimetype();
             if (mimeType == null) {
@@ -925,6 +969,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             pnfs.setFileAttributes(pnfsId, attr);
             dObj.setMetadata("cdmi_atime", sdf.format(now));
 
+            dObj.setCompletionStatus("Complete");
             return dObj;
         } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
             _log.error("Exception while reading, {}", ex);
@@ -1001,11 +1046,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         if (oacl != null && !oacl.isEmpty()) {
                             ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                             for (ACE ace : oacl.getList()) {
+                                AceConverter ac = new AceConverter();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ace.getType().name());
-                                subMetadataEntry_ACL.put("identifier", ace.getWho().name());
-                                subMetadataEntry_ACL.put("aceflags", String.valueOf(ace.getFlags()));
-                                subMetadataEntry_ACL.put("acemask", String.valueOf(ace.getAccessMsk()));
+                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
                             }
                             dObj.setSubMetadata_ACL(subMetadata_ACL);
@@ -1122,6 +1168,29 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
         if (Subjects.getUid(subject) == attr.getOwner()) {
             result = true;
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Get the PnfsId of a path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private PnfsId getPnfsIDByPath(Subject subject, String path)
+    {
+        PnfsId result = null;
+        try {
+            String tmpPath = addPrefixSlashToPath(path);
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
+            if (attr.getFileType() == DIR) {
+                result = attr.getPnfsId();
+            }
+        } catch (CacheException ignore) {
         }
         return result;
     }
