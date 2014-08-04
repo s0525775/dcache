@@ -724,7 +724,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     String parent2 = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
                     PnfsId parentPnfsId = getPnfsIDByPath(subject, parent2);
                     String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                    if (parent.contains(baseDirectoryName + "/")) {
+                    if (parent2.contains(baseDirectoryName + "/")) {
                         parentPath = parent2.replace(baseDirectoryName + "/", "");
                     } else {
                         parentPath = parent2;
