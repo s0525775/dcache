@@ -418,8 +418,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         String parentPath = "";
                         PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
                         String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                        if (parent.contains(baseDirectoryName + "/")) {
-                            parentPath = parent.replace(baseDirectoryName + "/", "");
+                        if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                         } else {
                             parentPath = parent;
                         }
@@ -459,7 +459,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         }
                         newDObj.setMimetype(mimeType);
                         newDObj.setMetadata("mimetype", mimeType);
-                        newDObj.setMetadata("fileName", objFile.getAbsolutePath());
+                        String fileName = "";
+                        String filePath = objFile.getAbsolutePath();
+                        if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                        } else {
+                            fileName = filePath;
+                        }
+                        newDObj.setMetadata("fileName", fileName);
 
                         newDObj.setCompletionStatus("Complete");
                         return newDObj;
@@ -585,8 +592,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
                                     PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
                                     String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                                    if (parent.contains(baseDirectoryName + "/")) {
-                                        parentPath = parent.replace(baseDirectoryName + "/", "");
+                                    if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                        parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                                     } else {
                                         parentPath = parent;
                                     }
@@ -626,7 +633,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     }
                                     newDObj.setMimetype(mimeType);
                                     newDObj.setMetadata("mimetype", mimeType);
-                                    newDObj.setMetadata("fileName", objFile.getAbsolutePath());
+                                    String fileName = "";
+                                    String filePath = objFile.getAbsolutePath();
+                                    if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                        fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                                    } else {
+                                        fileName = filePath;
+                                    }
+                                    newDObj.setMetadata("fileName", fileName);
 
                                     // update meta information
                                     try {
@@ -724,8 +738,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     String parent2 = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
                     PnfsId parentPnfsId = getPnfsIDByPath(subject, parent2);
                     String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                    if (parent2.contains(baseDirectoryName + "/")) {
-                        parentPath = parent2.replace(baseDirectoryName + "/", "");
+                    if (parent2.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        parentPath = parent2.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                     } else {
                         parentPath = parent2;
                     }
@@ -766,7 +780,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     }
                     newDObj.setMimetype(mimeType);
                     newDObj.setMetadata("mimetype", mimeType);
-                    newDObj.setMetadata("fileName", objFile.getAbsolutePath());
+                    String fileName = "";
+                    String filePath = objFile.getAbsolutePath();
+                    if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                    } else {
+                        fileName = filePath;
+                    }
+                    newDObj.setMetadata("fileName", fileName);
 
                     // update meta information
                     try {
@@ -947,8 +968,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
             PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
             String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-            if (parent.contains(baseDirectoryName + "/")) {
-                parentPath = parent.replace(baseDirectoryName + "/", "");
+            if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
             } else {
                 parentPath = parent;
             }
@@ -961,7 +982,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             }
             dObj.setMimetype(mimeType);
             dObj.setMetadata("mimetype", mimeType);
-            dObj.setMetadata("fileName", objFile.getAbsolutePath());
+            String fileName = "";
+            String filePath = objFile.getAbsolutePath();
+            if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+            } else {
+                fileName = filePath;
+            }
+            dObj.setMetadata("fileName", fileName);
 
             FileAttributes attr = new FileAttributes();
             attr.setAccessTime(nowAsLong);
@@ -1072,7 +1100,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         }
                         dObj.setMimetype(mimeType);
                         dObj.setMetadata("mimetype", mimeType);
-                        dObj.setMetadata("fileName", path);
+                        String fileName = "";
+                        String filePath = path;
+                        if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                        } else {
+                            fileName = filePath;
+                        }
+                        dObj.setMetadata("fileName", fileName);
 
                         FileAttributes attr = new FileAttributes();
                         attr.setAccessTime(nowAsLong);
