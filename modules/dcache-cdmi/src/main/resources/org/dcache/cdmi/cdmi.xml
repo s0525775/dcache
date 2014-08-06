@@ -334,8 +334,9 @@
     </bean>
 
     <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DcacheCapabilityDao">
-        <property name="baseDirectoryName" value="/public"/>
+        <property name="baseDirectoryName" value="/"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
+        <property name="listDirectoryHandler" ref="list-handler"/>
     </bean>
 
 </beans>

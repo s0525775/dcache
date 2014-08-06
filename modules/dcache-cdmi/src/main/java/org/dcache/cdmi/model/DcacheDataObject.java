@@ -151,6 +151,8 @@ public class DcacheDataObject extends DataObject
                 g.writeStringField("parentURI", getParentURI());
             if (getMimetype() != null)
                 g.writeStringField("mimetype", getMimetype());
+            if (getCompletionStatus() != null)
+                g.writeStringField("completionStatus", getCompletionStatus());
             //
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : getMetadata().entrySet()) {

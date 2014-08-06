@@ -20,6 +20,7 @@ package org.dcache.cdmi.dao.impl;
 import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Range;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
@@ -28,13 +29,21 @@ import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import dmg.cells.nucleus.CellLifeCycleAware;
 import java.io.File;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import javax.security.auth.Subject;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.model.DcacheCapability;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import static org.dcache.namespace.FileAttribute.*;
+import static org.dcache.namespace.FileType.DIR;
+import org.dcache.util.list.DirectoryEntry;
+import org.dcache.util.list.DirectoryListPrinter;
+import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
@@ -61,7 +70,7 @@ public class DcacheCapabilityDao
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheCapabilityDao.class);
 
     // Properties and Dependency Injection Methods by CDMI
-    private static final String MAIN_DIRECTORY = "cdmi_capabilities";
+    private static final String MAIN_DIRECTORY = "/cdmi_capabilities";
     private String baseDirectoryName = null;
     private File baseDirectory = null;
 
@@ -69,15 +78,16 @@ public class DcacheCapabilityDao
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES = EnumSet.of(PNFSID);
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
+    private ListDirectoryHandler listDirectoryHandler;
 
     private final static ImmutableList<String> CAPABILITY_MAINTREE = new ImmutableList.Builder<String>()
         //.add("domain")
-        .add("container")
-        .add("dataobject")
+        .add("/container")
+        .add("/dataobject")
         .build();
 
     private final static ImmutableList<String> CAPABILITY_SUBTREE = new ImmutableList.Builder<String>()
-        .add("default")
+        .add("/default")
         .build();
 
     private final static ImmutableMap<String, String> CONTAINER_METADATA = new ImmutableMap.Builder<String, String>()
@@ -162,6 +172,18 @@ public class DcacheCapabilityDao
         this.pnfsHandler = new PnfsHandler(this.pnfsStub);
     }
 
+    /**
+     * <p>
+     * Set the ListDirectoryHandler from dCache.
+     * </p>
+     *
+     * @param listDirectoryHandler
+     */
+    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
+    {
+        this.listDirectoryHandler = checkNotNull(listDirectoryHandler);
+    }
+
     @Override
     public Capability findByObjectId(String objectId)
     {
@@ -243,6 +265,14 @@ public class DcacheCapabilityDao
                 break;
         }
         capability.setObjectType("application/cdmi-capability");
+
+        List<String> children = capability.getChildren();
+        if (children.size() > 0) {
+            // has children - set the range
+            int lastindex = children.size() - 1;
+            String childrange = "0-" + lastindex;
+            capability.setChildrenrange(childrange);
+        }
         return (DcacheCapability) capability;
     }
 
@@ -460,5 +490,4 @@ public class DcacheCapabilityDao
     public void beforeStop()
     {
     }
-
 }

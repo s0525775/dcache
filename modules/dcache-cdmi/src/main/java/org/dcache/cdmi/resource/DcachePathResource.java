@@ -20,7 +20,6 @@ package org.dcache.cdmi.resource;
 import com.google.common.collect.ImmutableList;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -58,30 +57,6 @@ public class DcachePathResource
 {
 
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcachePathResource.class);
-
-    private final static ImmutableList<String> CONTAINER_CAPABILITIES = new ImmutableList.Builder<String>()
-        .add("objectID")
-        .add("capabilitiesURI")
-        .add("domainURI")
-        .add("exports")
-        .add("metadata")
-        .add("parentID")
-        .add("parentURI")
-        .add("children")
-        .add("childrenrange")
-        .build();
-
-    private final static ImmutableList<String> DATAOBJECT_CAPABILITIES = new ImmutableList.Builder<String>()
-        .add("objectID")
-        .add("objectType")
-        .add("capabilitiesURI")
-        .add("mimetype")
-        .add("metadata")
-        .add("parentID")
-        .add("parentURI")
-        .add("children")
-        .add("childrenrange")
-        .build();
 
     //
     // Properties and Dependency Injection Methods
@@ -318,7 +293,7 @@ public class DcachePathResource
         // print queryparams for debug - TODO! See http://cdmi.sniacloud.com/cdmi_spec/9-container_objects/9-container_objects.htm (chapter 9.4.1)
         if (query != null) {
             if (!query.isEmpty()) {
-                String queries[] = uriInfo.getRequestUri().getQuery().split(";");
+                String queries[] = query.split(";");
                 for (String item : queries) {
                     if (item != null) {
                         if (item.isEmpty()) {
