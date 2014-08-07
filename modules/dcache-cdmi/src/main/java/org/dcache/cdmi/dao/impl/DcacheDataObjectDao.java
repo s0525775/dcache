@@ -289,7 +289,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     }
 
     /**
-     * Returns true if access to path is allowed through the WebDAV
+     * Returns true if access to path is allowed through the CDMI
      * door, false otherwise.
      */
     private boolean isAllowedPath(FsPath path)
