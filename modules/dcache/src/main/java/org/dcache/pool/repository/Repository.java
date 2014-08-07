@@ -7,6 +7,7 @@ import java.util.Set;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FileInCacheException;
 import diskCacheV111.util.FileNotInCacheException;
+import diskCacheV111.util.LockedCacheException;
 import diskCacheV111.util.PnfsId;
 
 import org.dcache.pool.FaultListener;
@@ -88,16 +89,12 @@ public interface Repository
      * entry from being deleted. Notice that an open read handle does
      * not prevent state changes.
      *
-     * TODO: Refine the exceptions. Throwing FileNotInCacheException
-     * implies that one could create the entry, however this is not
-     * the case for broken or incomplet files.
-     *
      * @param id the PNFS ID of the entry to open
      * @param flags options that influence how the entry is opened
      * @return IO descriptor
      * @throws InterruptedException if thread was interrupted
-     * @throws FileNotInCacheException if file not found or in a state
-     * in which it cannot be opened
+     * @throws FileNotInCacheException if file not found
+     * @throws LockedCacheException if in a state in which it cannot be opened
      * @throws CacheException in case of other errors
      */
     ReplicaDescriptor openEntry(PnfsId id, Set<OpenFlags> flags)

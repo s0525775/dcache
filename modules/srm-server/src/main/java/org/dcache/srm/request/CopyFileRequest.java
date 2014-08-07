@@ -72,6 +72,7 @@ COPYRIGHT STATUS:
 
 package org.dcache.srm.request;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.CheckedFuture;
 import org.apache.axis.types.UnsignedLong;
 import org.globus.util.GlobusURL;
@@ -91,6 +92,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Map;
 import java.util.Objects;
 
 import diskCacheV111.srm.RequestFileStatus;
@@ -133,6 +135,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
     //these are used if the transfer is performed in the pull mode for
     // storage of the space reservation related info
     private final String spaceReservationId;
+    private final ImmutableMap<String,String> extraInfo;
 
     public CopyFileRequest(long requestId,
                            Long requestCredentalId,
@@ -140,13 +143,15 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
                            URI destinationSurl,
                            String spaceToken,
                            long lifetime,
-                           int maxNumberOfRetries)
+                           int maxNumberOfRetries,
+                           ImmutableMap<String,String> extraInfo)
     {
         super(requestId, requestCredentalId, lifetime, maxNumberOfRetries);
         LOG.debug("CopyFileRequest");
         this.sourceSurl = sourceSurl;
         this.destinationSurl = destinationSurl;
         this.spaceReservationId = spaceToken;
+        this.extraInfo = extraInfo;
         LOG.debug("constructor from={} to={}", sourceSurl, destinationSurl);
     }
 
@@ -182,7 +187,8 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
             String remoteRequestId,
             String remoteFileId,
             String spaceReservationId,
-            String transferId)
+            String transferId,
+            ImmutableMap<String,String> extraInfo)
     {
         super(id, nextJobId, creationTime, lifetime, stateId, errorMessage,
               scheduelerId, schedulerTimeStamp, numberOfRetries,
@@ -208,6 +214,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
         }
         this.spaceReservationId = spaceReservationId;
         this.transferId = transferId;
+        this.extraInfo = extraInfo;
     }
 
     public void done()
@@ -218,6 +225,11 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
     public void error()
     {
         done();
+    }
+
+    public ImmutableMap<String,String> getExtraInfo()
+    {
+        return extraInfo;
     }
 
     @Override
@@ -345,7 +357,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
             if (status != null) {
                 sb.append(padding).append("   Status:").append(status).append('\n');
             }
-            sb.append(padding).append("   History of State Transitions:\n");
+            sb.append(padding).append("   History:\n");
             sb.append(getHistory(padding + "   "));
         }
     }
@@ -583,7 +595,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
                     }
                 }
             };
-            setTransferId(getStorage().getFromRemoteTURL(getUser(), getSourceTurl(), getDestinationFileId(), getUser(), credential.getId(), copycallbacks));
+            setTransferId(getStorage().getFromRemoteTURL(getUser(), getSourceTurl(), getDestinationFileId(), getUser(), credential.getId(), extraInfo, copycallbacks));
             saveJob();
         } else {
             // transfer id is not null and we are scheduled
@@ -595,32 +607,44 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
                                   (transferError == null) ? null : transferError.getMessage());
             setDestinationFileId(null);
             setTransferId(null);
-            throw new NonFatalJobFailure(transferError);
+            throw new NonFatalJobFailure(transferError.getMessage(), transferError);
         }
     }
 
     private void setStateToDone()
     {
-        try {
-            setState(State.DONE, "setStateToDone called");
+        if (!getState().isFinal()) {
             try {
-                getContainerRequest().fileRequestCompleted();
-            } catch (SRMInvalidRequestException ire) {
-                LOG.error(ire.toString());
+                setState(State.DONE, "completed");
+
+                try {
+                    getContainerRequest().fileRequestCompleted();
+                } catch (SRMInvalidRequestException ire) {
+                    LOG.error("Failed to find container request: " + ire.toString());
+                }
+            } catch (IllegalStateTransition ist) {
+                LOG.error("Failed to set copy file request state to DONE: "  +
+                        ist.getMessage());
             }
-        } catch (IllegalStateTransition ist) {
-            LOG.error("setStateToDone: Illegal State Transition : " +ist.getMessage());
         }
     }
 
-    private void setStateToFailed(String error) throws SRMInvalidRequestException
+    private void setStateToFailed(String error)
     {
-        try {
-            setState(State.FAILED, error);
-        } catch (IllegalStateTransition ist) {
-            LOG.error("setStateToFailed: Illegal State Transition : " +ist.getMessage());
+        if (!getState().isFinal()) {
+            try {
+                setState(State.FAILED, error);
+
+                try {
+                    getContainerRequest().fileRequestCompleted();
+                } catch (SRMInvalidRequestException e) {
+                    LOG.error("Failed to find container request: " + e);
+                }
+            } catch (IllegalStateTransition ist) {
+                LOG.error("Failed to set copy file request state to FAILED: " +
+                        ist.getMessage());
+            }
         }
-        getContainerRequest().fileRequestCompleted();
     }
 
     private void runLocalToRemoteCopy() throws SRMException, NonFatalJobFailure,
@@ -630,7 +654,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
             LOG.debug("copying using storage.putToRemoteTURL");
             RequestCredential credential = getCredential();
             TheCopyCallbacks copycallbacks = new TheCopyCallbacks(getId());
-            setTransferId(getStorage().putToRemoteTURL(getUser(), getSourceSurl(), getDestinationTurl(), getUser(), credential.getId(), copycallbacks));
+            setTransferId(getStorage().putToRemoteTURL(getUser(), getSourceSurl(), getDestinationTurl(), getUser(), credential.getId(), extraInfo, copycallbacks));
             setState(State.RUNNINGWITHOUTTHREAD, "Transferring file.");
             saveJob();
         } else {
@@ -638,7 +662,8 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
             // there was some kind of error durign the transfer
             getStorage().killRemoteTransfer(getTransferId());
             setTransferId(null);
-            throw new NonFatalJobFailure(getTransferError());
+            Exception e = getTransferError();
+            throw new NonFatalJobFailure(e.getMessage(), e);
         }
     }
 
@@ -675,7 +700,7 @@ public final class CopyFileRequest extends FileRequest<CopyRequest>
                 setStateToFailed("Unknown combination of to/from ursl");
             }
         } catch (IllegalStateTransition | IOException | SRMException | DataAccessException e) {
-            throw new NonFatalJobFailure(e.toString());
+            throw new NonFatalJobFailure(e.getMessage(), e);
         }
     }
 

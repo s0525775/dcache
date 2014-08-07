@@ -293,7 +293,6 @@
         <constructor-arg>
             <ref bean="DAOFactory"/>
         </constructor-arg>
-        <property name="definitions" value="${httpd.alarms.definitions.path}"/>
     </bean>
 
     <bean id="ThumbnailPanelProvider" class="org.dcache.webadmin.controller.util.ThumbnailPanelProvider">
@@ -329,6 +328,11 @@
     </bean>
 
     <beans profile="alarms-rdbms">
+        <!--
+             this data source is not wrapped with the AlarmEnabledDataSource
+             decorator because we do not want internal errors to become
+             alarms
+          -->
         <bean id="dataSource" class="com.zaxxer.hikari.HikariDataSource"
               destroy-method="shutdown">
             <description>Database connection pool</description>
@@ -381,7 +385,6 @@
         <bean id="alarmStore" class="org.dcache.webadmin.model.dataaccess.impl.DataNucleusAlarmStore"
               init-method="initialize" destroy-method="shutDown">
             <property name="persistenceManagerFactory" ref="pmf"/>
-            <property name="alarmsXMLPath" value="${httpd.alarms.db.xml.path}"/>
             <property name="alarmsCleanerEnabled" value="${httpd.enable.alarm-cleaner}"/>
             <property name="alarmsCleanerSleepInterval" value="${httpd.alarm-cleaner.timeout}"/>
             <property name="alarmsCleanerSleepIntervalUnit" value="${httpd.alarm-cleaner.timeout.unit}"/>

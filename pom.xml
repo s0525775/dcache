@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.dcache</groupId>
-    <version>2.10.0-SNAPSHOT</version>
+    <version>2.11.0-SNAPSHOT</version>
     <artifactId>dcache-parent</artifactId>
     <packaging>pom</packaging>
 
@@ -31,11 +31,11 @@
         <version.milton>2.3.0.7</version.milton>
         <version.spring>4.0.5.RELEASE</version.spring>
         <!-- Remember to sync aspectj version in dcache.properties -->
-        <version.aspectj>1.8.0</version.aspectj>
+        <version.aspectj>1.8.1</version.aspectj>
         <version.smc>6.3.0</version.smc>
         <version.xerces>2.10.0</version.xerces>
         <version.jetty>8.1.15.v20140411</version.jetty>
-        <version.wicket>6.15.0</version.wicket>
+        <version.wicket>6.16.0</version.wicket>
         <version.xrootd4j>1.3.3</version.xrootd4j>
         <version.jglobus>2.0.6-rc6.d</version.jglobus>
         <version.openmq>4.5.2</version.openmq>
@@ -67,12 +67,12 @@
          -->
         <bouncycastle.bcprov>bcprov-jdk16</bouncycastle.bcprov>
         <bouncycastle.version>1.45</bouncycastle.version>
-        <datanucleus-core.version>3.2.11</datanucleus-core.version>
-        <datanucleus.plugin.version>3.3.2</datanucleus.plugin.version>
+        <datanucleus-core.version>4.0.1</datanucleus-core.version>
+        <datanucleus.plugin.version>4.0.0-release</datanucleus.plugin.version>
     </properties>
 
     <prerequisites>
-        <maven>3.0.3</maven>
+        <maven>3.0.4</maven>
     </prerequisites>
 
     <scm>
@@ -101,12 +101,12 @@
             <dependency>
                 <groupId>org.scala-lang</groupId>
                 <artifactId>scala-library</artifactId>
-                <version>2.10.3</version>
+                <version>2.11.1</version>
             </dependency>
             <dependency>
                 <groupId>org.scala-lang</groupId>
                 <artifactId>scala-reflect</artifactId>
-                <version>2.10.3</version>
+                <version>2.11.1</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -133,12 +133,10 @@
                 <artifactId>logback-classic</artifactId>
                 <!-- Remember to update modules/logback-test-config/pom.xml
                      when upgrading logback. -->
-                <!-- There are two issues with 1.1.1:
-                     http://jira.qos.ch/browse/LOGBACK-959
+                <!-- There is an issue with 1.1.2:
                      http://jira.qos.ch/browse/LOGBACK-961;
-                     while we have put a workaround for the first
-                     in place, the second still affects
-                     dcache alarm send (it hangs after sending) -->
+                     which affects dcache alarm send (it hangs
+                     after sending) -->
                 <version>1.0.12</version>
             </dependency>
             <dependency>
@@ -268,12 +266,12 @@
                         <groupId>commons-logging</groupId>
                         <artifactId>commons-logging</artifactId>
                     </exclusion>
-		    <!-- 'servlet-api' conflicts with Jetty-supplied
-		         'javax.servlet' jar. -->
-		    <exclusion>
-			<groupId>javax.servlet</groupId>
-			<artifactId>servlet-api</artifactId>
-		    </exclusion>
+                    <!-- 'servlet-api' conflicts with Jetty-supplied
+                         'javax.servlet' jar. -->
+                    <exclusion>
+                        <groupId>javax.servlet</groupId>
+                        <artifactId>servlet-api</artifactId>
+                    </exclusion>
                 </exclusions>
             </dependency>
             <dependency>
@@ -289,7 +287,7 @@
             <dependency>
                 <groupId>com.zaxxer</groupId>
                 <artifactId>HikariCP</artifactId>
-                <version>1.3.8</version>
+                <version>1.3.9</version>
             </dependency>
             <dependency>
                 <groupId>org.postgresql</groupId>
@@ -318,7 +316,7 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty</artifactId>
-                <version>3.9.1.Final</version>
+                <version>3.9.2.Final</version>
             </dependency>
             <dependency>
                 <groupId>org.glassfish.grizzly</groupId>
@@ -363,28 +361,27 @@
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-cache</artifactId>
-                <version>3.1.3</version>
+                <version>${datanucleus-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-api-jdo</artifactId>
-                <version>3.2.7</version>
+                <version>${datanucleus-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-api-jpa</artifactId>
-                <version>3.3.6</version>
+                <version>${datanucleus-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-rdbms</artifactId>
-                <version>3.2.10</version>
+                <version>${datanucleus-core.version}</version>
             </dependency>
-            <!-- 3.2.1 has a saxon/XSLT bug -->
             <dependency>
                 <groupId>org.datanucleus</groupId>
                 <artifactId>datanucleus-xml</artifactId>
-                <version>3.2.0-release</version>
+                <version>${datanucleus-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.sf.saxon</groupId>
@@ -439,7 +436,7 @@
                   -->
                 <version>0.8.0</version>
             </dependency>
-
+            <!-- liquibase 3.2.0 produces wrong checksums -->
             <dependency>
                 <groupId>org.liquibase</groupId>
                 <artifactId>liquibase-core</artifactId>
@@ -668,8 +665,8 @@
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcprov-jdk16</artifactId>
                   </exclusion>
-		  <!-- 'servlet-api' conflicts with Jetty-supplied
-		       'javax.servlet' jar. -->
+                  <!-- 'servlet-api' conflicts with Jetty-supplied
+                       'javax.servlet' jar. -->
                   <exclusion>
                       <groupId>javax.servlet</groupId>
                       <artifactId>servlet-api</artifactId>
@@ -810,6 +807,17 @@
                 </exclusion>
             </exclusions>
         </dependency>
+	<dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.3.3</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -823,7 +831,7 @@
         <dependency>
            <groupId>org.powermock</groupId>
             <artifactId>powermock-api-mockito</artifactId>
-            <version>1.5.2</version>
+            <version>1.5.5</version>
             <scope>test</scope>
             <exclusions>
                 <!-- powermock-api-mockito depends on mockito-all,
@@ -845,7 +853,7 @@
                 </exclusion>
             </exclusions>
         </dependency>
-	<dependency>
+        <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <version>1.9.5</version>
@@ -860,13 +868,13 @@
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-module-junit4</artifactId>
-            <version>1.5.2</version>
+            <version>1.5.5</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.scalatest</groupId>
-            <artifactId>scalatest_2.10</artifactId>
-            <version>2.0</version>
+            <artifactId>scalatest_2.11</artifactId>
+            <version>2.2.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -893,7 +901,7 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>aspectj-maven-plugin</artifactId>
-                    <version>1.5</version>
+                    <version>1.6</version>
                     <dependencies>
                         <dependency>
                             <groupId>org.aspectj</groupId>
@@ -957,7 +965,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>2.4</version>
+                    <version>2.5</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -967,12 +975,12 @@
                 <plugin>
                   <groupId>org.codehaus.mojo</groupId>
                   <artifactId>build-helper-maven-plugin</artifactId>
-                  <version>1.8</version>
+                  <version>1.9</version>
                 </plugin>
                 <plugin>
                   <groupId>org.codehaus.mojo</groupId>
                   <artifactId>exec-maven-plugin</artifactId>
-                  <version>1.3</version>
+                  <version>1.3.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -1096,6 +1104,15 @@
                          too many places. That unfortunately means we have
                          to accept the overhead of forking each test run. -->
                     <forkMode>always</forkMode>
+
+                    <!-- OpenJDK v1.7.0_65 has a regression where the byte-code generated by
+                         powermock is not accepted.  OpenJDK v1.7.0_60 and earlier are not
+                         affected by this problem.  It is described here:
+
+                             https://bugs.openjdk.java.net/browse/JDK-8051012
+
+                         as a work-around, we disable the split verifier. -->
+                    <argLine>-XX:-UseSplitVerifier</argLine>
                 </configuration>
             </plugin>
 

@@ -23,6 +23,7 @@ import diskCacheV111.util.CacheException;
 import diskCacheV111.util.DiskErrorCacheException;
 import diskCacheV111.util.FileInCacheException;
 import diskCacheV111.util.FileNotInCacheException;
+import diskCacheV111.util.LockedCacheException;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.UnitInteger;
@@ -475,10 +476,6 @@ public class CacheRepositoryV5
     public ReplicaDescriptor openEntry(PnfsId id, Set<OpenFlags> flags)
         throws CacheException, InterruptedException
     {
-        /* TODO: Refine the exceptions. Throwing FileNotInCacheException
-         * implies that one could create the entry, however this is not
-         * the case for broken or incomplete files.
-         */
         assertInitialized();
 
         try {
@@ -486,18 +483,16 @@ public class CacheRepositoryV5
 
             MetaDataRecord entry = getMetaDataRecord(id);
             synchronized (entry) {
-                /* REVISIT: Is using FileNotInCacheException appropriate?
-                 */
                 switch (entry.getState()) {
                 case NEW:
                 case FROM_CLIENT:
                 case FROM_STORE:
                 case FROM_POOL:
-                    throw new FileNotInCacheException("File is incomplete");
+                    throw new LockedCacheException("File is incomplete");
                 case BROKEN:
-                    throw new FileNotInCacheException("File is broken");
+                    throw new LockedCacheException("File is broken");
                 case DESTROYED:
-                    throw new FileNotInCacheException("File has been removed");
+                    throw new LockedCacheException("File has been removed");
                 case PRECIOUS:
                 case CACHED:
                 case REMOVED:
@@ -728,7 +723,8 @@ public class CacheRepositoryV5
     @Override
     public void getInfo(PrintWriter pw)
     {
-        pw.println("State             : " + _state);
+        pw.println("State : " + _state);
+        pw.println("Files : " + _store.list().size());
 
         SpaceRecord space = getSpaceRecord();
         long total = space.getTotalSpace();
@@ -737,7 +733,7 @@ public class CacheRepositoryV5
         long fsFree = _store.getFreeSpace();
         long fsTotal = _store.getTotalSpace();
 
-        pw.println("Diskspace usage   : ");
+        pw.println("Disk space");
         pw.println("    Total    : " + UnitInteger.toUnitString(total));
         pw.println("    Used     : " + used + "    ["
                    + (((float) used) / ((float) total)) + "]");
@@ -750,8 +746,8 @@ public class CacheRepositoryV5
                    + (((float) space.getRemovableSpace()) / ((float) total))
                    + "]");
         pw.println("File system");
-        pw.println("    Size: " + fsTotal);
-        pw.println("    Free: " + fsFree +
+        pw.println("    Size : " + fsTotal);
+        pw.println("    Free : " + fsFree +
                    "    [" + (((float) fsFree) / fsTotal) + "]");
         pw.println("Limits for maximum disk space");
         pw.println("    File system          : " + (fsFree + used));

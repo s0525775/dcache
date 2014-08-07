@@ -31,6 +31,7 @@ import org.dcache.auth.util.GSSUtils;
 import org.dcache.delegation.gridsite2.DelegationException;
 import org.dcache.srm.request.RequestCredential;
 import org.dcache.srm.request.RequestCredentialStorage;
+import org.dcache.util.Glob;
 
 import static org.dcache.gridsite.Utilities.assertThat;
 
@@ -41,6 +42,20 @@ import static org.dcache.gridsite.Utilities.assertThat;
 public class SrmCredentialStore implements CredentialStore
 {
     private RequestCredentialStorage _store;
+    private String caDir;
+    private String vomsDir;
+
+    @Required
+    public void setCaCertificatePath(String caDir)
+    {
+        this.caDir = caDir;
+    }
+
+    @Required
+    public void setVomsdir(String vomsDir)
+    {
+        this.vomsDir = vomsDir;
+    }
 
     @Required
     public void setRequestCredentialStorage(RequestCredentialStorage store)
@@ -62,7 +77,7 @@ public class SrmCredentialStore implements CredentialStore
             throws DelegationException
     {
         try {
-            Iterable<String> fqans = GSSUtils.getFQANsFromGSSCredential(credential);
+            Iterable<String> fqans = GSSUtils.getFQANsFromGSSCredential(vomsDir, caDir, credential);
             String primaryFqan = Iterables.getFirst(fqans, null);
 
             RequestCredential srmCredential = new RequestCredential(nameFromId(id),
@@ -122,5 +137,71 @@ public class SrmCredentialStore implements CredentialStore
         } else {
             return id.getDelegationId() + " " + id.getDn();
         }
+    }
+
+    @Override
+    public GSSCredential search(String dn)
+    {
+        GSSCredential bestWithFqan = search(dn, new Glob("*"));
+        GSSCredential bestWithoutFqan = search(dn, (Glob)null);
+
+        if (bestWithFqan == null) {
+            return bestWithoutFqan;
+        } else if (bestWithoutFqan == null) {
+            return bestWithFqan;
+        }
+
+        long bestWithFqanLifetime;
+
+        try {
+            bestWithFqanLifetime = bestWithFqan.getRemainingLifetime();
+        } catch (GSSException ignored) {
+            // treat as expired
+            bestWithFqanLifetime = 0;
+        }
+
+        long bestWithoutFqanLifetime;
+
+        try {
+            bestWithoutFqanLifetime = bestWithoutFqan.getRemainingLifetime();
+        } catch (GSSException ignored) {
+            // treat as expired
+            bestWithoutFqanLifetime = 0;
+        }
+
+        if (bestWithoutFqanLifetime > bestWithFqanLifetime) {
+            return bestWithoutFqan;
+        }
+
+        return (bestWithFqanLifetime > 0) ? bestWithFqan : null;
+    }
+
+    @Override
+    public GSSCredential search(String dn, String fqan)
+    {
+        return search(dn, fqan != null ? new Glob(fqan) : null);
+    }
+
+
+    private GSSCredential search(String dn, Glob fqan)
+    {
+        long lifetime = 0;
+        RequestCredential credential = null;
+
+        RequestCredential gsiCredential = _store.searchRequestCredential(new Glob(dn), fqan);
+        if (gsiCredential != null) {
+            lifetime = gsiCredential.getDelegatedCredentialRemainingLifetime();
+            if (lifetime > 0) {
+                credential = gsiCredential;
+            }
+        }
+
+        RequestCredential gridsiteCredential = _store.searchRequestCredential(new Glob("* " + dn), fqan);
+        if (gridsiteCredential != null &&
+                gridsiteCredential.getDelegatedCredentialRemainingLifetime() > lifetime) {
+            credential = gridsiteCredential;
+        }
+
+        return credential != null ? credential.getDelegatedCredential() : null;
     }
 }

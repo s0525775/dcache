@@ -61,14 +61,12 @@ package org.dcache.webadmin.model.dataaccess.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Required;
 
 import javax.jdo.JDOException;
 import javax.jdo.PersistenceManager;
 import javax.jdo.PersistenceManagerFactory;
 import javax.jdo.Transaction;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -90,10 +88,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * <br>
  * Supports webadmin queries and updates.<br>
  * <br>
- * Note that this implementation is agnostic as to actual storage type;
- * non-RDBMs plugins may exhibit performance slowdowns as the store fills up, so
- * the administrator may need to do periodic deletes manually or through the
- * adminstrative interface.
  *
  * @author arossi
  */
@@ -101,17 +95,15 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
     private static final Logger logger
         = LoggerFactory.getLogger(DataNucleusAlarmStore.class);
 
-    private boolean active;
-
-    private PersistenceManagerFactory pmf;
-    private Thread cleanerThread;
-
-    private File alarmsXMLPath;
     private boolean alarmCleanerEnabled;
     private int alarmCleanerSleepInterval;
     private TimeUnit alarmCleanerSleepIntervalUnit;
     private int alarmCleanerDeleteThreshold;
     private TimeUnit alarmCleanerDeleteThresholdUnit;
+    private boolean active;
+
+    private PersistenceManagerFactory pmf;
+    private Thread cleanerThread;
 
     private static void rollbackIfActive(Transaction tx) {
         if (tx.isActive()) {
@@ -141,18 +133,13 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
         alarmCleanerSleepIntervalUnit = checkNotNull(timeUnit);
     }
 
-    public void setAlarmsXMLPath(File alarmsXMLPath) {
-        this.alarmsXMLPath = alarmsXMLPath;
-    }
-
-    public void setPersistenceManagerFactory(PersistenceManagerFactory pmf)
-    {
+    public void setPersistenceManagerFactory(PersistenceManagerFactory pmf) {
         this.pmf = pmf;
     }
 
     @Override
     public Collection<LogEntry> get(AlarmDAOFilter filter) {
-        PersistenceManager readManager = getManager();
+        PersistenceManager readManager = pmf.getPersistenceManager();
         if (readManager == null) {
             return Collections.emptyList();
         }
@@ -171,7 +158,38 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
             logger.debug("successfully executed get for filter {}", filter);
             return detached;
         } catch (JDOException t) {
-            logJDOException("update", filter, t);
+            logJDOException("get", filter, t);
+            return Collections.emptyList();
+        } finally {
+            try {
+                rollbackIfActive(tx);
+            } finally {
+                readManager.close();
+            }
+        }
+    }
+
+    /*
+     * Uses JPQL (JPA-type) DISTINCT query.
+     */
+    public Collection<String> getEntryTypes() {
+        PersistenceManager readManager = pmf.getPersistenceManager();
+        if (readManager == null) {
+            return Collections.emptyList();
+        }
+
+        Transaction tx = readManager.currentTransaction();
+
+        try {
+            tx.begin();
+            Collection<String> result
+                = (Collection<String>)AlarmJDOUtils.getTypeQuery(readManager)
+                                                   .execute();
+            logger.debug("got collection {}", result);
+            tx.commit();
+            return result;
+        } catch (JDOException t) {
+            logJDOException("get entry types", null, t);
             return Collections.emptyList();
         } finally {
             try {
@@ -183,30 +201,24 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
     }
 
     public void initialize() {
-
         if (pmf == null) {
             active = false;
         } else {
             active = true;
 
             if (alarmCleanerEnabled) {
-                checkArgument(alarmCleanerSleepInterval > 0);
-                checkArgument(alarmCleanerDeleteThreshold > 0);
-                cleanerThread = new Thread(this, "alarm-cleanup-daemon");
+                if (cleanerThread != null && !cleanerThread.isAlive()) {
+                    checkArgument(alarmCleanerSleepInterval > 0);
+                    checkArgument(alarmCleanerDeleteThreshold > 0);
+                    cleanerThread = new Thread(this, "alarm-cleanup-daemon");
+                    cleanerThread.start();
+                }
             }
-        }
-
-        if (!active) {
-            return;
-        }
-
-        if (cleanerThread != null && !cleanerThread.isAlive()) {
-            cleanerThread.start();
         }
     }
 
     public boolean isConnected() {
-        return active && (getManager() != null);
+        return active && (pmf.getPersistenceManager() != null);
     }
 
     @Override
@@ -215,7 +227,7 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
             return 0;
         }
 
-        PersistenceManager deleteManager = getManager();
+        PersistenceManager deleteManager = pmf.getPersistenceManager();
         if (deleteManager == null) {
             return 0;
         }
@@ -230,7 +242,7 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
             logger.debug("successfully removed {} entries", removed);
             return removed;
         } catch (JDOException t) {
-            logJDOException("update", filter, t);
+            logJDOException("remove", filter, t);
             return 0;
         } finally {
             try {
@@ -245,7 +257,8 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
     public void run() {
         while (isRunning()) {
             Long currentThreshold
-                = System.currentTimeMillis() - alarmCleanerDeleteThresholdUnit.toMillis(alarmCleanerDeleteThreshold);
+                = System.currentTimeMillis() - alarmCleanerDeleteThresholdUnit
+                                               .toMillis(alarmCleanerDeleteThreshold);
 
             try {
                 long count = remove(currentThreshold);
@@ -276,7 +289,7 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
             return 0;
         }
 
-        PersistenceManager updateManager = getManager();
+        PersistenceManager updateManager = pmf.getPersistenceManager();
         if (updateManager == null) {
             return 0;
         }
@@ -319,13 +332,6 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
         }
     }
 
-    private PersistenceManager getManager() {
-        if (!active || alarmsXMLPath != null && !alarmsXMLPath.isFile()) {
-            return null;
-        }
-        return pmf.getPersistenceManager();
-    }
-
     private synchronized boolean isRunning() {
         return active && cleanerThread != null && !cleanerThread.isInterrupted();
     }
@@ -337,7 +343,12 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
          * a checked exception here; the SQL error should neither
          * be dealt with by the client nor be propagated up in this case
          */
-        logger.error("alarm data, failed to {}, {}", action, filter);
+        if (filter == null) {
+            logger.error("alarm data, failed to {}: {}", action, e.getMessage());
+        } else {
+            logger.error("alarm data, failed to {}, {}: {}", action, filter, e.getMessage());
+        }
+
         logger.debug("{}", action, e);
     }
 
@@ -345,7 +356,7 @@ public class DataNucleusAlarmStore implements ILogEntryDAO, Runnable {
      * Used only internally by the cleaner daemon (run()).
      */
     private long remove(Long threshold) throws DAOException {
-        PersistenceManager deleteManager = getManager();
+        PersistenceManager deleteManager = pmf.getPersistenceManager();
         if (deleteManager == null) {
             return 0;
         }

@@ -62,6 +62,8 @@ import diskCacheV111.vehicles.HttpProtocolInfo;
 import diskCacheV111.vehicles.IoDoorEntry;
 import diskCacheV111.vehicles.IoDoorInfo;
 import diskCacheV111.vehicles.PnfsCreateEntryMessage;
+import diskCacheV111.vehicles.PoolIoFileMessage;
+import diskCacheV111.vehicles.PoolMoverKillMessage;
 import diskCacheV111.vehicles.ProtocolInfo;
 
 import dmg.cells.nucleus.AbstractCellComponent;
@@ -697,6 +699,7 @@ public class DcacheResourceFactory
                         transfer.getMoverId() + ": Waiting for completion");
             } finally {
                 if (uri == null) {
+                    transfer.killMover(_killTimeout, _killTimeoutUnit);
                     transfer.deleteNameSpaceEntry();
                 }
             }
@@ -729,7 +732,7 @@ public class DcacheResourceFactory
             throws CacheException, InterruptedException, IOException,
                    URISyntaxException
     {
-        ReadTransfer transfer = beginRead(path, pnfsid, true);
+        ReadTransfer transfer = beginRead(path, pnfsid, true, null);
         try {
             transfer.relayData(outputStream, range);
         } catch (CacheException e) {
@@ -744,6 +747,7 @@ public class DcacheResourceFactory
                                    e.toString());
             throw e;
         } finally {
+            transfer.killMover(_killTimeout, _killTimeoutUnit);
             _transfers.remove((int) transfer.getSessionId());
         }
     }
@@ -911,10 +915,11 @@ public class DcacheResourceFactory
      * @param path The full path of the file.
      * @param pnfsid The PNFS ID of the file.
      */
-    public String getReadUrl(FsPath path, PnfsId pnfsid)
+    public String getReadUrl(FsPath path, PnfsId pnfsid,
+            HttpProtocolInfo.Disposition disposition)
             throws CacheException, InterruptedException, URISyntaxException
     {
-        return beginRead(path, pnfsid, false).getRedirect();
+        return beginRead(path, pnfsid, false, disposition).getRedirect();
     }
 
     /**
@@ -926,13 +931,15 @@ public class DcacheResourceFactory
      * @param isProxyTransfer
      * @return ReadTransfer encapsulating the read operation
      */
-    private ReadTransfer beginRead(FsPath path, PnfsId pnfsid, boolean isProxyTransfer)
-            throws CacheException, InterruptedException, URISyntaxException
+    private ReadTransfer beginRead(FsPath path, PnfsId pnfsid, boolean isProxyTransfer,
+            HttpProtocolInfo.Disposition disposition) throws CacheException,
+            InterruptedException, URISyntaxException
     {
         Subject subject = getSubject();
 
         String uri = null;
-        ReadTransfer transfer = new ReadTransfer(_pnfs, subject, path, pnfsid);
+        ReadTransfer transfer = new ReadTransfer(_pnfs, subject, path, pnfsid,
+                disposition);
         transfer.setIsChecksumNeeded(isDigestRequested());
         _transfers.put((int) transfer.getSessionId(), transfer);
         try {
@@ -962,6 +969,7 @@ public class DcacheResourceFactory
             throw e;
         } finally {
             if (uri == null) {
+                transfer.killMover(_killTimeout, _killTimeoutUnit);
                 _transfers.remove((int) transfer.getSessionId());
             }
         }
@@ -989,6 +997,23 @@ public class DcacheResourceFactory
         Transfer transfer = _transfers.get((int) message.getId());
         if (transfer != null) {
             transfer.finished(message);
+        }
+    }
+
+    /**
+     * Fall back message handler for mover creation replies. We
+     * only receive these if the Transfer timed out before the
+     * mover was created. Instead we kill the mover.
+     */
+    public void messageArrived(PoolIoFileMessage message)
+    {
+        if (message.getReturnCode() == 0) {
+            try {
+                _poolStub.notify(new PoolMoverKillMessage(message.getPoolName(), message.getMoverId()));
+            } catch (NoRouteToCellException e) {
+                _log.debug("Failed to kill mover {}/{}: {}", message.getPoolName(), message.getMoverId(),
+                           e.getMessage());
+            }
         }
     }
 
@@ -1141,6 +1166,7 @@ public class DcacheResourceFactory
     {
         private URI _location;
         private InetSocketAddress _clientAddressForPool;
+        protected HttpProtocolInfo.Disposition _disposition;
 
         public HttpTransfer(PnfsHandler pnfs, Subject subject, FsPath path)
                 throws URISyntaxException
@@ -1163,7 +1189,8 @@ public class DcacheResourceFactory
                         address,
                         getCellName(), getCellDomainName(),
                         _path.toString(),
-                        _location);
+                        _location,
+                        _disposition);
             protocolInfo.setSessionId((int) getSessionId());
             return protocolInfo;
         }
@@ -1201,11 +1228,13 @@ public class DcacheResourceFactory
     private class ReadTransfer extends HttpTransfer
     {
         public ReadTransfer(PnfsHandler pnfs, Subject subject,
-                            FsPath path, PnfsId pnfsid)
+                            FsPath path, PnfsId pnfsid,
+                            HttpProtocolInfo.Disposition disposition)
                 throws URISyntaxException
         {
             super(pnfs, subject, path);
             setPnfsId(pnfsid);
+            _disposition = disposition;
         }
 
         public void setIsChecksumNeeded(boolean isChecksumNeeded)

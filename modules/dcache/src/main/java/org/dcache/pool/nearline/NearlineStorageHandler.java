@@ -19,6 +19,8 @@ package org.dcache.pool.nearline;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
+import com.google.common.collect.Ordering;
+import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -82,10 +84,14 @@ import org.dcache.pool.nearline.spi.NearlineRequest;
 import org.dcache.pool.nearline.spi.NearlineStorage;
 import org.dcache.pool.nearline.spi.RemoveRequest;
 import org.dcache.pool.nearline.spi.StageRequest;
+import org.dcache.pool.repository.EntryChangeEvent;
 import org.dcache.pool.repository.EntryState;
 import org.dcache.pool.repository.IllegalTransitionException;
 import org.dcache.pool.repository.ReplicaDescriptor;
 import org.dcache.pool.repository.Repository;
+import org.dcache.pool.repository.StateChangeEvent;
+import org.dcache.pool.repository.StateChangeListener;
+import org.dcache.pool.repository.StickyChangeEvent;
 import org.dcache.pool.repository.StickyRecord;
 import org.dcache.util.Checksum;
 import org.dcache.vehicles.FileAttributes;
@@ -98,7 +104,7 @@ import static org.dcache.namespace.FileAttribute.*;
 /**
  * Entry point to and management interface for the nearline storage subsystem.
  */
-public class NearlineStorageHandler extends AbstractCellComponent implements CellCommandListener
+public class NearlineStorageHandler extends AbstractCellComponent implements CellCommandListener, StateChangeListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(NearlineStorageHandler.class);
 
@@ -123,31 +129,31 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
     @Required
     public void setScheduledExecutor(ScheduledExecutorService executor)
     {
-        this.scheduledExecutor = executor;
+        this.scheduledExecutor = checkNotNull(executor);
     }
 
     @Required
     public void setExecutor(ListeningExecutorService executor)
     {
-        this.executor = executor;
+        this.executor = checkNotNull(executor);
     }
 
     @Required
     public void setRepository(Repository repository)
     {
-        this.repository = repository;
+        this.repository = checkNotNull(repository);
     }
 
     @Required
     public void setChecksumModule(ChecksumModule checksumModule)
     {
-        this.checksumModule = checksumModule;
+        this.checksumModule = checkNotNull(checksumModule);
     }
 
     @Required
     public void setPnfsHandler(PnfsHandler pnfs)
     {
-        this.pnfs = pnfs;
+        this.pnfs = checkNotNull(pnfs);
     }
 
     @Required
@@ -159,19 +165,20 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
     @Required
     public void setBillingStub(CellStub billingStub)
     {
-        this.billingStub = billingStub;
+        this.billingStub = checkNotNull(billingStub);
     }
 
     @Required
     public void setHsmSet(HsmSet hsmSet)
     {
-        this.hsmSet = hsmSet;
+        this.hsmSet = checkNotNull(hsmSet);
     }
 
     @PostConstruct
     public void init()
     {
         scheduledExecutor.scheduleWithFixedDelay(new TimeoutTask(), 30, 30, TimeUnit.SECONDS);
+        repository.addListener(this);
     }
 
     /**
@@ -260,6 +267,26 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
         return flushRequests.getCount(AbstractRequest.State.QUEUED);
     }
 
+    @Override
+    public void stateChanged(StateChangeEvent event)
+    {
+        if (event.getNewState() == EntryState.REMOVED) {
+            PnfsId pnfsId = event.getPnfsId();
+            stageRequests.cancel(pnfsId);
+            flushRequests.cancel(pnfsId);
+        }
+    }
+
+    @Override
+    public void accessTimeChanged(EntryChangeEvent event)
+    {
+    }
+
+    @Override
+    public void stickyChanged(StickyChangeEvent event)
+    {
+    }
+
 
     /**
      * Abstract base class for request implementations.
@@ -272,7 +299,7 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
      *
      * @param <K> key identifying a request
      */
-    private abstract static class AbstractRequest<K>
+    private abstract static class AbstractRequest<K> implements Comparable<AbstractRequest<K>>
     {
         private enum State { QUEUED, ACTIVE, CANCELED }
 
@@ -351,6 +378,12 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
                 sb.append(' ').append(new Date(activatedAt));
             }
             return sb.toString();
+        }
+
+        @Override
+        public int compareTo(AbstractRequest<K> o)
+        {
+            return Longs.compare(createdAt, o.createdAt);
         }
     }
 
@@ -445,6 +478,11 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
         public synchronized String printJobQueue()
         {
             return Joiner.on('\n').join(requests.values());
+        }
+
+        public synchronized String printJobQueue(Ordering ordering)
+        {
+            return Joiner.on('\n').join(ordering.sortedCopy(requests.values()));
         }
 
         private synchronized Iterable<CompletionHandler<Void,K>> remove(K key)
@@ -975,7 +1013,7 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
         @Override
         public String call()
         {
-            return stageRequests.printJobQueue();
+            return stageRequests.printJobQueue(Ordering.natural());
         }
     }
 
@@ -1024,7 +1062,7 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
         @Override
         public String call()
         {
-            return flushRequests.printJobQueue();
+            return flushRequests.printJobQueue(Ordering.natural());
         }
     }
 
@@ -1057,7 +1095,7 @@ public class NearlineStorageHandler extends AbstractCellComponent implements Cel
         @Override
         public String call()
         {
-            return removeRequests.printJobQueue();
+            return removeRequests.printJobQueue(Ordering.natural());
         }
     }
 

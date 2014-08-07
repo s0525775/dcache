@@ -100,7 +100,9 @@ import org.dcache.srm.v2_2.TRequestType;
 import org.dcache.srm.v2_2.TReturnStatus;
 import org.dcache.srm.v2_2.TStatusCode;
 
-import static org.dcache.srm.handler.ReturnStatuses.getSummaryReturnStatus;
+import static org.dcache.srm.handler.ReturnStatuses.*;
+
+import static org.dcache.util.TimeUtils.relativeTimestamp;
 
 /**
  * This abstract class represents an "SRM request"
@@ -155,6 +157,7 @@ public abstract class ContainerRequest<R extends FileRequest<?>> extends Request
          super(user ,
          requestCredentalId,
          max_number_of_retries,
+         max_update_period,
          lifetime,
          description,
          client_host);
@@ -333,6 +336,7 @@ public abstract class ContainerRequest<R extends FileRequest<?>> extends Request
         // we can rely on the fact that
         // once file request reach their final state, this state does not change
         // so the combined logic
+        updateRetryDeltaTime();
         RequestStatus rs = new RequestStatus();
         rs.requestId = getRequestNum();
         rs.errorMessage = getLastJobChange().getDescription();
@@ -403,10 +407,16 @@ public abstract class ContainerRequest<R extends FileRequest<?>> extends Request
                 // no running, no ready and  no pending  requests
                 // there are only failed requests
                 // we can fail this request
+
+                // REVISIT: the above logic seems flawed: this branch is reached
+                //          if there are multiple file requests, some in state
+                //          Done and others in state Failed.  The behaviour may
+                //          be correct, but should be checked.
+
                 rs.state = "Failed";
                 try
                 {
-                    setState(State.FAILED, rs.errorMessage);
+                    setState(State.FAILED, "File requests have failed.");
                     stopUpdating();
                 }
                 catch(IllegalStateTransition ist)
@@ -417,7 +427,7 @@ public abstract class ContainerRequest<R extends FileRequest<?>> extends Request
                 // all requests are done
                 try
                 {
-                    setState(State.DONE,"All files are done.");
+                    setState(State.DONE, "All file requests succeeded.");
                     stopUpdating();
                 }
                 catch(IllegalStateTransition ist)
@@ -660,16 +670,17 @@ public abstract class ContainerRequest<R extends FileRequest<?>> extends Request
         if (code != null) {
             sb.append(" status:").append(code);
         }
-        sb.append(" by:").append(getUser());
+        sb.append(" by:").append(getUser().getDisplayName());
         if (longformat) {
             sb.append('\n');
-            sb.append("   Submitted:").append(describe(new Date(getCreationTime()))).append('\n');
-            sb.append("   Expires:").append(describe(new Date(getCreationTime() + getLifetime()))).append('\n');
+            long now = System.currentTimeMillis();
+            sb.append("   Submitted: ").append(relativeTimestamp(getCreationTime(), now)).append('\n');
+            sb.append("   Expires: ").append(relativeTimestamp(getCreationTime() + getLifetime(), now)).append('\n');
             RequestCredential credential = getCredential();
             if (credential != null) {
-                sb.append("   Credential: \"").append(getCredential()).append("\"\n");
+                sb.append("   Credential: ").append(credential.getCredentialName()).append('\n');
             }
-            sb.append("   History of State Transitions:\n");
+            sb.append("   History:\n");
             sb.append(getHistory("   "));
             for (R fr:fileRequests) {
                 sb.append("\n");
