@@ -508,10 +508,35 @@ public class DcacheObjectIdResource
         try {
             DataObject dObj = (DcacheDataObject) dataObjectDao.findByPath(objectPath);
             if (dObj == null) {
-                System.out.println("Not Ok");
-                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
-                builder.header("X-CDMI-Specification-Version", "1.0.2");
-                return builder.entity("Method Not Allowed").build();
+                dObj = new DcacheDataObject();
+
+                dObj.setObjectType("application/cdmi-object");
+                // parse json
+                dObj.fromJson(bytes, false);
+                if (dObj.getValue() == null) {
+                    dObj.setValue("== N/A ==");
+                }
+                if (dObj.getMove() == null) {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(objectPath, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Created");
+                    ResponseBuilder builder = Response.created(new URI(objectPath));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                } else {
+                    dObj = (DcacheDataObject) dataObjectDao.createByPath(objectPath, dObj);
+                    // return representation
+                    String respStr = dObj.toJson();
+                    // make http response
+                    // build a JSON representation
+                    System.out.println("Ok");
+                    ResponseBuilder builder = Response.ok(new URI(objectPath));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                }
             } else {
                 dObj = new DcacheDataObject();
 
@@ -578,23 +603,15 @@ public class DcacheObjectIdResource
 
         try {
             containerRequest.fromJson(bytes, false);
-            Container container = (DcacheContainer) containerDao.findByPath(path);
-            if (container == null) {
-                System.out.println("Not Ok");
-                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
-                builder.header("X-CDMI-Specification-Version", "1.0.2");
-                return builder.entity("Method Not Allowed").build();
-            } else {
-                container = (DcacheContainer) containerDao.createByPath(path, containerRequest);
-                // return representation
-                String respStr = container.toJson(false);
-                // make http response
-                // build a JSON representation
-                System.out.println("Ok");
-                ResponseBuilder builder = Response.ok(new URI(path));
-                builder.header("X-CDMI-Specification-Version", "1.0.2");
-                return builder.entity(respStr).build();
-            } // if/else
+            Container container = (DcacheContainer) containerDao.createByPath(path, containerRequest);
+            // return representation
+            String respStr = container.toJson(false);
+            // make http response
+            // build a JSON representation
+            System.out.println("Ok");
+            ResponseBuilder builder = Response.ok(new URI(path));
+            builder.header("X-CDMI-Specification-Version", "1.0.2");
+            return builder.entity(respStr).build();
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());

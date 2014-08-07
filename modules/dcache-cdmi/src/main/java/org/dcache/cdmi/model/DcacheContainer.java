@@ -44,16 +44,8 @@ public class DcacheContainer extends Container
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheContainer.class);
 
     private String parentID;
+    private String objectName;
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-
-    private final static List<String> IGNORE_LIST = new ArrayList() {{
-        add("cdmi_ctime");
-        add("cdmi_atime");
-        add("cdmi_mtime");
-        add("cdmi_size");
-        add("cdmi_owner");
-        add("cdmi_acl");
-    }};
 
     public void setChildren(List<String> children)
     {
@@ -71,6 +63,11 @@ public class DcacheContainer extends Container
     public String getParentID()
     {
         return parentID;
+    }
+
+    public String getObjectName()
+    {
+        return objectName;
     }
 
     public void addSubMetadata_ACL(HashMap<String, String> metadata)
@@ -91,6 +88,11 @@ public class DcacheContainer extends Container
     public void setParentID(String id)
     {
         parentID = id;
+    }
+
+    public void setObjectName(String name)
+    {
+        objectName = name;
     }
 
     public void setMetadata(Map<String, String> metadata)
@@ -134,9 +136,9 @@ public class DcacheContainer extends Container
             g.writeStartObject();
 
             g.writeStringField("objectID", getObjectID());
-
             g.writeStringField("capabilitiesURI", getCapabilitiesURI());
             g.writeStringField("domainURI", getDomainURI());
+            g.writeStringField("objectType", getObjectType());
 
             g.writeObjectFieldStart("exports");
             for (Map.Entry<String, Object> entry : getExports().entrySet()) {
@@ -161,14 +163,12 @@ public class DcacheContainer extends Container
             g.writeEndObject();
 
             if (!toFile) {
-                if (getObjectType() != null)
-                    g.writeStringField("objectType", getObjectType());
-                if (getCapabilitiesURI() != null)
-                    g.writeStringField("capabilitiesURI", getCapabilitiesURI());
-                if (getObjectID() != null)
+                if (getParentID() != null)
                     g.writeStringField("parentID", getParentID());
-                if (getObjectID() != null)
+                if (getParentURI() != null)
                     g.writeStringField("parentURI", getParentURI());
+                if (getObjectName() != null)
+                    g.writeStringField("objectName", getObjectName());
                 g.writeArrayFieldStart("children");
                 ListIterator<String> it = getChildren().listIterator();
                 while (it.hasNext()) {
@@ -186,33 +186,6 @@ public class DcacheContainer extends Container
             return ("Error: " + ex);
         }
         //
-        return outBuffer.toString();
-    }
-
-    public String metadataToJson(boolean toFile)
-    {
-        StringWriter outBuffer = new StringWriter();
-        try {
-            JsonFactory f = new JsonFactory();
-            JsonGenerator g = f.createJsonGenerator(outBuffer);
-            g.useDefaultPrettyPrinter();
-
-            g.writeStartObject();
-            if (getObjectID() != null)
-                g.writeStringField("objectID", getObjectID());
-            g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
-                if (!IGNORE_LIST.contains(entry.getKey())) {
-                    g.writeStringField(entry.getKey(), entry.getValue());
-                }
-            }
-            g.writeEndObject();
-            g.writeEndObject();
-
-            g.flush();
-        } catch (IOException ex) {
-            return("Error: " + ex);
-        }
         return outBuffer.toString();
     }
 

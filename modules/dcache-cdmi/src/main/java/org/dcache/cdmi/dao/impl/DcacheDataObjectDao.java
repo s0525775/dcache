@@ -402,7 +402,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 String objectId = "";
                 String restPath = "";
                 String tempPath = "";
-                objectIdPath = true;
                 IdConverter idc = new IdConverter();
                 if (path.startsWith("cdmi_objectid/")) {
                     tempPath = path.replace("cdmi_objectid/", "");
@@ -416,6 +415,9 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     String strPnfsId = idc.toPnfsID(objectId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
                     FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    if ((restPath == null) || restPath.isEmpty() || (restPath.equals("/"))) {
+                        objectIdPath = true;
+                    }
                     if (pnfsPath != null) {
                         String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
@@ -428,6 +430,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     String strPnfsId = idc.toPnfsID(objectId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
                     FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    objectIdPath = true;
                     if (pnfsPath != null) {
                         String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
@@ -443,82 +446,415 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             System.out.println("Container AbsolutePath=" + containerDirectory.getAbsolutePath());
             System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
 
-            if (newDObj.getMove() == null) { // This is a normal Create or Update
+            if (checkPath != null) {
 
-                if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {  //Create
-                    _log.trace("<DataObject Create>");
-                    System.out.println("<DataObject Create>");
+                FsPath tmpFsPath = new FsPath();
+                tmpFsPath.add(objFile.getAbsolutePath());
+                if (!isAllowedPath(tmpFsPath)) {
+                    throw new ForbiddenException("Permission denied");
+                }
 
+                if (newDObj.getMove() == null) { // This is a normal Create or Update
+
+                    if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {  //Create
+                        _log.trace("<DataObject Create>");
+                        System.out.println("<DataObject Create>");
+
+                        if (objectIdPath) {
+                            throw new MethodNotAllowedException("This method is not supported yet.");
+                        }
+
+                        String base =  removeSlashesFromPath(baseDirectoryName);
+                        String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                        if (!base.equals(parent)) {
+                            if (!isUserAllowed(subject, parent)) {
+                                throw new UnauthorizedException("Access denied", realm);
+                            }
+                        }
+                        // check for container
+                        if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
+                            throw new ConflictException("Container <"
+                                                        + containerDirectory.getAbsolutePath()
+                                                        + "> doesn't exist");
+                        }
+                        if (checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                            throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
+                        }
+
+                        try {
+                            FsPath fsPath = new FsPath(objFile.getAbsolutePath());
+                            byte[] bytData = newDObj.getValue().getBytes(StandardCharsets.UTF_8);
+                            InputStream isData = new ByteArrayInputStream(bytData);
+                            if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
+                                _log.error("Exception while writing dataobject.");
+                                throw new ServerErrorException("Cannot write Object file @" + path);
+                            }
+                        } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
+                            _log.error("Exception while writing dataobject, {}", ex);
+                            throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
+                        }
+
+                        FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
+
+                        PnfsId pnfsId = null;
+                        String objectID = "";
+                        ACL oacl = null;
+                        if (attributes != null) {
+                            pnfsId = attributes.getPnfsId();
+                            if (pnfsId != null) {
+                                newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
+                                newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
+                                newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
+                                newDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
+                                newDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
+                                oacl = attributes.getAcl();
+                                objectID = new IdConverter().toObjectID(pnfsId.toIdString());
+                                newDObj.setObjectID(objectID);
+                                _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
+
+                                String parentPath = "";
+                                PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                                String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                                if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                    parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                                } else {
+                                    parentPath = parent;
+                                }
+                                newDObj.setParentID(parentObjectId);
+                                newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+
+                                newDObj.setObjectType("application/cdmi-object");
+                                newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+                                newDObj.setMetadata("cdmi_acount", "0");
+                                newDObj.setMetadata("cdmi_mcount", "0");
+                                if (oacl != null && !oacl.isEmpty()) {
+                                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                    for (ACE ace : oacl.getList()) {
+                                        AceConverter ac = new AceConverter();
+                                        HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                        subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                        subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                        subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                        subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
+                                        subMetadata_ACL.add(subMetadataEntry_ACL);
+                                    }
+                                    newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                } else {
+                                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                    subMetadataEntry_ACL.put("acetype", "ALLOW");
+                                    subMetadataEntry_ACL.put("identifier", "OWNER@");
+                                    subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                                    subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                                    subMetadata_ACL.add(subMetadataEntry_ACL);
+                                    newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                }
+
+                                String mimeType = newDObj.getMimetype();
+                                if (mimeType == null) {
+                                    mimeType = "text/plain";
+                                }
+                                newDObj.setMimetype(mimeType);
+                                newDObj.setMetadata("mimetype", mimeType);
+                                String fileName = "";
+                                String filePath = objFile.getAbsolutePath();
+                                if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                    fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                                } else {
+                                    fileName = filePath;
+                                }
+                                newDObj.setMetadata("fileName", fileName);
+
+                                newDObj.setCompletionStatus("Complete");
+                                return newDObj;
+                            } else {
+                                throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
+                            }
+                        } else {
+                            throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
+                        }
+
+                    } else {  //Update
+                        _log.trace("<DataObject Update>");
+                        System.out.println("<DataObject Update>");
+
+                        // check for container
+                        if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
+                            throw new ConflictException("Container <"
+                                                        + containerDirectory.getAbsolutePath()
+                                                        + "> doesn't exist");
+                        }
+                        if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                            throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
+                        }
+
+                        try {
+                            DcacheDataObject currentDObj = new DcacheDataObject();
+                            FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
+
+                            PnfsId pnfsId = null;
+                            String objectId = "";
+                            ACL oacl = null;
+                            if (attributes != null) {
+                                pnfsId = attributes.getPnfsId();
+                                if (pnfsId != null) {
+                                    // Read object from file
+                                    if (attributes.getFileType() != DIR) {
+                                        pnfsId = attributes.getPnfsId();
+                                        byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
+                                        if (inBytes != null) {
+                                            currentDObj.setValue(new String(inBytes));
+                                        }
+                                    }
+                                    currentDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
+                                    currentDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
+                                    currentDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
+                                    currentDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
+                                    currentDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
+                                    oacl = attributes.getAcl();
+                                    objectId = new IdConverter().toObjectID(pnfsId.toIdString());
+                                    currentDObj.setObjectID(objectId);
+                                    _log.trace("DCacheDataObjectDao<Update>, setObjectID={}", objectId);
+
+                                    currentDObj.setObjectType("application/cdmi-object");
+                                    currentDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+                                    currentDObj.setMetadata("cdmi_acount", "0");
+                                    currentDObj.setMetadata("cdmi_mcount", "0");
+                                    if (oacl != null && !oacl.isEmpty()) {
+                                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                        for (ACE ace : oacl.getList()) {
+                                            AceConverter ac = new AceConverter();
+                                            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
+                                            subMetadata_ACL.add(subMetadataEntry_ACL);
+                                        }
+                                        currentDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                    } else {
+                                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                        HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                        subMetadataEntry_ACL.put("acetype", "ALLOW");
+                                        subMetadataEntry_ACL.put("identifier", "OWNER@");
+                                        subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                                        subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                                        subMetadata_ACL.add(subMetadataEntry_ACL);
+                                        currentDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                    }
+
+                                    if (!currentDObj.getValue().equals(newDObj.getValue())) {
+                                        deleteFile(subject, pnfsId, objFile.getAbsolutePath());
+                                        try {
+                                            FsPath fsPath = new FsPath(objFile.getAbsolutePath());
+                                            byte[] bytData = newDObj.getValue().getBytes(StandardCharsets.UTF_8);
+                                            InputStream isData = new ByteArrayInputStream(bytData);
+                                            if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
+                                                _log.error("Exception while writing dataobject.");
+                                                throw new ServerErrorException("Cannot write Object file @" + path);
+                                            }
+                                        } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
+                                            _log.error("Exception while writing dataobject, {}", ex);
+                                            throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
+                                        }
+                                    }
+
+                                    //forth-and-back update
+                                    for (String key : newDObj.getMetadata().keySet()) {
+                                        currentDObj.setMetadata(key, newDObj.getMetadata().get(key));
+                                    }
+                                    for (String key : currentDObj.getMetadata().keySet()) {
+                                        newDObj.setMetadata(key, currentDObj.getMetadata().get(key));
+                                    }
+
+                                    attributes = getAttributes(subject, objFile.getAbsolutePath());
+
+                                    pnfsId = null;
+                                    String objectID = "";
+                                    oacl = null;
+                                    if (attributes != null) {
+                                        pnfsId = attributes.getPnfsId();
+                                        if (pnfsId != null) {
+                                            newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
+                                            newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
+                                            newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
+                                            newDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
+                                            newDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
+                                            oacl = attributes.getAcl();
+                                            objectID = new IdConverter().toObjectID(pnfsId.toIdString());
+                                            newDObj.setObjectID(objectID);
+                                            _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
+
+                                            String parentPath = "";
+                                            String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                                            PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                                            String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                                            if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                                parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                                            } else {
+                                                parentPath = parent;
+                                            }
+                                            newDObj.setParentID(parentObjectId);
+                                            newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+
+                                            newDObj.setObjectType("application/cdmi-object");
+                                            newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+                                            newDObj.setMetadata("cdmi_acount", "0");
+                                            newDObj.setMetadata("cdmi_mcount", "0");
+                                            if (oacl != null && !oacl.isEmpty()) {
+                                                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                                for (ACE ace : oacl.getList()) {
+                                                    AceConverter ac = new AceConverter();
+                                                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                                    subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                                                    subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                                                    subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                                                    subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
+                                                    subMetadata_ACL.add(subMetadataEntry_ACL);
+                                                }
+                                                newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                            } else {
+                                                ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                                                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                                                subMetadataEntry_ACL.put("acetype", "ALLOW");
+                                                subMetadataEntry_ACL.put("identifier", "OWNER@");
+                                                subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                                                subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
+                                                subMetadata_ACL.add(subMetadataEntry_ACL);
+                                                newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                            }
+
+                                            String mimeType = newDObj.getMimetype();
+                                            if (mimeType == null) {
+                                                mimeType = "text/plain";
+                                            }
+                                            newDObj.setMimetype(mimeType);
+                                            newDObj.setMetadata("mimetype", mimeType);
+                                            String fileName = "";
+                                            String filePath = objFile.getAbsolutePath();
+                                            if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                                fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                                            } else {
+                                                fileName = filePath;
+                                            }
+                                            newDObj.setMetadata("fileName", fileName);
+
+                                            // update meta information
+                                            try {
+                                                FileAttributes attr = new FileAttributes();
+                                                Date atime = sdf.parse(newDObj.getMetadata().get("cdmi_atime"));
+                                                Date mtime = sdf.parse(newDObj.getMetadata().get("cdmi_mtime"));
+                                                long atimeAsLong = atime.getTime();
+                                                long mtimeAsLong = mtime.getTime();
+                                                attr.setAccessTime(atimeAsLong);
+                                                attr.setModificationTime(mtimeAsLong);
+                                                PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+                                                pnfs.setFileAttributes(pnfsId, attr);
+                                            } catch (CacheException | ParseException ex) {
+                                                ex.printStackTrace();
+                                                _log.error("DcacheDataObjectDao<Update>, Cannot update meta information for object with objectID {}", newDObj.getObjectID());
+                                            }
+                                            newDObj.setCompletionStatus("Complete");
+                                            return newDObj;
+                                        } else {
+                                            throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
+                                        }
+                                    } else {
+                                        throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
+                                    }
+                                } else {
+                                    throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
+                                }
+                            } else {
+                                throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
+                            }
+                        } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
+                            _log.error("Exception while reading, {}", ex);
+                            throw new ServerErrorException("Cannot read Object @" + path + " error: " + ex);
+                        } catch (UnauthorizedException ex) {
+                            _log.error("Exception while reading, {}", ex);
+                            throw new ForbiddenException("Permission denied");
+                        }
+                    }
+                } else { // Moving/Renaming a DataObject
+                    _log.trace("<DataObject Move>");
+                    System.out.println("<DataObject Move>");
                     if (objectIdPath) {
                         throw new MethodNotAllowedException("This method is not supported yet.");
                     }
 
-                    String base =  removeSlashesFromPath(baseDirectoryName);
-                    String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
-                    if (!base.equals(parent)) {
-                        if (!isUserAllowed(subject, parent)) {
-                            throw new UnauthorizedException("Access denied", realm);
-                        }
+                    File sourceFile = absoluteFile(dObj.getMove());
+
+                    if (!isUserAllowed(subject, sourceFile.getAbsolutePath())) {
+                        throw new ForbiddenException("Permission denied");
                     }
+
                     // check for container
                     if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
                         throw new ConflictException("Container <"
                                                     + containerDirectory.getAbsolutePath()
                                                     + "> doesn't exist");
                     }
-                    if (checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
-                        throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> exists");
+                    if (!checkIfDirectoryFileExists(subject, sourceFile.getAbsolutePath())) {
+                        throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
                     }
 
-                    try {
-                        FsPath fsPath = new FsPath(objFile.getAbsolutePath());
-                        byte[] bytData = newDObj.getValue().getBytes(StandardCharsets.UTF_8);
-                        InputStream isData = new ByteArrayInputStream(bytData);
-                        if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
-                            _log.error("Exception while writing dataobject.");
-                            throw new ServerErrorException("Cannot write Object file @" + path);
+                    String base =  removeSlashesFromPath(baseDirectoryName);
+                    String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+
+                    if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                        if (!base.equals(parent)) {
+                            if (!isUserAllowed(subject, parent)) {
+                                throw new ForbiddenException("Permission denied");
+                            }
                         }
-                    } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
-                        _log.error("Exception while writing dataobject, {}", ex);
-                        throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
+                    } else {
+                        throw new ConflictException("Cannot move dataobject '" + dObj.getMove()
+                                                       + "' to '" + path + "'; Destination already exists");
                     }
 
-                    FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
+                    DcacheDataObject movedDObj = new DcacheDataObject();
+                    FileAttributes attributes = renameFile(subject, sourceFile.getAbsolutePath(), objFile.getAbsolutePath());
 
                     PnfsId pnfsId = null;
-                    String objectID = "";
-                    ACL oacl = null;
+                    String objectId = "";
+                    ACL cacl = null;
                     if (attributes != null) {
                         pnfsId = attributes.getPnfsId();
                         if (pnfsId != null) {
-                            newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                            newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
-                            newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
-                            newDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                            newDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
-                            oacl = attributes.getAcl();
-                            objectID = new IdConverter().toObjectID(pnfsId.toIdString());
-                            newDObj.setObjectID(objectID);
-                            _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
+                            for (String key : dObj.getMetadata().keySet()) {
+                                movedDObj.setMetadata(key, dObj.getMetadata().get(key));
+                            }
+                            movedDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
+                            movedDObj.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
+                            movedDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
+                            movedDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
+                            movedDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
+                            cacl = attributes.getAcl();
+                            objectId = new IdConverter().toObjectID(pnfsId.toIdString());
+                            movedDObj.setObjectID(objectId);
+                            _log.trace("DcacheContainerDao<Move>, setObjectID={}", objectId);
 
                             String parentPath = "";
-                            PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                            String parent2 = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                            PnfsId parentPnfsId = getPnfsIDByPath(subject, parent2);
                             String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                            if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                                parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            if (parent2.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                                parentPath = parent2.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                             } else {
-                                parentPath = parent;
+                                parentPath = parent2;
                             }
-                            newDObj.setParentID(parentObjectId);
-                            newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+                            movedDObj.setParentID(parentObjectId);
+                            movedDObj.setParentURI(addPrefixSlashToPath(parentPath));
 
-                            newDObj.setObjectType("application/cdmi-object");
-                            newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-                            newDObj.setMetadata("cdmi_acount", "0");
-                            newDObj.setMetadata("cdmi_mcount", "0");
-                            if (oacl != null && !oacl.isEmpty()) {
+                            movedDObj.setCapabilitiesURI("/cdmi_capabilities/container/default");
+                            movedDObj.setMetadata("cdmi_ctime", sdf.format(now));
+                            movedDObj.setMetadata("cdmi_atime", sdf.format(now));
+                            movedDObj.setMetadata("cdmi_mtime", sdf.format(now));
+
+                            if (cacl != null && !cacl.isEmpty()) {
                                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                                for (ACE ace : oacl.getList()) {
+                                for (ACE ace : cacl.getList()) {
                                     AceConverter ac = new AceConverter();
                                     HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
                                     subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
@@ -527,7 +863,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
                                     subMetadata_ACL.add(subMetadataEntry_ACL);
                                 }
-                                newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                movedDObj.setSubMetadata_ACL(subMetadata_ACL);
                             } else {
                                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                                 HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
@@ -536,7 +872,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                 subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
                                 subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
                                 subMetadata_ACL.add(subMetadataEntry_ACL);
-                                newDObj.setSubMetadata_ACL(subMetadata_ACL);
+                                movedDObj.setSubMetadata_ACL(subMetadata_ACL);
                             }
 
                             String mimeType = newDObj.getMimetype();
@@ -554,359 +890,37 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             }
                             newDObj.setMetadata("fileName", fileName);
 
-                            newDObj.setCompletionStatus("Complete");
+                            // update meta information
+                            try {
+                                FileAttributes attr = new FileAttributes();
+                                Date ctime = sdf.parse(movedDObj.getMetadata().get("cdmi_ctime"));
+                                Date atime = sdf.parse(movedDObj.getMetadata().get("cdmi_atime"));
+                                Date mtime = sdf.parse(movedDObj.getMetadata().get("cdmi_mtime"));
+                                long ctimeAsLong = ctime.getTime();
+                                long atimeAsLong = atime.getTime();
+                                long mtimeAsLong = mtime.getTime();
+                                attr.setCreationTime(ctimeAsLong);
+                                attr.setAccessTime(atimeAsLong);
+                                attr.setModificationTime(mtimeAsLong);
+                                PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+                                pnfs.setFileAttributes(pnfsId, attr);
+                            } catch (CacheException | ParseException ex) {
+                                _log.error("DcacheContainerDao<Move>, Cannot update meta information for object with objectID {}", movedDObj.getObjectID());
+                            }
+                            movedDObj.setCompletionStatus("Complete");
                             return newDObj;
                         } else {
-                            throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
+                            throw new BadRequestException("Error while moving container '" + path + "', no PnfsId set.");
                         }
                     } else {
-                        throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
-                    }
-
-                } else {  //Update
-                    _log.trace("<DataObject Update>");
-                    System.out.println("<DataObject Update>");
-
-                    // check for container
-                    if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
-                        throw new ConflictException("Container <"
-                                                    + containerDirectory.getAbsolutePath()
-                                                    + "> doesn't exist");
-                    }
-                    if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
-                        throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
-                    }
-
-                    try {
-                        DcacheDataObject currentDObj = new DcacheDataObject();
-                        FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
-
-                        PnfsId pnfsId = null;
-                        String objectId = "";
-                        ACL oacl = null;
-                        if (attributes != null) {
-                            pnfsId = attributes.getPnfsId();
-                            if (pnfsId != null) {
-                                // Read object from file
-                                if (attributes.getFileType() != DIR) {
-                                    pnfsId = attributes.getPnfsId();
-                                    byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
-                                    if (inBytes != null) {
-                                        currentDObj.setValue(new String(inBytes));
-                                    }
-                                }
-                                currentDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                                currentDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
-                                currentDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
-                                currentDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                                currentDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
-                                oacl = attributes.getAcl();
-                                objectId = new IdConverter().toObjectID(pnfsId.toIdString());
-                                currentDObj.setObjectID(objectId);
-                                _log.trace("DCacheDataObjectDao<Update>, setObjectID={}", objectId);
-
-                                currentDObj.setObjectType("application/cdmi-object");
-                                currentDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-                                currentDObj.setMetadata("cdmi_acount", "0");
-                                currentDObj.setMetadata("cdmi_mcount", "0");
-                                if (oacl != null && !oacl.isEmpty()) {
-                                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                                    for (ACE ace : oacl.getList()) {
-                                        AceConverter ac = new AceConverter();
-                                        HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                        subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
-                                        subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
-                                        subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
-                                        subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
-                                        subMetadata_ACL.add(subMetadataEntry_ACL);
-                                    }
-                                    currentDObj.setSubMetadata_ACL(subMetadata_ACL);
-                                } else {
-                                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                    subMetadataEntry_ACL.put("acetype", "ALLOW");
-                                    subMetadataEntry_ACL.put("identifier", "OWNER@");
-                                    subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                                    subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                                    subMetadata_ACL.add(subMetadataEntry_ACL);
-                                    currentDObj.setSubMetadata_ACL(subMetadata_ACL);
-                                }
-
-                                if (!currentDObj.getValue().equals(newDObj.getValue())) {
-                                    deleteFile(subject, pnfsId, objFile.getAbsolutePath());
-                                    try {
-                                        FsPath fsPath = new FsPath(objFile.getAbsolutePath());
-                                        byte[] bytData = newDObj.getValue().getBytes(StandardCharsets.UTF_8);
-                                        InputStream isData = new ByteArrayInputStream(bytData);
-                                        if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
-                                            _log.error("Exception while writing dataobject.");
-                                            throw new ServerErrorException("Cannot write Object file @" + path);
-                                        }
-                                    } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
-                                        _log.error("Exception while writing dataobject, {}", ex);
-                                        throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
-                                    }
-                                }
-
-                                //forth-and-back update
-                                for (String key : newDObj.getMetadata().keySet()) {
-                                    currentDObj.setMetadata(key, newDObj.getMetadata().get(key));
-                                }
-                                for (String key : currentDObj.getMetadata().keySet()) {
-                                    newDObj.setMetadata(key, currentDObj.getMetadata().get(key));
-                                }
-
-                                attributes = getAttributes(subject, objFile.getAbsolutePath());
-
-                                pnfsId = null;
-                                String objectID = "";
-                                oacl = null;
-                                if (attributes != null) {
-                                    pnfsId = attributes.getPnfsId();
-                                    if (pnfsId != null) {
-                                        newDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                                        newDObj.setMetadata("cdmi_atime", sdf.format(attributes.getCreationTime()));
-                                        newDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
-                                        newDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                                        newDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
-                                        oacl = attributes.getAcl();
-                                        objectID = new IdConverter().toObjectID(pnfsId.toIdString());
-                                        newDObj.setObjectID(objectID);
-                                        _log.trace("DCacheDataObjectDao<Create>, setObjectID={}", objectID);
-
-                                        String parentPath = "";
-                                        String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
-                                        PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
-                                        String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                                        if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                                            parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                                        } else {
-                                            parentPath = parent;
-                                        }
-                                        newDObj.setParentID(parentObjectId);
-                                        newDObj.setParentURI(addPrefixSlashToPath(parentPath));
-
-                                        newDObj.setObjectType("application/cdmi-object");
-                                        newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-                                        newDObj.setMetadata("cdmi_acount", "0");
-                                        newDObj.setMetadata("cdmi_mcount", "0");
-                                        if (oacl != null && !oacl.isEmpty()) {
-                                            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                                            for (ACE ace : oacl.getList()) {
-                                                AceConverter ac = new AceConverter();
-                                                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
-                                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
-                                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
-                                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
-                                                subMetadata_ACL.add(subMetadataEntry_ACL);
-                                            }
-                                            newDObj.setSubMetadata_ACL(subMetadata_ACL);
-                                        } else {
-                                            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                                            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                            subMetadataEntry_ACL.put("acetype", "ALLOW");
-                                            subMetadataEntry_ACL.put("identifier", "OWNER@");
-                                            subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                                            subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                                            subMetadata_ACL.add(subMetadataEntry_ACL);
-                                            newDObj.setSubMetadata_ACL(subMetadata_ACL);
-                                        }
-
-                                        String mimeType = newDObj.getMimetype();
-                                        if (mimeType == null) {
-                                            mimeType = "text/plain";
-                                        }
-                                        newDObj.setMimetype(mimeType);
-                                        newDObj.setMetadata("mimetype", mimeType);
-                                        String fileName = "";
-                                        String filePath = objFile.getAbsolutePath();
-                                        if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                                            fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                                        } else {
-                                            fileName = filePath;
-                                        }
-                                        newDObj.setMetadata("fileName", fileName);
-
-                                        // update meta information
-                                        try {
-                                            FileAttributes attr = new FileAttributes();
-                                            Date atime = sdf.parse(newDObj.getMetadata().get("cdmi_atime"));
-                                            Date mtime = sdf.parse(newDObj.getMetadata().get("cdmi_mtime"));
-                                            long atimeAsLong = atime.getTime();
-                                            long mtimeAsLong = mtime.getTime();
-                                            attr.setAccessTime(atimeAsLong);
-                                            attr.setModificationTime(mtimeAsLong);
-                                            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-                                            pnfs.setFileAttributes(pnfsId, attr);
-                                        } catch (CacheException | ParseException ex) {
-                                            ex.printStackTrace();
-                                            _log.error("DcacheDataObjectDao<Update>, Cannot update meta information for object with objectID {}", newDObj.getObjectID());
-                                        }
-                                        newDObj.setCompletionStatus("Complete");
-                                        return newDObj;
-                                    } else {
-                                        throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
-                                    }
-                                } else {
-                                    throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
-                                }
-                            } else {
-                                throw new BadRequestException("Error while creating dataobject '" + path + "', no PnfsId set.");
-                            }
-                        } else {
-                            throw new BadRequestException("Error while creating dataobject '" + path + "', no attributes available.");
-                        }
-                    } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
-                        _log.error("Exception while reading, {}", ex);
-                        throw new ServerErrorException("Cannot read Object @" + path + " error: " + ex);
-                    } catch (UnauthorizedException ex) {
-                        _log.error("Exception while reading, {}", ex);
-                        throw new ForbiddenException("Permission denied");
+                        throw new BadRequestException("Error while moving container '" + path + "', no attributes available.");
                     }
                 }
-            } else { // Moving/Renaming a DataObject
-                _log.trace("<DataObject Move>");
-                System.out.println("<DataObject Move>");
-                if (objectIdPath) {
-                    throw new MethodNotAllowedException("This method is not supported yet.");
-                }
-
-                File sourceFile = absoluteFile(dObj.getMove());
-
-                if (!isUserAllowed(subject, sourceFile.getAbsolutePath())) {
-                    throw new ForbiddenException("Permission denied");
-                }
-
-                // check for container
-                if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
-                    throw new ConflictException("Container <"
-                                                + containerDirectory.getAbsolutePath()
-                                                + "> doesn't exist");
-                }
-                if (!checkIfDirectoryFileExists(subject, sourceFile.getAbsolutePath())) {
-                    throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
-                }
-
-                String base =  removeSlashesFromPath(baseDirectoryName);
-                String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
-
-                if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
-                    if (!base.equals(parent)) {
-                        if (!isUserAllowed(subject, parent)) {
-                            throw new ForbiddenException("Permission denied");
-                        }
-                    }
-                } else {
-                    throw new ConflictException("Cannot move dataobject '" + dObj.getMove()
-                                                   + "' to '" + path + "'; Destination already exists");
-                }
-
-                DcacheDataObject movedDObj = new DcacheDataObject();
-                FileAttributes attributes = renameFile(subject, sourceFile.getAbsolutePath(), objFile.getAbsolutePath());
-
-                PnfsId pnfsId = null;
-                String objectId = "";
-                ACL cacl = null;
-                if (attributes != null) {
-                    pnfsId = attributes.getPnfsId();
-                    if (pnfsId != null) {
-                        for (String key : dObj.getMetadata().keySet()) {
-                            movedDObj.setMetadata(key, dObj.getMetadata().get(key));
-                        }
-                        movedDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
-                        movedDObj.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
-                        movedDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
-                        movedDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
-                        movedDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
-                        cacl = attributes.getAcl();
-                        objectId = new IdConverter().toObjectID(pnfsId.toIdString());
-                        movedDObj.setObjectID(objectId);
-                        _log.trace("DcacheContainerDao<Move>, setObjectID={}", objectId);
-
-                        String parentPath = "";
-                        String parent2 = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
-                        PnfsId parentPnfsId = getPnfsIDByPath(subject, parent2);
-                        String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                        if (parent2.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                            parentPath = parent2.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                        } else {
-                            parentPath = parent2;
-                        }
-                        movedDObj.setParentID(parentObjectId);
-                        movedDObj.setParentURI(addPrefixSlashToPath(parentPath));
-
-                        movedDObj.setCapabilitiesURI("/cdmi_capabilities/container/default");
-                        movedDObj.setMetadata("cdmi_ctime", sdf.format(now));
-                        movedDObj.setMetadata("cdmi_atime", sdf.format(now));
-                        movedDObj.setMetadata("cdmi_mtime", sdf.format(now));
-
-                        if (cacl != null && !cacl.isEmpty()) {
-                            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                            for (ACE ace : cacl.getList()) {
-                                AceConverter ac = new AceConverter();
-                                HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                                subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
-                                subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
-                                subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
-                                subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
-                                subMetadata_ACL.add(subMetadataEntry_ACL);
-                            }
-                            movedDObj.setSubMetadata_ACL(subMetadata_ACL);
-                        } else {
-                            ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                            subMetadataEntry_ACL.put("acetype", "ALLOW");
-                            subMetadataEntry_ACL.put("identifier", "OWNER@");
-                            subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                            subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                            subMetadata_ACL.add(subMetadataEntry_ACL);
-                            movedDObj.setSubMetadata_ACL(subMetadata_ACL);
-                        }
-
-                        String mimeType = newDObj.getMimetype();
-                        if (mimeType == null) {
-                            mimeType = "text/plain";
-                        }
-                        newDObj.setMimetype(mimeType);
-                        newDObj.setMetadata("mimetype", mimeType);
-                        String fileName = "";
-                        String filePath = objFile.getAbsolutePath();
-                        if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                            fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                        } else {
-                            fileName = filePath;
-                        }
-                        newDObj.setMetadata("fileName", fileName);
-
-                        // update meta information
-                        try {
-                            FileAttributes attr = new FileAttributes();
-                            Date ctime = sdf.parse(movedDObj.getMetadata().get("cdmi_ctime"));
-                            Date atime = sdf.parse(movedDObj.getMetadata().get("cdmi_atime"));
-                            Date mtime = sdf.parse(movedDObj.getMetadata().get("cdmi_mtime"));
-                            long ctimeAsLong = ctime.getTime();
-                            long atimeAsLong = atime.getTime();
-                            long mtimeAsLong = mtime.getTime();
-                            attr.setCreationTime(ctimeAsLong);
-                            attr.setAccessTime(atimeAsLong);
-                            attr.setModificationTime(mtimeAsLong);
-                            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-                            pnfs.setFileAttributes(pnfsId, attr);
-                        } catch (CacheException | ParseException ex) {
-                            _log.error("DcacheContainerDao<Move>, Cannot update meta information for object with objectID {}", movedDObj.getObjectID());
-                        }
-                        movedDObj.setCompletionStatus("Complete");
-                        return newDObj;
-                    } else {
-                        throw new BadRequestException("Error while moving container '" + path + "', no PnfsId set.");
-                    }
-                } else {
-                    throw new BadRequestException("Error while moving container '" + path + "', no attributes available.");
-                }
+            } else {
+                throw new BadRequestException("No path given");
             }
         } else {
-            throw new BadRequestException("No path given.");
+            throw new BadRequestException("No path given");
         }
     }
 
@@ -986,113 +1000,126 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
                 _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
 
-                if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
-                    return null;
-                } else {
-                    if (!isUserAllowed(subject, objFile.getAbsolutePath())) {
-                        throw new UnauthorizedException("Access denied", realm);
-                    }
-                }
+                if (checkPath != null) {
 
-                PnfsId pnfsId = null;
-                FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
-                String objectID = "";
-                int oowner = 0;
-                ACL oacl = null;
-                if (attributes != null) {
-                    // Read object from file
-                    if (attributes.getFileType() != DIR) {
-                        pnfsId = attributes.getPnfsId();
-                        byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
-                        if (inBytes != null) {
-                            dObj.setValue(new String(inBytes));
+                    FsPath fsPath = new FsPath();
+                    fsPath.add(objFile.getAbsolutePath());
+                    if (!isAllowedPath(fsPath)) {
+                        throw new ForbiddenException("Permission denied");
+                    }
+
+                    if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
+                        return null;
+                    } else {
+                        if (!isUserAllowed(subject, objFile.getAbsolutePath())) {
+                            throw new UnauthorizedException("Access denied", realm);
                         }
                     }
-                    pnfsId = attributes.getPnfsId();
-                    if (pnfsId != null) {
-                        long ctime = attributes.getCreationTime();
-                        long atime = attributes.getAccessTime();
-                        long mtime = attributes.getModificationTime();
-                        long osize = attributes.getSize();
-                        dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
-                        dObj.setMetadata("cdmi_atime", sdf.format(atime));
-                        dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
-                        dObj.setMetadata("cdmi_size", String.valueOf(osize));
-                        oowner = attributes.getOwner();
-                        oacl = attributes.getAcl();
-                        objectID = new IdConverter().toObjectID(pnfsId.toIdString());
-                        dObj.setObjectID(objectID);
-                        _log.trace("DCacheDataObjectDao<Read>, setObjectID={}", objectID);
+
+                    PnfsId pnfsId = null;
+                    FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
+                    String objectID = "";
+                    int oowner = 0;
+                    ACL oacl = null;
+                    if (attributes != null) {
+                        // Read object from file
+                        if (attributes.getFileType() != DIR) {
+                            pnfsId = attributes.getPnfsId();
+                            byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
+                            if (inBytes != null) {
+                                dObj.setValue(new String(inBytes));
+                            }
+                        }
+                        pnfsId = attributes.getPnfsId();
+                        if (pnfsId != null) {
+                            long ctime = attributes.getCreationTime();
+                            long atime = attributes.getAccessTime();
+                            long mtime = attributes.getModificationTime();
+                            long osize = attributes.getSize();
+                            dObj.setMetadata("cdmi_ctime", sdf.format(ctime));
+                            dObj.setMetadata("cdmi_atime", sdf.format(atime));
+                            dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
+                            dObj.setMetadata("cdmi_size", String.valueOf(osize));
+                            dObj.setValueRange("0-" + String.valueOf(osize - 1));
+                            dObj.setValueTransferEncoding("utf-8");
+                            oowner = attributes.getOwner();
+                            oacl = attributes.getAcl();
+                            objectID = new IdConverter().toObjectID(pnfsId.toIdString());
+                            dObj.setObjectID(objectID);
+                            _log.trace("DCacheDataObjectDao<Read>, setObjectID={}", objectID);
+                        } else {
+                            _log.error("DCacheDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        }
                     } else {
-                        _log.error("DCacheDataObjectDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object {}", objFile.getAbsolutePath());
                     }
-                } else {
-                    _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object {}", objFile.getAbsolutePath());
-                }
 
-                dObj.setObjectType("application/cdmi-object");
-                dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
-                dObj.setMetadata("cdmi_acount", "0");
-                dObj.setMetadata("cdmi_mcount", "0");
-                dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentication and autorization first
-                if (oacl != null && !oacl.isEmpty()) {
-                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                    for (ACE ace : oacl.getList()) {
-                        AceConverter ac = new AceConverter();
+                    dObj.setObjectName(getItem(objFile.getAbsolutePath()));
+                    dObj.setObjectType("application/cdmi-object");
+                    dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
+                    dObj.setMetadata("cdmi_acount", "0");
+                    dObj.setMetadata("cdmi_mcount", "0");
+                    dObj.setMetadata("cdmi_owner", String.valueOf(oowner));  //TODO: need to implement authentication and autorization first
+                    if (oacl != null && !oacl.isEmpty()) {
+                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
+                        for (ACE ace : oacl.getList()) {
+                            AceConverter ac = new AceConverter();
+                            HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
+                            subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
+                            subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
+                            subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
+                            subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
+                            subMetadata_ACL.add(subMetadataEntry_ACL);
+                        }
+                        dObj.setSubMetadata_ACL(subMetadata_ACL);
+                    } else {
+                        ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                         HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                        subMetadataEntry_ACL.put("acetype", ac.convertToCdmiAceType(ace.getType().name()));
-                        subMetadataEntry_ACL.put("identifier", ac.convertToCdmiAceWho(ace.getWho().name()));
-                        subMetadataEntry_ACL.put("aceflags", ac.convertToCdmiAceFlags(AceFlags.asString(ace.getFlags())));
-                        subMetadataEntry_ACL.put("acemask", ac.convertToCdmiAceMask(AccessMask.asString(ace.getAccessMsk())));
+                        subMetadataEntry_ACL.put("acetype", "ALLOW");
+                        subMetadataEntry_ACL.put("identifier", "OWNER@");
+                        subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
+                        subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
                         subMetadata_ACL.add(subMetadataEntry_ACL);
+                        dObj.setSubMetadata_ACL(subMetadata_ACL);
                     }
-                    dObj.setSubMetadata_ACL(subMetadata_ACL);
+
+                    String parentPath = "";
+                    String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
+                    PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
+                    String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
+                    if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                    } else {
+                        parentPath = parent;
+                    }
+                    dObj.setParentID(parentObjectId);
+                    dObj.setParentURI(addPrefixSlashToPath(parentPath));
+
+                    String mimeType = dObj.getMimetype();
+                    if (mimeType == null) {
+                        mimeType = "text/plain";
+                    }
+                    dObj.setMimetype(mimeType);
+                    dObj.setMetadata("mimetype", mimeType);
+                    String fileName = "";
+                    String filePath = objFile.getAbsolutePath();
+                    if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                        fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                    } else {
+                        fileName = filePath;
+                    }
+                    dObj.setMetadata("fileName", fileName);
+
+                    FileAttributes attr = new FileAttributes();
+                    attr.setAccessTime(nowAsLong);
+                    PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+                    pnfs.setFileAttributes(pnfsId, attr);
+                    dObj.setMetadata("cdmi_atime", sdf.format(now));
+                    dObj.setCompletionStatus("Complete");
+                    return dObj;
                 } else {
-                    ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-                    HashMap<String, String> subMetadataEntry_ACL = new HashMap<String, String>();
-                    subMetadataEntry_ACL.put("acetype", "ALLOW");
-                    subMetadataEntry_ACL.put("identifier", "OWNER@");
-                    subMetadataEntry_ACL.put("aceflags", "OBJECT_INHERIT, CONTAINER_INHERIT");
-                    subMetadataEntry_ACL.put("acemask", "ALL_PERMS");
-                    subMetadata_ACL.add(subMetadataEntry_ACL);
-                    dObj.setSubMetadata_ACL(subMetadata_ACL);
+                    throw new BadRequestException("No path given.");
                 }
-
-                String parentPath = "";
-                String parent = removeSlashesFromPath(getParentDirectory(objFile.getAbsolutePath()));
-                PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
-                String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
-                if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                    parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                } else {
-                    parentPath = parent;
-                }
-                dObj.setParentID(parentObjectId);
-                dObj.setParentURI(addPrefixSlashToPath(parentPath));
-
-                String mimeType = dObj.getMimetype();
-                if (mimeType == null) {
-                    mimeType = "text/plain";
-                }
-                dObj.setMimetype(mimeType);
-                dObj.setMetadata("mimetype", mimeType);
-                String fileName = "";
-                String filePath = objFile.getAbsolutePath();
-                if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
-                    fileName = filePath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
-                } else {
-                    fileName = filePath;
-                }
-                dObj.setMetadata("fileName", fileName);
-
-                FileAttributes attr = new FileAttributes();
-                attr.setAccessTime(nowAsLong);
-                PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-                pnfs.setFileAttributes(pnfsId, attr);
-                dObj.setMetadata("cdmi_atime", sdf.format(now));
-
-                dObj.setCompletionStatus("Complete");
-                return dObj;
             } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
                 _log.error("Exception while reading, {}", ex);
                 throw new ServerErrorException("Cannot read Object @" + path + " error: " + ex);
@@ -1164,11 +1191,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             objectID = new IdConverter().toObjectID(pnfsId.toIdString());
                             dObj.setObjectID(objectID);
 
+                            dObj.setObjectName(getItem(path));
                             dObj.setObjectType("application/cdmi-object");
                             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                             dObj.setMetadata("cdmi_acount", "0");
                             dObj.setMetadata("cdmi_mcount", "0");
                             dObj.setMetadata("cdmi_owner", String.valueOf(oowner));
+                            dObj.setValueRange("0-" + String.valueOf(osize - 1));
+                            dObj.setValueTransferEncoding("ascii");
                             if (oacl != null && !oacl.isEmpty()) {
                                 ArrayList<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
                                 for (ACE ace : oacl.getList()) {
@@ -1226,6 +1256,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
                             pnfs.setFileAttributes(pnfsId, attr);
                             dObj.setMetadata("cdmi_atime", sdf.format(now));
+                            dObj.setCompletionStatus("Complete");
                             return dObj;
                         } else {
                             throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
@@ -1392,6 +1423,34 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 }
             }
         }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Gets the item of a file path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private String getItem(String path)
+    {
+        String result = "";
+        String tempPath = path;
+        if (path != null) {
+            if (path.endsWith("/")) {
+                tempPath = path.substring(0, path.length() - 1);
+            }
+            String item = tempPath;
+            if (tempPath.contains("/")) {
+                item = tempPath.substring(tempPath.lastIndexOf("/") + 1, tempPath.length());
+            }
+            if (item != null) {
+                result = item;
+            }
+        }
+        System.out.println("TEST006: " + result);
         return result;
     }
 

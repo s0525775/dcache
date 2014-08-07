@@ -42,21 +42,20 @@ public class DcacheDataObject extends DataObject
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheDataObject.class);
 
     private String valueTransferEncoding;
+    private String valuerange;
     private String domainURI;
     private String parentID;
+    private String objectName;
     private List<HashMap<String, String>> subMetadata_ACL = new ArrayList<HashMap<String, String>>();
-
-    private final static List<String> IGNORE_LIST = new ArrayList() {{
-        add("cdmi_ctime");
-        add("cdmi_atime");
-        add("cdmi_mtime");
-        add("cdmi_size");
-        add("cdmi_owner");
-    }};
 
     public String getValueTransferEncoding()
     {
         return valueTransferEncoding;
+    }
+
+    public String getValueRange()
+    {
+        return valuerange;
     }
 
     public String getDomainURI()
@@ -69,6 +68,11 @@ public class DcacheDataObject extends DataObject
         return parentID;
     }
 
+    public String getObjectName()
+    {
+        return objectName;
+    }
+
     public List<HashMap<String, String>> getSubMetadata_ACL()
     {
         return subMetadata_ACL;
@@ -77,6 +81,11 @@ public class DcacheDataObject extends DataObject
     public void setValueTransferEncoding(String valueTransferEncoding)
     {
         this.valueTransferEncoding = valueTransferEncoding;
+    }
+
+    public void setValueRange(String valuerange)
+    {
+        this.valuerange = valuerange;
     }
 
     public void setDomainURI(String domainURI)
@@ -112,6 +121,11 @@ public class DcacheDataObject extends DataObject
         parentID = id;
     }
 
+    public void setObjectName(String name)
+    {
+        objectName = name;
+    }
+
     private boolean isValidSubMetadata_ACL()
     {
         boolean result = true;
@@ -139,20 +153,26 @@ public class DcacheDataObject extends DataObject
 
             g.writeStartObject();
             // get top level metadata
-            if (getObjectType() != null)
-                g.writeStringField("objectType", getObjectType());
-            if (getCapabilitiesURI() != null)
-                g.writeStringField("capabilitiesURI", getCapabilitiesURI());
+            g.writeStringField("objectType", getObjectType());
+            g.writeStringField("capabilitiesURI", getCapabilitiesURI());
             if (getObjectID() != null)
                 g.writeStringField("objectID", getObjectID());
-            if (getObjectID() != null)
+            if (getObjectName() != null)
+                g.writeStringField("objectName", getObjectName());
+            if (getParentID() != null)
                 g.writeStringField("parentID", getParentID());
-            if (getObjectID() != null)
+            if (getParentURI() != null)
                 g.writeStringField("parentURI", getParentURI());
             if (getMimetype() != null)
                 g.writeStringField("mimetype", getMimetype());
             if (getCompletionStatus() != null)
                 g.writeStringField("completionStatus", getCompletionStatus());
+            if (getValueTransferEncoding() != null)
+                g.writeStringField("valueTransferEncoding", getValueTransferEncoding());
+            if (getValueRange() != null)
+                g.writeStringField("valuerange", getValueRange());
+            if (getValue() != null)
+                g.writeStringField("value", getValue());
             //
             g.writeObjectFieldStart("metadata");
             for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
@@ -167,38 +187,6 @@ public class DcacheDataObject extends DataObject
                     g.writeStringField("acemask", entry.get("acemask"));
                 }
                 g.writeEndObject();
-            }
-            g.writeEndObject();
-            //
-            g.writeEndObject();
-
-            g.flush();
-        } catch (IOException ex) {
-            throw ex;
-        }
-
-        return outBuffer.toString();
-    }
-
-    @Override
-    public String metadataToJson() throws Exception
-    {
-        StringWriter outBuffer = new StringWriter();
-        try {
-            JsonFactory f = new JsonFactory();
-            JsonGenerator g = f.createJsonGenerator(outBuffer);
-            g.useDefaultPrettyPrinter();
-
-            g.writeStartObject();
-            // get top level metadata
-            if (getObjectID() != null)
-                g.writeStringField("objectID", getObjectID());
-            //
-            g.writeObjectFieldStart("metadata");
-            for (Map.Entry<String, String> entry : getMetadata().entrySet()) {
-                if (!IGNORE_LIST.contains(entry.getKey())) {
-                    g.writeStringField(entry.getKey(), entry.getValue());
-                }
             }
             g.writeEndObject();
             //
@@ -235,6 +223,8 @@ public class DcacheDataObject extends DataObject
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
             String key = jp.getCurrentName();
+            jp.configure(JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);
+            jp.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
             switch (key) {
                 case "metadata":
                     {
