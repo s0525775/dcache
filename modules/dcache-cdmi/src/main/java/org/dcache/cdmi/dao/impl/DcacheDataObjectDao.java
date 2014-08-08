@@ -22,6 +22,7 @@ import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
+import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.util.TimeoutCacheException;
@@ -63,15 +64,12 @@ import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
 import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AceFlags;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.exception.MethodNotAllowedException;
-import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheDataObject;
 import org.dcache.cdmi.util.AceConverter;
@@ -386,10 +384,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             baseDir = new File(baseDirectoryName + "/");
             _log.trace("Base Directory AbsolutePath={}", baseDir.getAbsolutePath());
             containerDirectory = absoluteFile(containerName);
-            System.out.println("Container AbsolutePath=" + containerDirectory.getAbsolutePath());
             _log.trace("Container AbsolutePath={}", containerDirectory.getAbsolutePath());
             objFile = absoluteFile(path);
-            System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
             _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
 
             Subject subject = getSubject();
@@ -440,13 +436,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     }
                 }
             }
-            containerName = getcontainerName(checkPath);
-            objFile = absoluteFile(checkPath);
-            containerDirectory = absoluteFile(containerName);
-            System.out.println("Container AbsolutePath=" + containerDirectory.getAbsolutePath());
-            System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
+            _log.trace("CheckPath={}", String.valueOf(checkPath));
 
             if (checkPath != null) {
+                containerName = getcontainerName(checkPath);
+                objFile = absoluteFile(checkPath);
+                containerDirectory = absoluteFile(containerName);
 
                 FsPath tmpFsPath = new FsPath();
                 tmpFsPath.add(objFile.getAbsolutePath());
@@ -458,7 +453,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                     if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {  //Create
                         _log.trace("<DataObject Create>");
-                        System.out.println("<DataObject Create>");
 
                         if (objectIdPath) {
                             throw new MethodNotAllowedException("This method is not supported yet.");
@@ -487,11 +481,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             InputStream isData = new ByteArrayInputStream(bytData);
                             if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
                                 _log.error("Exception while writing dataobject.");
-                                throw new ServerErrorException("Cannot write Object file @" + path);
+                                throw new BadRequestException("Cannot write Object file @" + path);
                             }
                         } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
                             _log.error("Exception while writing dataobject, {}", ex);
-                            throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
+                            throw new BadRequestException("Cannot write Object @" + path + ", error: " + ex);
                         }
 
                         FileAttributes attributes = getAttributes(subject, objFile.getAbsolutePath());
@@ -521,8 +515,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     parentPath = parent;
                                 }
                                 newDObj.setParentID(parentObjectId);
-                                newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+                                newDObj.setParentURI(addSuffixSlashToPath(removeSlashesFromPath(parentPath)));
 
+                                if (newDObj.getDomainURI() == null) {
+                                    newDObj.setDomainURI("/cdmi_domains/default_domain");
+                                }
+                                newDObj.setObjectName(getItem(objFile.getAbsolutePath()));
                                 newDObj.setObjectType("application/cdmi-object");
                                 newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                                 newDObj.setMetadata("cdmi_acount", "0");
@@ -576,7 +574,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                     } else {  //Update
                         _log.trace("<DataObject Update>");
-                        System.out.println("<DataObject Update>");
 
                         // check for container
                         if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
@@ -603,7 +600,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                         pnfsId = attributes.getPnfsId();
                                         byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
                                         if (inBytes != null) {
-                                            currentDObj.setValue(new String(inBytes));
+                                            currentDObj.setValue(new String(inBytes, "UTF-8"));
                                         }
                                     }
                                     currentDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
@@ -611,11 +608,19 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                     currentDObj.setMetadata("cdmi_mtime", sdf.format(attributes.getCreationTime()));
                                     currentDObj.setMetadata("cdmi_size", String.valueOf(attributes.getSize()));
                                     currentDObj.setMetadata("cdmi_owner", String.valueOf(attributes.getOwner()));
+                                    currentDObj.setValueRange("0-" + String.valueOf(attributes.getSize() - 1));
+                                    currentDObj.setValueTransferEncoding("utf-8");
                                     oacl = attributes.getAcl();
                                     objectId = new IdConverter().toObjectID(pnfsId.toIdString());
                                     currentDObj.setObjectID(objectId);
                                     _log.trace("DCacheDataObjectDao<Update>, setObjectID={}", objectId);
 
+                                    if (newDObj.getDomainURI() == null) {
+                                        currentDObj.setDomainURI("/cdmi_domains/default_domain");
+                                    } else {
+                                        currentDObj.setDomainURI(newDObj.getDomainURI());
+                                    }
+                                    currentDObj.setObjectName(getItem(objFile.getAbsolutePath()));
                                     currentDObj.setObjectType("application/cdmi-object");
                                     currentDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                                     currentDObj.setMetadata("cdmi_acount", "0");
@@ -651,11 +656,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                             InputStream isData = new ByteArrayInputStream(bytData);
                                             if (!writeFile(subject, fsPath, isData, (long) bytData.length)) {
                                                 _log.error("Exception while writing dataobject.");
-                                                throw new ServerErrorException("Cannot write Object file @" + path);
+                                                throw new BadRequestException("Cannot write Object file @" + path);
                                             }
                                         } catch (IllegalArgumentException | InterruptedException | IOException | URISyntaxException | CacheException ex) {
                                             _log.error("Exception while writing dataobject, {}", ex);
-                                            throw new ServerErrorException("Cannot write Object @" + path + ", error: " + ex);
+                                            throw new BadRequestException("Cannot write Object @" + path + ", error: " + ex);
                                         }
                                     }
 
@@ -695,8 +700,10 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                                 parentPath = parent;
                                             }
                                             newDObj.setParentID(parentObjectId);
-                                            newDObj.setParentURI(addPrefixSlashToPath(parentPath));
+                                            newDObj.setParentURI(addSuffixSlashToPath(removeSlashesFromPath(parentPath)));
 
+                                            newDObj.setObjectName(getItem(objFile.getAbsolutePath()));
+                                            newDObj.setDomainURI(currentDObj.getDomainURI());
                                             newDObj.setObjectType("application/cdmi-object");
                                             newDObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
                                             newDObj.setMetadata("cdmi_acount", "0");
@@ -770,7 +777,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             }
                         } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
                             _log.error("Exception while reading, {}", ex);
-                            throw new ServerErrorException("Cannot read Object @" + path + " error: " + ex);
+                            throw new BadRequestException("Cannot read Object @" + path + " error: " + ex);
                         } catch (UnauthorizedException ex) {
                             _log.error("Exception while reading, {}", ex);
                             throw new ForbiddenException("Permission denied");
@@ -778,7 +785,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     }
                 } else { // Moving/Renaming a DataObject
                     _log.trace("<DataObject Move>");
-                    System.out.println("<DataObject Move>");
                     if (objectIdPath) {
                         throw new MethodNotAllowedException("This method is not supported yet.");
                     }
@@ -822,8 +828,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     if (attributes != null) {
                         pnfsId = attributes.getPnfsId();
                         if (pnfsId != null) {
-                            for (String key : dObj.getMetadata().keySet()) {
-                                movedDObj.setMetadata(key, dObj.getMetadata().get(key));
+                            for (String key : newDObj.getMetadata().keySet()) {
+                                movedDObj.setMetadata(key, newDObj.getMetadata().get(key));
                             }
                             movedDObj.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                             movedDObj.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
@@ -845,8 +851,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                 parentPath = parent2;
                             }
                             movedDObj.setParentID(parentObjectId);
-                            movedDObj.setParentURI(addPrefixSlashToPath(parentPath));
+                            movedDObj.setParentURI(addSuffixSlashToPath(removeSlashesFromPath(parentPath)));
 
+                            if (newDObj.getDomainURI() == null) {
+                                movedDObj.setDomainURI("/cdmi_domains/default_domain");
+                            } else {
+                                movedDObj.setDomainURI(newDObj.getDomainURI());
+                            }
+                            movedDObj.setObjectName(getItem(objFile.getAbsolutePath()));
                             movedDObj.setCapabilitiesURI("/cdmi_capabilities/container/default");
                             movedDObj.setMetadata("cdmi_ctime", sdf.format(now));
                             movedDObj.setMetadata("cdmi_atime", sdf.format(now));
@@ -875,12 +887,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                 movedDObj.setSubMetadata_ACL(subMetadata_ACL);
                             }
 
-                            String mimeType = newDObj.getMimetype();
+                            String mimeType = movedDObj.getMimetype();
                             if (mimeType == null) {
                                 mimeType = "text/plain";
                             }
-                            newDObj.setMimetype(mimeType);
-                            newDObj.setMetadata("mimetype", mimeType);
+                            movedDObj.setMimetype(mimeType);
+                            movedDObj.setMetadata("mimetype", mimeType);
                             String fileName = "";
                             String filePath = objFile.getAbsolutePath();
                             if (filePath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
@@ -888,7 +900,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             } else {
                                 fileName = filePath;
                             }
-                            newDObj.setMetadata("fileName", fileName);
+                            movedDObj.setMetadata("fileName", fileName);
 
                             // update meta information
                             try {
@@ -948,7 +960,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     throw new UnauthorizedException("Access denied", realm);
                 }
 
-                System.out.println("Object AbsolutePath=" + path);
                 // Check for object file
                 File objFile, baseDirectory;
                 _log.trace("baseDirectory={}", baseDirectoryName);
@@ -964,7 +975,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                     } else {
                         tempPath = path.replace("/cdmi_objectid/", "");
                     }
-                    System.out.println("Object AbsolutePath=" + tempPath);
                     int slashIndex = tempPath.indexOf("/");
                     if (slashIndex > 0) {
                         objectId = tempPath.substring(0, slashIndex);
@@ -992,15 +1002,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             }
                         }
                     }
-                    System.out.println("Object AbsolutePath=" + objectId);
-                    System.out.println("Object AbsolutePath=" + restPath);
                 }
-                objFile = new File(baseDirectory, checkPath);
-                System.out.println("Object AbsolutePath=" + checkPath);
-                System.out.println("Object AbsolutePath=" + objFile.getAbsolutePath());
-                _log.trace("Object AbsolutePath={}", objFile.getAbsolutePath());
+                _log.trace("CheckPath={}", String.valueOf(checkPath));
 
                 if (checkPath != null) {
+                    objFile = new File(baseDirectory, checkPath);
 
                     FsPath fsPath = new FsPath();
                     fsPath.add(objFile.getAbsolutePath());
@@ -1027,7 +1033,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             pnfsId = attributes.getPnfsId();
                             byte[] inBytes = readFile(subject, new FsPath(objFile.getAbsolutePath()), pnfsId);
                             if (inBytes != null) {
-                                dObj.setValue(new String(inBytes));
+                                dObj.setValue(new String(inBytes, "UTF-8"));
                             }
                         }
                         pnfsId = attributes.getPnfsId();
@@ -1054,6 +1060,9 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         _log.error("DCacheDataObjectDao<Read>, Cannot read meta information from object {}", objFile.getAbsolutePath());
                     }
 
+                    if (dObj.getDomainURI() == null) {
+                        dObj.setDomainURI("/cdmi_domains/default_domain");
+                    }
                     dObj.setObjectName(getItem(objFile.getAbsolutePath()));
                     dObj.setObjectType("application/cdmi-object");
                     dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
@@ -1093,7 +1102,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         parentPath = parent;
                     }
                     dObj.setParentID(parentObjectId);
-                    dObj.setParentURI(addPrefixSlashToPath(parentPath));
+                    dObj.setParentURI(addSuffixSlashToPath(removeSlashesFromPath(parentPath)));
 
                     String mimeType = dObj.getMimetype();
                     if (mimeType == null) {
@@ -1122,7 +1131,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 }
             } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
                 _log.error("Exception while reading, {}", ex);
-                throw new ServerErrorException("Cannot read Object @" + path + " error: " + ex);
+                throw new BadRequestException("Cannot read Object @" + path + " error: " + ex);
             } catch (UnauthorizedException ex) {
                 _log.error("Exception while reading, {}", ex);
                 throw new ForbiddenException("Permission denied");
@@ -1135,7 +1144,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     @Override
     public DcacheDataObject findByObjectId(String objectId)
     {
-        System.out.println("In DCacheDataObjectDao.findByObjectId, ObjectID=" + removeSlashesFromPath(objectId));
         _log.trace("In DCacheDataObjectDao.findByObjectId, ObjectID={}", removeSlashesFromPath(objectId));
         if (objectId != null) {
             try {
@@ -1172,12 +1180,11 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         // Read object from file
                         byte[] inBytes = readFile(subject, new FsPath(path), pnfsId);
                         if (inBytes != null) {
-                            dObj.setValue(new String(inBytes));
+                            dObj.setValue(new String(inBytes, "UTF-8"));
                         }
                         pnfsId = attributes.getPnfsId();
                         if (pnfsId != null) {
                             path = getPnfsPath(subject, pnfsId).toString();
-                            System.out.println("Path=" + path);
                             long ctime = attributes.getCreationTime();
                             long atime = attributes.getAccessTime();
                             long mtime = attributes.getModificationTime();
@@ -1186,11 +1193,16 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             dObj.setMetadata("cdmi_atime", sdf.format(atime));
                             dObj.setMetadata("cdmi_mtime", sdf.format(mtime));
                             dObj.setMetadata("cdmi_size", String.valueOf(osize));
+                            dObj.setValueRange("0-" + String.valueOf(osize - 1));
+                            dObj.setValueTransferEncoding("utf-8");
                             oowner = attributes.getOwner();
                             oacl = attributes.getAcl();
                             objectID = new IdConverter().toObjectID(pnfsId.toIdString());
                             dObj.setObjectID(objectID);
 
+                            if (dObj.getDomainURI() == null) {
+                                dObj.setDomainURI("/cdmi_domains/default_domain");
+                            }
                             dObj.setObjectName(getItem(path));
                             dObj.setObjectType("application/cdmi-object");
                             dObj.setCapabilitiesURI("/cdmi_capabilities/dataobject");
@@ -1224,9 +1236,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                             String parentPath = "";
                             String parent = removeSlashesFromPath(getParentDirectory(path));
-                            System.out.println("AAAAA:" + parent);
                             PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
-                            System.out.println("AAAAA:" + parentPnfsId.toIdString());
                             String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
                             if (parent.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
                                 parentPath = parent.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
@@ -1234,7 +1244,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                                 parentPath = parent;
                             }
                             dObj.setParentID(parentObjectId);
-                            dObj.setParentURI(addPrefixSlashToPath(parentPath));
+                            dObj.setParentURI(addSuffixSlashToPath(removeSlashesFromPath(parentPath)));
 
                             String mimeType = dObj.getMimetype();
                             if (mimeType == null) {
@@ -1259,21 +1269,21 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                             dObj.setCompletionStatus("Complete");
                             return dObj;
                         } else {
-                            throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
+                            throw new BadRequestException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                                         + ", metadata could not become read");
                         }
                     } else {
-                        throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
+                        throw new BadRequestException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                                     + ", object is a directory");
                     }
                 } else {
-                    throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
+                    throw new BadRequestException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId)
                                 + ", metadata could not become read");
                 }
             } catch (UnauthorizedException ex) {
                 throw new UnauthorizedException("Access denied", realm);
             } catch (CacheException | IOException | InterruptedException | URISyntaxException ex) {
-                throw new ServerErrorException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId));
+                throw new BadRequestException("Exception while reading dataobject with objectId " + removeSlashesFromPath(objectId));
             }
         } else {
             throw new BadRequestException("No path given.");
@@ -1344,11 +1354,17 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private boolean isUserAllowed(Subject subject, String path) throws CacheException
     {
         boolean result = false;
-        String tmpPath = addPrefixSlashToPath(path);
-        PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-        FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
-        if (Subjects.getUid(subject) == attr.getOwner()) {
-            result = true;
+        try {
+            String tmpPath = addPrefixSlashToPath(path);
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
+            if (Subjects.getUid(subject) == attr.getOwner()) {
+                result = true;
+            }
+        } catch (PermissionDeniedCacheException e) {
+            return false;
+        } catch (CacheException ignore) {
+            return true;
         }
         return result;
     }
@@ -1387,10 +1403,16 @@ public class DcacheDataObjectDao extends AbstractCellComponent
     private boolean isUserAllowed(Subject subject, PnfsId pnfsid) throws CacheException
     {
         boolean result = false;
-        PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-        FileAttributes attr = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
-        if (Subjects.getUid(subject) == attr.getOwner()) {
-            result = true;
+        try {
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            FileAttributes attr = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
+            if (Subjects.getUid(subject) == attr.getOwner()) {
+                result = true;
+            }
+        } catch (PermissionDeniedCacheException e) {
+            return false;
+        } catch (CacheException ignore) {
+            return true;
         }
         return result;
     }
@@ -1450,7 +1472,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 result = item;
             }
         }
-        System.out.println("TEST006: " + result);
         return result;
     }
 
@@ -1517,6 +1538,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             String tmpDirPath = addPrefixSlashToPath(path);
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             result = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.error("DcacheDataObjectDao<getAttributes>, Could not retreive attributes for path {}", path);
         }
@@ -1537,6 +1560,8 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         try {
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             result = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.error("DcacheDataObjectDao<getAttributes>, Could not retreive attributes for PnfsId {}", pnfsid);
         }
@@ -1577,6 +1602,27 @@ public class DcacheDataObjectDao extends AbstractCellComponent
         if (path != null && path.length() > 0) {
             if (!path.startsWith("/")) {
                 result = "/" + path;
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Adds a suffix slash to a directory path if there isn't a slash already.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private String addSuffixSlashToPath(String path)
+    {
+        String result = "";
+        if (path != null && path.length() > 0) {
+            if (!path.endsWith("/")) {
+                result = path + "/";
             } else {
                 result = path;
             }

@@ -153,7 +153,6 @@
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
             <ref bean="methodNotAllowedExceptionMapper"/>
-            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -161,21 +160,6 @@
             <ref bean="capabilityResource"/>
         </jaxrs:serviceBeans>
     </jaxrs:server>
-
-    <!--
-    <httpj:engine-factory id="https">
-        <httpj:engine port="8543">
-            <httpj:tlsServerParameters>
-                <sec:keyManagers keyPassword="${cdmi.authn.keystore.password}">
-                    <sec:keyStore type="PKCS12" file="${cdmi.authn.keystore}" password="${cdmi.authn.keystore.password}"/>
-                </sec:keyManagers>
-                <sec:trustManagers>
-                    <sec:keyStore file="${cdmi.authn.truststore}" password="${cdmi.authn.truststore.password}"/>
-                </sec:trustManagers>
-            </httpj:tlsServerParameters>
-        </httpj:engine>
-    </httpj:engine-factory>
-    -->
 
     <httpj:engine-factory id="https" bus="cxf">
         <httpj:identifiedTLSServerParameters id="secure">
@@ -229,7 +213,6 @@
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
             <ref bean="methodNotAllowedExceptionMapper"/>
-            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -280,7 +263,6 @@
             <ref bean="unauthorizedExceptionMapper"/>
             <ref bean="unsupportedOperationExceptionMapper"/>
             <ref bean="methodNotAllowedExceptionMapper"/>
-            <ref bean="serverErrorExceptionMapper"/>
         </jaxrs:providers>
         <jaxrs:serviceBeans>
             <ref bean="objectIdResource"/>
@@ -310,7 +292,6 @@
     <bean id="unauthorizedExceptionMapper" class="org.snia.cdmiserver.provider.UnauthorizedExceptionMapper"/>
     <bean id="unsupportedOperationExceptionMapper" class="org.snia.cdmiserver.provider.UnsupportedOperationExceptionMapper"/>
     <bean id="methodNotAllowedExceptionMapper" class="org.dcache.cdmi.provider.MethodNotAllowedExceptionMapper"/>
-    <bean id="serverErrorExceptionMapper" class="org.dcache.cdmi.provider.ServerErrorExceptionMapper"/>
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.impl.DcacheContainerDao">
         <property name="baseDirectoryName" value="/public"/>
@@ -336,7 +317,6 @@
     <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DcacheCapabilityDao">
         <property name="baseDirectoryName" value="/"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
-        <property name="listDirectoryHandler" ref="list-handler"/>
     </bean>
 
 </beans>

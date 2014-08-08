@@ -19,7 +19,6 @@ package org.dcache.cdmi.model;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.HashMap;
 import java.util.ListIterator;
 import java.util.Map;
 import org.codehaus.jackson.JsonFactory;
@@ -34,15 +33,26 @@ import org.snia.cdmiserver.model.Capability;
 public class DcacheCapability extends Capability
 {
     private String childrenrange;
+    private String objectName;
 
     public String getChildrenrange()
     {
         return childrenrange;
     }
 
+    public String getObjectName()
+    {
+        return objectName;
+    }
+
     public void setChildrenrange(String childrenrange)
     {
         this.childrenrange = childrenrange;
+    }
+
+    public void setObjectName(String objectName)
+    {
+        this.objectName = objectName;
     }
 
     public String toJson()
@@ -55,20 +65,18 @@ public class DcacheCapability extends Capability
             g.useDefaultPrettyPrinter();
             g.writeStartObject();
 
-            g.writeStringField("objectID", getObjectID());
             g.writeStringField("objectType", getObjectType());
+            g.writeStringField("objectID", getObjectID());
+            g.writeStringField("objectName", getObjectName());
             g.writeStringField("parentURI", getParentURI());
-            g.writeStringField("capabilities", getCapabilities());
+            g.writeStringField("parentID", getParentID());
 
-            g.writeObjectFieldStart("metadata");
+            g.writeObjectFieldStart("capabilities");
             for (Map.Entry<String, String> entry : super.getMetadata().entrySet()) {
                 g.writeStringField(entry.getKey(), entry.getValue());
             }
             g.writeEndObject();
 
-            g.writeStringField("objectType", getObjectType());
-            g.writeStringField("parentID", getParentID());
-            g.writeStringField("parentURI", getParentURI());
             g.writeArrayFieldStart("children");
             ListIterator<String> it = getChildren().listIterator();
             while (it.hasNext()) {
@@ -76,6 +84,7 @@ public class DcacheCapability extends Capability
             }
             g.writeEndArray();
             g.writeStringField("childrenrange", getChildrenrange());
+            g.writeEndObject();
             g.flush();
         } catch (IOException ex) {
             return ("Error: " + ex);

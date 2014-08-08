@@ -114,7 +114,6 @@ public class DcacheObjectIdResource
             @Context UriInfo uriInfo,
             @Context HttpHeaders headers)
     {
-        System.out.println("In DcacheObjectIdResource.getContainerOrObjectByID, path=" + objectId);
         _log.trace("In DcacheObjectIdResource.getContainerOrObjectByID, path={}", objectId);
 
         //print headers for debug
@@ -136,8 +135,6 @@ public class DcacheObjectIdResource
         } else {
             theObjectId = objectId;
         }
-        System.out.println("001: " + objectId);
-        System.out.println("002: " + restPath);
         if (!restPath.isEmpty()) {
             // Check for container vs object
             if (containerDao.isContainer(path)) {
@@ -293,7 +290,6 @@ public class DcacheObjectIdResource
             @Context HttpHeaders headers)
     {
 
-        System.out.println("In DcacheObjectIdResource.getDataObjectOrContainerByID, path=" + objectId);
         _log.trace("In DcacheObjectIdResource.getDataObjectOrContainerByID, path={}", objectId);
         String query = uriInfo.getRequestUri().getQuery();
 
@@ -495,9 +491,7 @@ public class DcacheObjectIdResource
             _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        System.out.println("Object Id = " + objectId + "\n" + inBuffer);
         String objectPath = "/cdmi_objectid/" + objectId;
-        System.out.println("In DcacheObjectIdResource.putDataObjectByID, path=" + objectPath);
         _log.trace("In DcacheObjectIdResource.putDataObjectByID, path={}", objectPath);
 
         // print headers for debug
@@ -522,7 +516,6 @@ public class DcacheObjectIdResource
                     String respStr = dObj.toJson();
                     // make http response
                     // build a JSON representation
-                    System.out.println("Created");
                     ResponseBuilder builder = Response.created(new URI(objectPath));
                     builder.header("X-CDMI-Specification-Version", "1.0.2");
                     return builder.entity(respStr).build();
@@ -532,7 +525,6 @@ public class DcacheObjectIdResource
                     String respStr = dObj.toJson();
                     // make http response
                     // build a JSON representation
-                    System.out.println("Ok");
                     ResponseBuilder builder = Response.ok(new URI(objectPath));
                     builder.header("X-CDMI-Specification-Version", "1.0.2");
                     return builder.entity(respStr).build();
@@ -551,7 +543,6 @@ public class DcacheObjectIdResource
                 String respStr = dObj.toJson();
                 // make http response
                 // build a JSON representation
-                System.out.println("Ok");
                 ResponseBuilder builder = Response.ok(new URI(objectPath));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();
@@ -594,9 +585,7 @@ public class DcacheObjectIdResource
             _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        System.out.println("Object Id = " + objectId + "\n" + inBuffer);
         String path = "/cdmi_objectid/" + objectId;
-        System.out.println("In DcacheObjectIDResource.putContainerByID, path=" + path);
         _log.trace("In DcacheObjectIDResource.putContainerByID, path={}", path);
 
         Container containerRequest = new DcacheContainer();
@@ -608,7 +597,6 @@ public class DcacheObjectIdResource
             String respStr = container.toJson(false);
             // make http response
             // build a JSON representation
-            System.out.println("Ok");
             ResponseBuilder builder = Response.ok(new URI(path));
             builder.header("X-CDMI-Specification-Version", "1.0.2");
             return builder.entity(respStr).build();
@@ -641,9 +629,7 @@ public class DcacheObjectIdResource
         }
 
         String inBuffer = new String(bytes);
-        System.out.println("Object Id = " + objectId + "\n" + inBuffer);
         String objectPath = "/cdmi_objectid/" + objectId;
-        System.out.println("In DcacheObjectIdResource.updateContainerByID, path=" + objectPath);
         _log.trace("In DcacheObjectIdResource.updateContainerByID, path={}", objectPath);
 
         Container containerRequest = new DcacheContainer();
@@ -692,10 +678,8 @@ public class DcacheObjectIdResource
             _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        System.out.println("Object Id = " + objectId + "\n" + inBuffer);
         DcachePathResource pathResource = new DcachePathResource();
         String objectPath = "/cdmi_objectid/" + objectId;
-        System.out.println("In DcacheObjectIdResource.createDataObjectByID, path=" + objectPath);
         _log.trace("In DcacheObjectIdResource.createDataObjectByID, path={}", objectPath);
         Response resp = pathResource.postDataObject(objectPath,bytes);
         return resp;
@@ -712,10 +696,8 @@ public class DcacheObjectIdResource
             _log.trace("Hdr: {} - {}", hdr, headers.getRequestHeader(hdr));
         }
         String inBuffer = new String(bytes);
-        System.out.println("Object Id = " + objectId + "\n" + inBuffer);
         String objectPath = "/cdmi_objectid/" + objectId;
-        System.out.println("In DcacheObjectIdResource.deleteDataObjectByID, path=" + objectPath);
-        _log.trace("In DcacheObjectIdResource.deleteDataObjectByID, path={}", objectPath);
+        _log.trace("In DcacheObjectIdResource.deleteDataObjectOrContainerByID, path={}", objectPath);
         try {
             containerDao.deleteByPath(objectPath);
             ResponseBuilder builder = Response.status(Response.Status.NO_CONTENT);

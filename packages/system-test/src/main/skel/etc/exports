@@ -1,1 +1,3 @@
 / *(rw) localhost(rw,no_root_squash)
+/data *(rw) localhost(rw)
+/public/data *(rw) localhost(rw)

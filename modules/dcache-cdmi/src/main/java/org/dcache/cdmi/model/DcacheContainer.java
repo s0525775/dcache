@@ -134,12 +134,15 @@ public class DcacheContainer extends Container
             JsonGenerator g = f.createJsonGenerator(outBuffer);
             g.useDefaultPrettyPrinter();
             g.writeStartObject();
-
-            g.writeStringField("objectID", getObjectID());
-            g.writeStringField("capabilitiesURI", getCapabilitiesURI());
-            g.writeStringField("domainURI", getDomainURI());
             g.writeStringField("objectType", getObjectType());
-
+            g.writeStringField("objectID", getObjectID());
+            g.writeStringField("objectName", getObjectName());
+            g.writeStringField("parentURI", getParentURI());
+            g.writeStringField("parentID", getParentID());
+            g.writeStringField("domainURI", getDomainURI());
+            g.writeStringField("capabilitiesURI", getCapabilitiesURI());
+            if (getCompletionStatus() != null)
+                g.writeStringField("completionStatus", getCompletionStatus());
             g.writeObjectFieldStart("exports");
             for (Map.Entry<String, Object> entry : getExports().entrySet()) {
                 g.writeObjectFieldStart(entry.getKey());
@@ -161,25 +164,13 @@ public class DcacheContainer extends Container
                 g.writeEndObject();
             }
             g.writeEndObject();
-
-            if (!toFile) {
-                if (getParentID() != null)
-                    g.writeStringField("parentID", getParentID());
-                if (getParentURI() != null)
-                    g.writeStringField("parentURI", getParentURI());
-                if (getObjectName() != null)
-                    g.writeStringField("objectName", getObjectName());
-                g.writeArrayFieldStart("children");
-                ListIterator<String> it = getChildren().listIterator();
-                while (it.hasNext()) {
-                    g.writeString((String) it.next());
-                }
-                g.writeEndArray();
-                g.writeStringField("childrenrange", getChildrenrange());
-                if (getCompletionStatus() != null)
-                    g.writeStringField("completionStatus", getCompletionStatus());
+            g.writeArrayFieldStart("children");
+            ListIterator<String> it = getChildren().listIterator();
+            while (it.hasNext()) {
+                g.writeString((String) it.next());
             }
-
+            g.writeEndArray();
+            g.writeStringField("childrenrange", getChildrenrange());
             g.writeEndObject();
             g.flush();
         } catch (IOException ex) {
@@ -266,26 +257,18 @@ public class DcacheContainer extends Container
                         jp.nextToken();
                         break;
                     }
+                case "objectID":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setObjectID(value);
+                        break;
+                    }
                 default:
-                    if (fromFile) { // accept rest of key-values
-                        switch (key) {
-                            case "objectID":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setObjectID(value);
-                                    break;
-                                }
-                            default:
-                                {
-                                    _log.trace("Invalid Key: {}", key);
-                                    throw new BadRequestException("Invalid Key: " + key);
-                                }
-                        }
-                    } else {
+                    {
                         _log.trace("Invalid Key: {}", key);
-                        throw new BadRequestException("Invalid Key : " + key);
+                        throw new BadRequestException("Invalid Key: " + key);
                     }
             }
         }

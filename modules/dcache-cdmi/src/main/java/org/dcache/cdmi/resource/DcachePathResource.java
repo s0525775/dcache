@@ -17,7 +17,6 @@
  */
 package org.dcache.cdmi.resource;
 
-import com.google.common.collect.ImmutableList;
 import java.net.URI;
 import java.net.URISyntaxException;
 import javax.ws.rs.Consumes;
@@ -286,7 +285,6 @@ public class DcachePathResource
             @Context HttpHeaders headers)
     {
 
-        System.out.println("In DcachePathResource.getDataObjectOrContainer, path=" + path);
         _log.trace("In DcachePathResource.getDataObjectOrContainer, path={}", path);
         String query = uriInfo.getRequestUri().getQuery();
 
@@ -487,7 +485,6 @@ public class DcachePathResource
                     String respStr = dObj.toJson();
                     // make http response
                     // build a JSON representation
-                    System.out.println("Created");
                     ResponseBuilder builder = Response.created(new URI(path));
                     builder.header("X-CDMI-Specification-Version", "1.0.2");
                     return builder.entity(respStr).build();
@@ -497,7 +494,6 @@ public class DcachePathResource
                     String respStr = dObj.toJson();
                     // make http response
                     // build a JSON representation
-                    System.out.println("Ok");
                     ResponseBuilder builder = Response.ok(new URI(path));
                     builder.header("X-CDMI-Specification-Version", "1.0.2");
                     return builder.entity(respStr).build();
@@ -516,7 +512,6 @@ public class DcachePathResource
                 String respStr = dObj.toJson();
                 // make http response
                 // build a JSON representation
-                System.out.println("Ok");
                 ResponseBuilder builder = Response.ok(new URI(path));
                 builder.header("X-CDMI-Specification-Version", "1.0.2");
                 return builder.entity(respStr).build();

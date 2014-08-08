@@ -72,10 +72,10 @@ import org.dcache.auth.attributes.LoginAttribute;
 import org.dcache.auth.attributes.ReadOnly;
 import org.dcache.auth.attributes.RootDirectory;
 import org.dcache.cdmi.exception.MethodNotAllowedException;
-import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.util.CertificateFactories;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.ForbiddenException;
 import org.snia.cdmiserver.exception.UnauthorizedException;
 
@@ -170,7 +170,7 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         if (servletRequest == null) {
             _log.error("HttpServletRequest is null!");
             throw new CdmiExceptionMapper(
-                    new ServerErrorException("HttpServletRequest is null!"));
+                    new BadRequestException("HttpServletRequest is null!"));
         }
 
         if (!isAllowedMethod(msg.get(Message.HTTP_REQUEST_METHOD).toString())) {
@@ -230,7 +230,7 @@ public class AuthorizationInterceptor extends AbstractPhaseInterceptor<Message>
         } catch (CacheException e) {
             _log.error("Internal server error: " + e);
             throw new CdmiExceptionMapper(
-                    new ServerErrorException(e.getMessage()));
+                    new BadRequestException(e.getMessage()));
         }
     }
 

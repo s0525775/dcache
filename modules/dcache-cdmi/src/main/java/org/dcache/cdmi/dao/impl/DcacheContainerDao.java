@@ -57,8 +57,6 @@ import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import dmg.cells.nucleus.NoRouteToCellException;
 import java.text.ParseException;
 import java.util.Collections;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.security.auth.Subject;
 import org.dcache.acl.ACE;
 import org.dcache.acl.ACL;
@@ -66,7 +64,6 @@ import org.dcache.acl.enums.AccessMask;
 import org.dcache.acl.enums.AceFlags;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.exception.MethodNotAllowedException;
-import org.dcache.cdmi.exception.ServerErrorException;
 import org.dcache.cdmi.filter.ContextHolder;
 import org.dcache.cdmi.model.DcacheContainer;
 import org.dcache.cdmi.util.AceConverter;
@@ -212,7 +209,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     {
         boolean objectIdPath = false;
         File directory = absoluteFile(path);
-        System.out.println("Create container, path=" + directory.getAbsolutePath());
         _log.trace("Create container, path={}", directory.getAbsolutePath());
         if (path != null) {
             // Setup ISO-8601 Date
@@ -252,7 +248,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
                             String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                             checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
-                            System.out.println("CheckPath0: " + checkPath);
                         }
                     }
                 } else {
@@ -266,16 +261,14 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
                             String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                             checkPath = "/" + tmpBasePath;
-                            System.out.println("CheckPath1: " + checkPath);
                         }
                     }
                 }
             }
-            directory = absoluteFile(checkPath);
-            System.out.println("CheckPath2: " + directory.getAbsolutePath());
+            _log.trace("CheckPath={}", String.valueOf(checkPath));
 
             if (checkPath != null) {
-
+                directory = absoluteFile(checkPath);
                 FsPath fsPath = new FsPath();
                 fsPath.add(directory.getAbsolutePath());
                 if (!isAllowedPath(fsPath)) {
@@ -318,6 +311,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                                 newContainer.setObjectID(objectId);
                                 _log.trace("DcacheContainerDao<Create>, setObjectID={}", objectId);
 
+                                newContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(directory.getAbsolutePath()))));
                                 newContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                                 if (containerRequest.getDomainURI() == null) {
                                     newContainer.setDomainURI("/cdmi_domains/default_domain");
@@ -350,8 +344,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                                     subMetadata_ACL.add(subMetadataEntry_ACL);
                                     newContainer.setSubMetadata_ACL(subMetadata_ACL);
                                 }
-
-                                containerRequest.setCompletionStatus("Complete");
                                 return completeContainer(subject, newContainer, directory, checkPath);
                             } else {
                                 throw new BadRequestException("Error while creating container '" + checkPath + "', no PnfsId set.");
@@ -386,6 +378,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                                 currentContainer.setObjectID(objectId);
                                 _log.trace("DcacheContainerDao<Update>, setObjectID={}", objectId);
 
+                                currentContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(directory.getAbsolutePath()))));
                                 currentContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                                 if (containerRequest.getDomainURI() == null) {
                                     currentContainer.setDomainURI("/cdmi_domains/default_domain");
@@ -419,6 +412,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                                 newContainer.setObjectID(objectId);
                                 newContainer.setCapabilitiesURI(currentContainer.getCapabilitiesURI());
                                 newContainer.setDomainURI(currentContainer.getDomainURI());
+                                newContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(directory.getAbsolutePath()))));
 
                                 //forth-and-back update
                                 for (String key : newContainer.getMetadata().keySet()) {
@@ -468,7 +462,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                                 } catch (CacheException | ParseException ex) {
                                     _log.error("DcacheContainerDao<Update>, Cannot update meta information for object with objectID {}", newContainer.getObjectID());
                                 }
-                                containerRequest.setCompletionStatus("Complete");
                                 return completeContainer(subject, newContainer, directory, checkPath);
 
                             } else {
@@ -530,6 +523,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                             movedContainer.setObjectID(objectId);
                             _log.trace("DcacheContainerDao<Move>, setObjectID={}", objectId);
 
+                            movedContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(directory.getAbsolutePath()))));
                             movedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                             if (containerRequest.getDomainURI() == null) {
                                 movedContainer.setDomainURI("/cdmi_domains/default_domain");
@@ -580,7 +574,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                             } catch (CacheException | ParseException ex) {
                                 _log.error("DcacheContainerDao<Move>, Cannot update meta information for object with objectID {}", movedContainer.getObjectID());
                             }
-                            movedContainer.setCompletionStatus("Complete");
                             return completeContainer(subject, movedContainer, directory, path);
 
                         } else {
@@ -607,7 +600,7 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public void deleteByPath(String path)
     {
-        System.out.println("Delete container/object, path=" + path);
+        _log.trace("Delete container/object, path={}", path);
         if (path != null) {
             if (path.startsWith("/cdmi_objectid/") || path.startsWith("cdmi_objectid/")) {
                 String newPath = "";
@@ -634,6 +627,10 @@ public class DcacheContainerDao extends AbstractCellComponent
                     throw new ForbiddenException("Permission denied");
                 }
 
+                if (!checkIfDirectoryFileExists(directoryOrFile.getAbsolutePath())) {
+                    throw new NotFoundException("Not Found");
+                }
+
                 if (!isUserAllowed(subject, directoryOrFile.getAbsolutePath())) {
                     throw new ForbiddenException("Permission denied");
                 }
@@ -649,10 +646,10 @@ public class DcacheContainerDao extends AbstractCellComponent
                             deleteFile(subject, pnfsId, directoryOrFile.getAbsolutePath());
                         }
                     } else {
-                        throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                        throw new BadRequestException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
                     }
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                    throw new BadRequestException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
                 }
             }
         } else {
@@ -663,7 +660,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     private void deleteByObjectId(String path)
     {
         if (path != null) {
-            System.out.println("Delete container/object, path=" + path);
             _log.trace("Delete container/object, path={}", path);
 
             String checkPath = "";
@@ -676,7 +672,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 objectId = path.substring(0, slashIndex);
                 restPath = path.substring(slashIndex + 1);
                 String strPnfsId = idc.toPnfsID(objectId);
-                System.out.println("0005:" + strPnfsId);
                 PnfsId pnfsId = new PnfsId(strPnfsId);
                 FsPath pnfsPath = getPnfsPath(subject, pnfsId);
                 if (pnfsPath != null) {
@@ -689,7 +684,6 @@ public class DcacheContainerDao extends AbstractCellComponent
             } else {
                 objectId = path;
                 String strPnfsId = idc.toPnfsID(objectId);
-                System.out.println("0006:" + strPnfsId);
                 PnfsId pnfsId = new PnfsId(strPnfsId);
                 FsPath pnfsPath = getPnfsPath(subject, pnfsId);
                 if (pnfsPath != null) {
@@ -700,12 +694,11 @@ public class DcacheContainerDao extends AbstractCellComponent
                     }
                 }
             }
-            System.out.println("CheckPath: " + checkPath);
+            _log.trace("CheckPath={}", String.valueOf(checkPath));
 
             if (checkPath != null) {
                 File directoryOrFile;
                 directoryOrFile = absoluteFile(checkPath);
-
                 FsPath fsPath = new FsPath();
                 fsPath.add(directoryOrFile.getAbsolutePath());
                 if (!isAllowedPath(fsPath)) {
@@ -714,6 +707,10 @@ public class DcacheContainerDao extends AbstractCellComponent
 
                 if ((subject == null) || Subjects.isNobody(subject)) {
                     throw new ForbiddenException("Permission denied");
+                }
+
+                if (!checkIfDirectoryFileExists(directoryOrFile.getAbsolutePath())) {
+                    throw new NotFoundException("Not Found");
                 }
 
                 if (!isUserAllowed(subject, directoryOrFile.getAbsolutePath())) {
@@ -731,10 +728,10 @@ public class DcacheContainerDao extends AbstractCellComponent
                             deleteFile(subject, pnfsId, directoryOrFile.getAbsolutePath());
                         }
                     } else {
-                        throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                        throw new BadRequestException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
                     }
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
+                    throw new BadRequestException("DcacheContainerDao<Delete>, Cannot retrieve metadata for object '" +  directoryOrFile.getAbsolutePath() + "'");
                 }
             }
         } else {
@@ -745,7 +742,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public DcacheContainer findByPath(String path)
     {
-        System.out.println("In DcacheContainerDAO.findByPath, Path=" + path);
         _log.trace("In DcacheContainerDAO.findByPath, Path={}", path);
 
         File directory;
@@ -796,9 +792,10 @@ public class DcacheContainerDao extends AbstractCellComponent
                     }
                 }
             }
-            directory = absoluteFile(checkPath);
+            _log.trace("CheckPath={}", String.valueOf(checkPath));
 
             if (checkPath != null) {
+                directory = absoluteFile(checkPath);
                 FsPath fsPath = new FsPath();
                 fsPath.add(directory.getAbsolutePath());
                 if (!isAllowedPath(fsPath)) {
@@ -806,8 +803,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 }
 
                 if (!checkIfDirectoryFileExists(subject, directory.getAbsolutePath())) {
-    //                throw new NotFoundException("Path '" + directory.getAbsolutePath()
-    //                        + "' does not identify an existing container");
                     return null;
                 }
                 if (!checkIfDirectoryExists(subject, directory.getAbsolutePath())) {
@@ -842,7 +837,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                         requestedContainer.setObjectID(objectID);
                         _log.trace("DcacheContainerDao<Read>, setObjectID={}", objectID);
 
-                        requestedContainer.setObjectName(getItem(directory.getAbsolutePath()));
+                        requestedContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(directory.getAbsolutePath()))));
                         requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                         requestedContainer.setDomainURI("/cdmi_domains/default_domain");
                         requestedContainer.setMetadata("cdmi_acount", "0");
@@ -879,15 +874,14 @@ public class DcacheContainerDao extends AbstractCellComponent
                             pnfs.setFileAttributes(pnfsId, attr2);
                             requestedContainer.setMetadata("cdmi_atime", sdf.format(now));
                         } catch (CacheException ex) {
-                            throw new ServerErrorException("DcacheContainerDao<Read>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
+                            throw new BadRequestException("DcacheContainerDao<Read>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
                         }
-                        requestedContainer.setCompletionStatus("Complete");
                     } else {
-                        throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        throw new BadRequestException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                     }
                     return completeContainer(subject, requestedContainer, directory, checkPath);
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory '" + directory.getAbsolutePath() + "'");
+                    throw new BadRequestException("DcacheContainerDao<Read>, Cannot read meta information from directory '" + directory.getAbsolutePath() + "'");
                 }
             } else {
                 // root container
@@ -903,11 +897,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                         requestedContainer.setObjectID(objectID);
                         _log.trace("DcacheContainerDao<Read>, setObjectID={}", objectID);
                     } else {
-                        throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        throw new BadRequestException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                     }
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Read>, Cannot retrieve metadata for root container");
+                    throw new BadRequestException("DcacheContainerDao<Read>, Cannot retrieve metadata for root container");
                 }
+                requestedContainer.setObjectName("/");
                 requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                 requestedContainer.setDomainURI("/cdmi_domains/default_domain");
                 return completeContainer(subject, requestedContainer, directory, path);
@@ -926,11 +921,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                     requestedContainer.setObjectID(objectID);
                     _log.trace("DcacheContainerDao<Read>, setObjectID={}", objectID);
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                    throw new BadRequestException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                 }
             } else {
-                throw new ServerErrorException("DcacheContainerDao<Read>, Cannot retrieve metadata for root container");
+                throw new BadRequestException("DcacheContainerDao<Read>, Cannot retrieve metadata for root container");
             }
+            requestedContainer.setObjectName("/");
             requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
             requestedContainer.setDomainURI("/cdmi_domains/default_domain");
             return completeContainer(subject, requestedContainer, directory, path);
@@ -940,7 +936,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     @Override
     public DcacheContainer findByObjectId(String objectId)
     {
-        System.out.println("In DcacheContainerDAO.findByObjectId, ObjectID=" + removeSlashesFromPath(objectId));
         _log.trace("In DcacheContainerDAO.findByObjectId, ObjectID={}", removeSlashesFromPath(objectId));
 
         if (objectId != null) {
@@ -961,9 +956,9 @@ public class DcacheContainerDao extends AbstractCellComponent
                 }
 
                 if (!checkIfDirectoryFileExists(subject, pnfsId)) {
-                    throw new NotFoundException("Object with ObjectId '" + removeSlashesFromPath(objectId)
-                            + "' does not identify an existing container");
+                    throw new NotFoundException("Not Found");
                 }
+
                 if (!checkIfDirectoryExists(subject, pnfsId)) {
                     throw new BadRequestException("Object with ObjectId '" + removeSlashesFromPath(objectId)
                             + "' does not identify a container");
@@ -984,7 +979,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                     pnfsId = attributes.getPnfsId();
                     if (pnfsId != null) {
                         path = getPnfsPath(subject, pnfsId).toString();
-                        System.out.println("Path=" + path);
                         requestedContainer.setMetadata("cdmi_ctime", sdf.format(attributes.getCreationTime()));
                         requestedContainer.setMetadata("cdmi_atime", sdf.format(attributes.getAccessTime()));
                         requestedContainer.setMetadata("cdmi_mtime", sdf.format(attributes.getModificationTime()));
@@ -995,7 +989,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                         requestedContainer.setObjectID(objectID);
                         _log.trace("DcacheContainerDao<Read>, setObjectID={}", objectID);
 
-                        requestedContainer.setObjectName(getItem(path));
+                        requestedContainer.setObjectName(addSuffixSlashToPath(removeSlashesFromPath(getItem(path))));
                         requestedContainer.setCapabilitiesURI("/cdmi_capabilities/container/default");
                         requestedContainer.setDomainURI("/cdmi_domains/default_domain");
                         requestedContainer.setMetadata("cdmi_acount", "0");
@@ -1031,16 +1025,15 @@ public class DcacheContainerDao extends AbstractCellComponent
                             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
                             pnfs.setFileAttributes(pnfsId, attr2);
                             requestedContainer.setMetadata("cdmi_atime", sdf.format(now));
-                            requestedContainer.setCompletionStatus("Complete");
                         } catch (CacheException ex) {
-                            throw new ServerErrorException("DcacheContainerDao<Read>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
+                            throw new BadRequestException("DcacheContainerDao<Read>, Cannot update meta information for object with objectID '" + requestedContainer.getObjectID() + "'");
                         }
                         return completeContainer(subject, requestedContainer, removeSlashesFromPath(objectId));
                     } else {
-                        throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                        throw new BadRequestException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
                     }
                 } else {
-                    throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory with ObjectID '" + removeSlashesFromPath(objectId) + "'");
+                    throw new BadRequestException("DcacheContainerDao<Read>, Cannot read meta information from directory with ObjectID '" + removeSlashesFromPath(objectId) + "'");
                 }
             } else {
                 throw new BadRequestException("DcacheContainerDao<Read>, No path given");
@@ -1103,8 +1096,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     {
         _log.trace("In DcacheContainerDao.Container, Path={}", path);
         _log.trace("In DcacheContainerDao.Container, AbsolutePath={}", directory.getAbsolutePath());
-        System.out.println("In DcacheContainerDao.Container, Path=" + path);
-        System.out.println("In DcacheContainerDao.Container, AbsolutePath=" + directory.getAbsolutePath());
         container.setObjectType("application/cdmi-container");
 
         // Derive ParentURI
@@ -1124,15 +1115,12 @@ public class DcacheContainerDao extends AbstractCellComponent
             }
         }
 
-        if (parentURI.equals("//"))
-            parentURI = "/";
-        if (!parentURI.equals("/")) {
-            container.setParentURI(parentURI);
-            System.out.println("In DcacheContainerDao.Container0, ParentURI=" + parentURI);
+        if (parentURI.startsWith("//"))
+            parentURI = parentURI.replaceFirst("//", "/");
+        if ((path != null) && !path.isEmpty() && !path.equals("/")) {
+            container.setParentURI(addSuffixSlashToPath(addPrefixSlashToPath(parentURI)));
             String parent = "/" + removeSlashesFromPath(baseDirectoryName) + "/" + removeSlashesFromPath(parentURI);
-            System.out.println("In DcacheContainerDao.Container0, Parent=" + parent);
             PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
-            System.out.println("In DcacheContainerDao.Container0, ParentPnfsId=" + parentPnfsId.toIdString());
             String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
             container.setParentID(parentObjectId);
         }
@@ -1163,6 +1151,7 @@ public class DcacheContainerDao extends AbstractCellComponent
             container.setChildrenrange(childrange);
         }
 
+        container.setCompletionStatus("Complete");
         return container;
     }
 
@@ -1198,7 +1187,6 @@ public class DcacheContainerDao extends AbstractCellComponent
             pnfsId = attributes.getPnfsId();
             if (pnfsId != null) {
                 path = getPnfsPath(subject, pnfsId).toString();
-                System.out.println("Path_2=" + path);
                 _log.trace("In DcacheContainerDao.Container, Path={}", path);
                 container.setObjectType("application/cdmi-container");
 
@@ -1223,15 +1211,12 @@ public class DcacheContainerDao extends AbstractCellComponent
                         throw new BadRequestException("Root container names must not start with cdmi");
                     }
                 }
-                if (parentURI.equals("//"))
-                    parentURI = "/";
-                if (!parentURI.equals("/")) {
-                    container.setParentURI(parentURI);
-                    System.out.println("In DcacheContainerDao.Container1, ParentURI=" + parentURI);
+                if (parentURI.startsWith("//"))
+                    parentURI = parentURI.replaceFirst("//", "/");
+                if ((path != null) && !path.isEmpty() && !path.equals("/")) {
+                    container.setParentURI(addSuffixSlashToPath(addPrefixSlashToPath(parentURI)));
                     String parent = "/" + removeSlashesFromPath(baseDirectoryName) + "/" + removeSlashesFromPath(parentURI);
-                    System.out.println("In DcacheContainerDao.Container1, Parent=" + parent);
                     PnfsId parentPnfsId = getPnfsIDByPath(subject, parent);
-                    System.out.println("In DcacheContainerDao.Container1, ParentPnfsId=" + parentPnfsId.toIdString());
                     String parentObjectId = new IdConverter().toObjectID(parentPnfsId.toIdString());
                     container.setParentID(parentObjectId);
                 }
@@ -1259,12 +1244,13 @@ public class DcacheContainerDao extends AbstractCellComponent
                     String childrange = "0-" + lastindex;
                     container.setChildrenrange(childrange);
                 }
+                container.setCompletionStatus("Complete");
                 return container;
             } else {
-                throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read PnfsId from meta information, ObjectID will be empty");
+                throw new BadRequestException("DcacheContainerDao<Complete>, Cannot read PnfsId from meta information, ObjectID will be empty");
             }
         } else {
-            throw new ServerErrorException("DcacheContainerDao<Read>, Cannot read meta information from directory with ObjectID '" + objectId + "'");
+            throw new BadRequestException("DcacheContainerDao<Complete>, Cannot read meta information from directory with ObjectID '" + objectId + "'");
         }
     }
 
@@ -1298,7 +1284,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                     objectId = tempPath.substring(0, slashIndex);
                     restPath = tempPath.substring(slashIndex + 1);
                     String strPnfsId = idc.toPnfsID(objectId);
-                    System.out.println("0001:" + strPnfsId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
                     FsPath pnfsPath = getPnfsPath(subject, pnfsId);
                     if (pnfsPath != null) {
@@ -1311,7 +1296,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 } else {
                     objectId = tempPath;
                     String strPnfsId = idc.toPnfsID(objectId);
-                    System.out.println("0002:" + strPnfsId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
                     FsPath pnfsPath = getPnfsPath(subject, pnfsId);
                     if (pnfsPath != null) {
@@ -1323,8 +1307,8 @@ public class DcacheContainerDao extends AbstractCellComponent
                     }
                 }
             }
-            System.out.println("CheckPath: " + checkPath);
         }
+        _log.trace("CheckPath={}", String.valueOf(checkPath));
         return (checkPath == null || isDirectory(subject, checkPath));
     }
 
@@ -1361,7 +1345,10 @@ public class DcacheContainerDao extends AbstractCellComponent
             if (Subjects.getUid(subject) == attributes.getOwner()) {
                 result = true;
             }
+        } catch (PermissionDeniedCacheException e) {
+            return false;
         } catch (CacheException ignore) {
+            return true;
         }
         return result;
     }
@@ -1383,7 +1370,10 @@ public class DcacheContainerDao extends AbstractCellComponent
             if (Subjects.getUid(subject) == attr.getOwner()) {
                 result = true;
             }
+        } catch (PermissionDeniedCacheException e) {
+            return false;
         } catch (CacheException ignore) {
+            return true;
         }
         return result;
     }
@@ -1465,7 +1455,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                 result = item;
             }
         }
-        System.out.println("TEST005: " + result);
         return result;
     }
 
@@ -1480,7 +1469,6 @@ public class DcacheContainerDao extends AbstractCellComponent
     private boolean isDirectory(Subject subject, String dirPath)
     {
         String tmpDirPath = addPrefixSlashToPath(dirPath);
-        System.out.println("Check: " + (baseDirectoryName + tmpDirPath));
         return checkIfDirectoryExists(subject, baseDirectoryName + tmpDirPath);
     }
 
@@ -1564,6 +1552,31 @@ public class DcacheContainerDao extends AbstractCellComponent
 
     /**
      * <p>
+     * Checks if a Directory or File exists in a specific path, as root.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private boolean checkIfDirectoryFileExists(String dirPath)
+    {
+        boolean result = false;
+        try {
+            String tmpDirPath = addPrefixSlashToPath(dirPath);
+            FileAttributes attributes = null;
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, Subjects.ROOT);
+            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
+            if (attributes != null) {
+                result = true;
+            }
+            return result;
+        } catch (CacheException ignore) {
+        }
+        return result;
+    }
+
+    /**
+     * <p>
      * Checks if a Directory or File exists in a specific path.
      * </p>
      *
@@ -1601,6 +1614,8 @@ public class DcacheContainerDao extends AbstractCellComponent
             String tmpDirPath = addPrefixSlashToPath(path);
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             result = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.error("DcacheDataObjectDao<getAttributes>, Could not retreive attributes for path {}", path);
         }
@@ -1621,6 +1636,8 @@ public class DcacheContainerDao extends AbstractCellComponent
         try {
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             result = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.error("DcacheDataObjectDao<getAttributes>, Could not retreive attributes for PnfsId {}", pnfsid);
         }
@@ -1665,6 +1682,14 @@ public class DcacheContainerDao extends AbstractCellComponent
             PnfsCreateEntryMessage reply = pnfs.createPnfsDirectory(tmpDirPath);
             reply.getPnfsPath();
             result = pnfs.getFileAttributes(reply.getPnfsId(), REQUIRED_ATTRIBUTES);
+        } catch (TimeoutCacheException e) {
+            throw new BadRequestException("Name space timeout");
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("Directory '{}' could not get created, {}", dirPath, ex.getMessage());
         }
@@ -1685,6 +1710,12 @@ public class DcacheContainerDao extends AbstractCellComponent
         try {
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             result = pnfs.getPathByPnfsId(pnfsid);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("PnfsPath for PnfsId '{}' could not get retrieved, {}", pnfsid, ex.getMessage());
         }
@@ -1708,6 +1739,12 @@ public class DcacheContainerDao extends AbstractCellComponent
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             pnfs.renameEntry(tmpFromPath, tmpToPath, false);
             result = pnfs.getFileAttributes(tmpToPath, REQUIRED_ATTRIBUTES);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("Directory '{}' could not get renamed to '{}', {}", fromPath, toPath, ex.getMessage());
         }
@@ -1730,6 +1767,12 @@ public class DcacheContainerDao extends AbstractCellComponent
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             pnfs.renameEntry(pnfsid, tmpToPath, false);
             result = pnfs.getFileAttributes(tmpToPath, REQUIRED_ATTRIBUTES);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("Directory with PnfsId '{}' could not get renamed to '{}', {}", pnfsid, toPath, ex.getMessage());
         }
@@ -1772,6 +1815,14 @@ public class DcacheContainerDao extends AbstractCellComponent
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             pnfs.deletePnfsEntry(pnfsid, tmpDirPath, EnumSet.of(DIR));
             result = true;
+        } catch (TimeoutCacheException e) {
+            throw new BadRequestException("Name space timeout");
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("Directory '{}' could not get deleted, {}", dirPath, ex.getMessage());
         }
@@ -1796,6 +1847,14 @@ public class DcacheContainerDao extends AbstractCellComponent
                     EnumSet.of(REGULAR, LINK));
             sendRemoveInfoToBilling(new FsPath(tmpFilePath));
             result = true;
+        } catch (TimeoutCacheException e) {
+            throw new BadRequestException("Name space timeout");
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
         } catch (CacheException ex) {
             _log.warn("File '{}' could not get deleted, {}", filePath, ex.getMessage());
         }
@@ -1832,6 +1891,27 @@ public class DcacheContainerDao extends AbstractCellComponent
         if (path != null && path.length() > 0) {
             if (!path.startsWith("/")) {
                 result = "/" + path;
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Adds a suffix slash to a directory path if there isn't a slash already.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private String addSuffixSlashToPath(String path)
+    {
+        String result = "";
+        if (path != null && path.length() > 0) {
+            if (!path.endsWith("/")) {
+                result = path + "/";
             } else {
                 result = path;
             }
@@ -1906,7 +1986,7 @@ public class DcacheContainerDao extends AbstractCellComponent
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             pnfs.deletePnfsEntry(path.toString(), EnumSet.of(DIR));
         } catch (TimeoutCacheException e) {
-            throw new ServerErrorException("Name space timeout");
+            throw new BadRequestException("Name space timeout");
         } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
             throw new NotFoundException("No such file or directory");
         } catch (NotDirCacheException e) {
@@ -1923,7 +2003,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                 e.addSuppressed(suppressed);
             }
             _log.error("Failed to delete {}: {}", path, e.getMessage());
-            throw new ServerErrorException("Name space failure (" + e.getMessage() + ")", e);
+            throw new BadRequestException("Name space failure (" + e.getMessage() + ")", e);
         }
     }
 
@@ -1934,13 +2014,13 @@ public class DcacheContainerDao extends AbstractCellComponent
         try {
             attributes = pnfs.getFileAttributes(path.toString(), EnumSet.of(TYPE));
         } catch (TimeoutCacheException e) {
-            throw new ServerErrorException("Name space timeout", e);
+            throw new BadRequestException("Name space timeout", e);
         } catch (PermissionDeniedCacheException e) {
             throw new ForbiddenException("Permission denied");
         } catch (FileNotFoundCacheException | NotInTrashCacheException e) {
             throw new NotFoundException("No such file or directory", e);
         } catch (CacheException e) {
-            throw new ServerErrorException("Name space failure (" + e.getMessage() + ")");
+            throw new BadRequestException("Name space failure (" + e.getMessage() + ")");
         }
         if (attributes.getFileType() != DIR) {
             throw new NotFoundException("Not a directory");
@@ -1957,18 +2037,18 @@ public class DcacheContainerDao extends AbstractCellComponent
             try {
                 pnfs.deletePnfsEntry(directory.toString(), EnumSet.of(DIR));
             } catch (TimeoutCacheException e) {
-                throw new ServerErrorException("Name space timeout", e);
+                throw new BadRequestException("Name space timeout", e);
             } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
                 // Somebody removed the directory before we could.
             } catch (PermissionDeniedCacheException | NotDirCacheException e) {
                 // Only directories are included in the list output, and we checked that we
                 // have permission to delete them.
-                throw new ServerErrorException(directory + " (directory tree was modified concurrently)");
+                throw new BadRequestException(directory + " (directory tree was modified concurrently)");
             } catch (CacheException e) {
                 // Could be because the directory is no longer empty (concurrent modification),
                 // but could also be some other error.
                 _log.error("Failed to delete {}: {}", directory, e.getMessage());
-                throw new ServerErrorException(directory + " (" + e.getMessage() + ")");
+                throw new BadRequestException(directory + " (" + e.getMessage() + ")");
             }
         }
     }
@@ -1989,7 +2069,7 @@ public class DcacheContainerDao extends AbstractCellComponent
             for (DirectoryEntry child: list) {
                 FileAttributes childAttributes = child.getFileAttributes();
                 if (childAttributes.getFileType() != DIR) {
-                    throw new ServerErrorException(dir + "/" + child.getName() + " (not empty)");
+                    throw new BadRequestException(dir + "/" + child.getName() + " (not empty)");
                 }
                 if (!isUserAllowed(subject, dir + "/" + child.getName())) {
                     throw new ForbiddenException("Permission denied");
@@ -2003,11 +2083,11 @@ public class DcacheContainerDao extends AbstractCellComponent
         } catch (PermissionDeniedCacheException e) {
             throw new UnauthorizedException(dir + " (permission denied)", e);
         } catch (InterruptedException e) {
-            throw new ServerErrorException("Operation interrupted", e);
+            throw new BadRequestException("Operation interrupted", e);
         } catch (TimeoutCacheException e) {
-            throw new ServerErrorException("Name space timeout", e);
+            throw new BadRequestException("Name space timeout", e);
         } catch (CacheException e) {
-            throw new ServerErrorException(dir + " (" + e.getMessage() + ")");
+            throw new BadRequestException(dir + " (" + e.getMessage() + ")");
         }
 
         // Result list uses post-order so directories will be deleted bottom-up.

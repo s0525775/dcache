@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory;
 
 import org.snia.cdmiserver.dao.CapabilityDao;
 import org.snia.cdmiserver.model.Capability;
-import org.snia.cdmiserver.util.MediaTypes;
 
 /**
  * <p>
@@ -87,7 +86,7 @@ public class DcacheCapabilityResource {
     @GET
     //@Produces(MediaTypes.CAPABILITY)
     public Response getCapabilityDao(@PathParam("path") String path) {
-        System.out.println("In CapabilityResource.getCapabilityDao, path is: " + path);
+        _log.trace("In CapabilityResource.getCapabilityDao, path is={}", path);
         Capability capability = (DcacheCapability) capabilityDao.findByPath(path);
         try {
             if (capability instanceof DcacheCapability) {

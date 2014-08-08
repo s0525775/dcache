@@ -154,17 +154,13 @@ public class DcacheDataObject extends DataObject
             g.writeStartObject();
             // get top level metadata
             g.writeStringField("objectType", getObjectType());
+            g.writeStringField("objectID", getObjectID());
+            g.writeStringField("objectName", getObjectName());
+            g.writeStringField("parentURI", getParentURI());
+            g.writeStringField("parentID", getParentID());
+            g.writeStringField("domainURI", getDomainURI());
             g.writeStringField("capabilitiesURI", getCapabilitiesURI());
-            if (getObjectID() != null)
-                g.writeStringField("objectID", getObjectID());
-            if (getObjectName() != null)
-                g.writeStringField("objectName", getObjectName());
-            if (getParentID() != null)
-                g.writeStringField("parentID", getParentID());
-            if (getParentURI() != null)
-                g.writeStringField("parentURI", getParentURI());
-            if (getMimetype() != null)
-                g.writeStringField("mimetype", getMimetype());
+            g.writeStringField("mimetype", getMimetype());
             if (getCompletionStatus() != null)
                 g.writeStringField("completionStatus", getCompletionStatus());
             if (getValueTransferEncoding() != null)
@@ -223,8 +219,8 @@ public class DcacheDataObject extends DataObject
         tolkein = jp.nextToken();// START_OBJECT
         while ((tolkein = jp.nextToken()) != JsonToken.END_OBJECT) {
             String key = jp.getCurrentName();
-            jp.configure(JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);
-            jp.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
+            jp.configure(JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);  //TODO
+            jp.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);  //TODO
             switch (key) {
                 case "metadata":
                     {
@@ -309,48 +305,40 @@ public class DcacheDataObject extends DataObject
                         jp.nextToken();
                         break;
                     }
+                case "objectType":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setObjectType(value);
+                        break;
+                    }
+                case "capabilitiesURI":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setCapabilitiesURI(value);
+                        break;
+                    }
+                case "objectID":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setObjectID(value);
+                        break;
+                    }
+                case "valueRange":
+                    {
+                        jp.nextToken();
+                        String value = jp.getText();
+                        _log.trace("Key={} : Val={}", key, value);
+                        setValuerange(value);
+                        break;
+                    }
                 default:
-                    if (fromFile) { // accept rest of key-values
-                        switch (key) {
-                            case "objectType":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setObjectType(value);
-                                    break;
-                                }
-                            case "capabilitiesURI":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setCapabilitiesURI(value);
-                                    break;
-                                }
-                            case "objectID":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setObjectID(value);
-                                    break;
-                                }
-                            case "valueRange":
-                                {
-                                    jp.nextToken();
-                                    String value = jp.getText();
-                                    _log.trace("Key={} : Val={}", key, value);
-                                    setValuerange(value);
-                                    break;
-                                }
-                            default:
-                                {
-                                    _log.trace("Invalid Key: {}", key);
-                                    throw new BadRequestException("Invalid Key: " + key);
-                                }
-                        }
-                    } else {
+                    {
                         _log.trace("Invalid Key: {}", key);
                         throw new BadRequestException("Invalid Key: " + key);
                     }

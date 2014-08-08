@@ -20,7 +20,6 @@ package org.dcache.cdmi.dao.impl;
 import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Range;
 import diskCacheV111.util.CacheException;
 import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
@@ -29,21 +28,14 @@ import diskCacheV111.vehicles.PnfsCreateEntryMessage;
 import dmg.cells.nucleus.CellLifeCycleAware;
 import java.io.File;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import javax.security.auth.Subject;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.model.DcacheCapability;
 import org.dcache.cdmi.util.IdConverter;
 import org.dcache.cells.CellStub;
 import org.dcache.namespace.FileAttribute;
 import static org.dcache.namespace.FileAttribute.*;
-import static org.dcache.namespace.FileType.DIR;
-import org.dcache.util.list.DirectoryEntry;
-import org.dcache.util.list.DirectoryListPrinter;
-import org.dcache.util.list.ListDirectoryHandler;
 import org.dcache.vehicles.FileAttributes;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
@@ -70,7 +62,7 @@ public class DcacheCapabilityDao
     private final static org.slf4j.Logger _log = LoggerFactory.getLogger(DcacheCapabilityDao.class);
 
     // Properties and Dependency Injection Methods by CDMI
-    private static final String MAIN_DIRECTORY = "/cdmi_capabilities";
+    private static final String MAIN_DIRECTORY = "cdmi_capabilities/";
     private String baseDirectoryName = null;
     private File baseDirectory = null;
 
@@ -78,37 +70,46 @@ public class DcacheCapabilityDao
     private static final Set<FileAttribute> REQUIRED_ATTRIBUTES = EnumSet.of(PNFSID);
     private CellStub pnfsStub;
     private PnfsHandler pnfsHandler;
-    private ListDirectoryHandler listDirectoryHandler;
 
     private final static ImmutableList<String> CAPABILITY_MAINTREE = new ImmutableList.Builder<String>()
         //.add("domain")
-        .add("/container")
-        .add("/dataobject")
+        .add("container/")
+        .add("dataobject/")
         .build();
 
     private final static ImmutableList<String> CAPABILITY_SUBTREE = new ImmutableList.Builder<String>()
-        .add("/default")
+        .add("default/")
         .build();
 
     private final static ImmutableMap<String, String> CONTAINER_METADATA = new ImmutableMap.Builder<String, String>()
         .put("cdmi_list_children", "true")
+        .put("cdmi_list_children_range", "true")
         .put("cdmi_read_metadata", "true")
         .put("cdmi_modify_metadata", "true")
-        .put("cdmi_create_dataobject", "true")
         .put("cdmi_create_container", "true")
+        .put("cdmi_move_container", "true")
+        .put("cdmi_delete_container", "true")
+        .put("cdmi_create_dataobject", "true")
+        .put("cdmi_move_dataobject", "true")
+        .put("cdmi_delete_dataobject", "true")
         .build();
 
     private final static ImmutableMap<String, String> DEFAULT_CONTAINER_METADATA = new ImmutableMap.Builder<String, String>()
         .put("cdmi_list_children", "true")
+        .put("cdmi_list_children_range", "true")
         .put("cdmi_read_metadata", "true")
         .put("cdmi_modify_metadata", "true")
-        .put("cdmi_create_dataobject", "true")
-        .put("cdmi_post_dataobject", "true")
         .put("cdmi_create_container", "true")
+        .put("cdmi_move_container", "true")
+        .put("cdmi_delete_container", "true")
+        .put("cdmi_create_dataobject", "true")
+        .put("cdmi_move_dataobject", "true")
+        .put("cdmi_delete_dataobject", "true")
         .build();
 
     private final static ImmutableMap<String, String> DATAOBJECT_METADATA = new ImmutableMap.Builder<String, String>()
         .put("cdmi_read_value", "true")
+        .put("cdmi_read_value_range", "true")
         .put("cdmi_read_metadata", "true")
         .put("cdmi_modify_metadata", "true")
         .put("cdmi_modify_value", "true")
@@ -117,6 +118,7 @@ public class DcacheCapabilityDao
 
     private final static ImmutableMap<String, String> DEFAULT_DATAOBJECT_METADATA = new ImmutableMap.Builder<String, String>()
         .put("cdmi_read_value", "true")
+        .put("cdmi_read_value_range", "true")
         .put("cdmi_read_metadata", "true")
         .put("cdmi_modify_metadata", "true")
         .put("cdmi_modify_value", "true")
@@ -125,7 +127,7 @@ public class DcacheCapabilityDao
 
     private final static ImmutableMap<String, String> DEFAULT_METADATA = new ImmutableMap.Builder<String, String>()
         .put("domains", "false")
-        .put("cdmi_export_occi_iscsi", "true")
+        .put("cdmi_export_occi_iscsi", "false")
         .put("cdmi_metadata_maxitems", "1024")
         .put("cdmi_metadata_maxsize", "4096")
         .put("cdmi_assignedsize", "false")
@@ -172,18 +174,6 @@ public class DcacheCapabilityDao
         this.pnfsHandler = new PnfsHandler(this.pnfsStub);
     }
 
-    /**
-     * <p>
-     * Set the ListDirectoryHandler from dCache.
-     * </p>
-     *
-     * @param listDirectoryHandler
-     */
-    public void setListDirectoryHandler(ListDirectoryHandler listDirectoryHandler)
-    {
-        this.listDirectoryHandler = checkNotNull(listDirectoryHandler);
-    }
-
     @Override
     public Capability findByObjectId(String objectId)
     {
@@ -194,18 +184,16 @@ public class DcacheCapabilityDao
     @Override
     public Capability findByPath(String path)
     {
+        _log.trace("In DcacheCapabilityDao.findByPath, path={}", path);
         File directory;
         String objectId = "";
         DcacheCapability capability = new DcacheCapability();
-
-        System.out.println("In DcacheCapabilityDao.findByPath, path={" + path + "}");
-        _log.trace("In DcacheCapabilityDao.findByPath, path={}", path);
         switch (path) {
             case "container":
             case "container/":
                 _log.trace("Container Capabilities");
                 // Container Capabilities
-                capability.getMetadata().putAll(CONTAINER_METADATA);
+                capability.getMetadata().putAll(CONTAINER_METADATA); //those should be the capabilities
                 capability.getChildren().addAll(CAPABILITY_SUBTREE);
                 directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
                 objectId = getAttr(directory.getAbsolutePath());
@@ -410,6 +398,27 @@ public class DcacheCapabilityDao
         if (path != null && path.length() > 0) {
             if (!path.startsWith("/")) {
                 result = "/" + path;
+            } else {
+                result = path;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Adds a suffix slash to a directory path if there isn't a slash already.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private String addSuffixSlashToPath(String path)
+    {
+        String result = "";
+        if (path != null && path.length() > 0) {
+            if (!path.endsWith("/")) {
+                result = path + "/";
             } else {
                 result = path;
             }

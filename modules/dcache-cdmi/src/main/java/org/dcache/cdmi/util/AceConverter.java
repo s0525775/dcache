@@ -29,9 +29,9 @@ public class AceConverter
     {
         int hex = 0;
         if (value.equals(AceType.ACCESS_DENIED_ACE_TYPE.name()))
-            hex = hex | CdmiAce.CDMI_ACE_ACCESS_DENY;
+            hex = CdmiAce.CDMI_ACE_ACCESS_DENY;
         else if (value.equals(AceType.ACCESS_ALLOWED_ACE_TYPE.name()))
-            hex = hex | CdmiAce.CDMI_ACE_ACCESS_ALLOW;
+            hex = CdmiAce.CDMI_ACE_ACCESS_ALLOW;
         return String.format("0x%08X", (hex));
     }
 
