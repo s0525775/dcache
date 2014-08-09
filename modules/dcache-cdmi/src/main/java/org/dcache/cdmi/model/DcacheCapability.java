@@ -34,6 +34,8 @@ public class DcacheCapability extends Capability
 {
     private String childrenrange;
     private String objectName;
+    //There is a typo in Capability.setObjectType() in SNIA's reference implementation which results that the value becomes null
+    private String objectType;
 
     public String getChildrenrange()
     {
@@ -45,6 +47,13 @@ public class DcacheCapability extends Capability
         return objectName;
     }
 
+    //There is a typo in Capability.setObjectType() in SNIA's reference implementation which results that the value becomes null
+    @Override
+    public String getObjectType()
+    {
+        return objectType;
+    }
+
     public void setChildrenrange(String childrenrange)
     {
         this.childrenrange = childrenrange;
@@ -53,6 +62,12 @@ public class DcacheCapability extends Capability
     public void setObjectName(String objectName)
     {
         this.objectName = objectName;
+    }
+
+    //There is a typo in Capability.setObjectType() in SNIA's reference implementation which results that the value becomes null
+    @Override
+    public void setObjectType(String objectType) {
+        this.objectType = objectType;
     }
 
     public String toJson()

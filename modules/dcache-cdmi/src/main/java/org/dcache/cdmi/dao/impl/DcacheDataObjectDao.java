@@ -1351,13 +1351,38 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param path
      *            {@link String} identifying a directory path
      */
-    private boolean isUserAllowed(Subject subject, String path) throws CacheException
+    private boolean isUserAllowed(Subject subject, String path)
     {
         boolean result = false;
         try {
             String tmpPath = addPrefixSlashToPath(path);
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
             FileAttributes attr = pnfs.getFileAttributes(tmpPath, REQUIRED_ATTRIBUTES);
+            if (Subjects.getUid(subject) == attr.getOwner()) {
+                result = true;
+            }
+        } catch (PermissionDeniedCacheException e) {
+            return false;
+        } catch (CacheException ignore) {
+            return true;
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Checks if a user is allowed to access a file path.
+     * </p>
+     *
+     * @param path
+     *            {@link String} identifying a directory path
+     */
+    private boolean isUserAllowed(Subject subject, PnfsId pnfsid)
+    {
+        boolean result = false;
+        try {
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            FileAttributes attr = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
             if (Subjects.getUid(subject) == attr.getOwner()) {
                 result = true;
             }
@@ -1388,31 +1413,6 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                 result = attr.getPnfsId();
             }
         } catch (CacheException ignore) {
-        }
-        return result;
-    }
-
-    /**
-     * <p>
-     * Checks if a user is allowed to access a file path.
-     * </p>
-     *
-     * @param path
-     *            {@link String} identifying a directory path
-     */
-    private boolean isUserAllowed(Subject subject, PnfsId pnfsid) throws CacheException
-    {
-        boolean result = false;
-        try {
-            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-            FileAttributes attr = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
-            if (Subjects.getUid(subject) == attr.getOwner()) {
-                result = true;
-            }
-        } catch (PermissionDeniedCacheException e) {
-            return false;
-        } catch (CacheException ignore) {
-            return true;
         }
         return result;
     }

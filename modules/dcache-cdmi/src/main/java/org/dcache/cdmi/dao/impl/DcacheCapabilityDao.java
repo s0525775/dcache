@@ -25,6 +25,7 @@ import diskCacheV111.util.FsPath;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.vehicles.PnfsCreateEntryMessage;
+import dmg.cells.nucleus.AbstractCellComponent;
 import dmg.cells.nucleus.CellLifeCycleAware;
 import java.io.File;
 import java.util.EnumSet;
@@ -55,7 +56,7 @@ import org.snia.cdmiserver.model.Capability;
  * store.
  * </p>
  */
-public class DcacheCapabilityDao
+public class DcacheCapabilityDao extends AbstractCellComponent
              implements CapabilityDao, CellLifeCycleAware
 {
 
@@ -202,6 +203,7 @@ public class DcacheCapabilityDao
                 capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY)));
                 objectId = getAttr(directory.getAbsolutePath());
                 capability.setParentID(objectId);
+                capability.setObjectName("container/");
                 break;
             case "container/default":
             case "container/default/":
@@ -214,12 +216,14 @@ public class DcacheCapabilityDao
                 directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
                 objectId = getAttr(directory.getAbsolutePath());
                 capability.setParentID(objectId);
+                capability.setObjectName("default/");
                 break;
             case "dataobject":
             case "dataobject/":
                 // Data Object Capabilities
                 _log.trace("Data Object Capabilities");
                 capability.getMetadata().putAll(DATAOBJECT_METADATA);
+                capability.getChildren().addAll(CAPABILITY_SUBTREE);
                 directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
                 objectId = getAttr(directory.getAbsolutePath());
                 capability.setObjectID(objectId);
@@ -227,6 +231,7 @@ public class DcacheCapabilityDao
                 directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
                 objectId = getAttr(directory.getAbsolutePath());
                 capability.setParentID(objectId);
+                capability.setObjectName("dataobject/");
                 break;
             case "dataobject/default":
             case "dataobject/default/":
@@ -239,6 +244,7 @@ public class DcacheCapabilityDao
                 directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
                 objectId = getAttr(directory.getAbsolutePath());
                 capability.setParentID(objectId);
+                capability.setObjectName("default/");
                 break;
             default:
                 // System Capabilities
@@ -250,6 +256,7 @@ public class DcacheCapabilityDao
                 capability.setObjectID(objectId);
                 capability.setParentURI("/");
                 capability.setParentID(objectId);
+                capability.setObjectName(MAIN_DIRECTORY);
                 break;
         }
         capability.setObjectType("application/cdmi-capability");
