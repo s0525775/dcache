@@ -1267,7 +1267,7 @@ public class DcacheContainerDao extends AbstractCellComponent
     public boolean isContainer(String path)
     {
         String checkPath = path;
-        Subject subject = getSubject();
+        System.out.println("Path=" + String.valueOf(path));
         if (checkPath != null) {
             if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
                 String objectId = "";
@@ -1285,7 +1285,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                     restPath = tempPath.substring(slashIndex + 1);
                     String strPnfsId = idc.toPnfsID(objectId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
-                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    FsPath pnfsPath = getPnfsPath(Subjects.ROOT, pnfsId);
                     if (pnfsPath != null) {
                         String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
@@ -1297,7 +1297,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                     objectId = tempPath;
                     String strPnfsId = idc.toPnfsID(objectId);
                     PnfsId pnfsId = new PnfsId(strPnfsId);
-                    FsPath pnfsPath = getPnfsPath(subject, pnfsId);
+                    FsPath pnfsPath = getPnfsPath(Subjects.ROOT, pnfsId);
                     if (pnfsPath != null) {
                         String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
@@ -1308,8 +1308,9 @@ public class DcacheContainerDao extends AbstractCellComponent
                 }
             }
         }
+        System.out.println("CheckPath=" + String.valueOf(checkPath));
         _log.trace("CheckPath={}", String.valueOf(checkPath));
-        return (checkPath == null || isDirectory(subject, checkPath));
+        return (checkPath == null || isDirectory(Subjects.ROOT, checkPath));
     }
 
     /**
@@ -1493,7 +1494,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                     result = true;
                 }
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -1519,7 +1519,6 @@ public class DcacheContainerDao extends AbstractCellComponent
                     result = true;
                 }
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -1538,13 +1537,13 @@ public class DcacheContainerDao extends AbstractCellComponent
         boolean result = false;
         try {
             String tmpDirPath = addPrefixSlashToPath(dirPath);
-            FileAttributes attributes = null;
+            System.out.println(tmpDirPath);
+            PnfsId check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPnfsIdByPath(tmpDirPath);
+            if (check != null) {
                 result = true;
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -1558,18 +1557,18 @@ public class DcacheContainerDao extends AbstractCellComponent
      * @param dirPath
      *            {@link String} identifying a directory path
      */
-    private boolean checkIfDirectoryFileExists(String dirPath)
+    private synchronized boolean checkIfDirectoryFileExists(String dirPath)
     {
         boolean result = false;
         try {
             String tmpDirPath = addPrefixSlashToPath(dirPath);
-            FileAttributes attributes = null;
+            System.out.println(tmpDirPath);
+            PnfsId check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, Subjects.ROOT);
-            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPnfsIdByPath(tmpDirPath);
+            if (check != null) {
                 result = true;
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -1587,13 +1586,12 @@ public class DcacheContainerDao extends AbstractCellComponent
     {
         boolean result = false;
         try {
-            FileAttributes attributes = null;
+            FsPath check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-            attributes = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPathByPnfsId(pnfsid);
+            if (check != null) {
                 result = true;
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;

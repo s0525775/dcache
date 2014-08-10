@@ -65,7 +65,7 @@ public class DcachePathResource
 
     /**
     * <p>
-    * Injected {@link DCacheContainerDao} instance.
+    * Injected {@link DcacheContainerDao} instance.
     * </p>
     * @param containerDao
     */
@@ -76,7 +76,7 @@ public class DcachePathResource
 
     /**
     * <p>
-    * Injected {@link DCacheDataObjectDao} instance.
+    * Injected {@link DcacheDataObjectDao} instance.
     * </p>
     * @param dataObjectDao
     */
@@ -156,7 +156,6 @@ public class DcachePathResource
 
     @GET
     @Path("/{path:.+}")
-    @Consumes(MediaTypes.OBJECT)
     public Response getContainerOrDataObject(
             @PathParam("path") String path,
             @Context UriInfo uriInfo,
@@ -405,24 +404,61 @@ public class DcachePathResource
         String inBuffer = new String(bytes);
         _log.trace("Request={}", inBuffer);
 
-        Container containerRequest = new DcacheContainer();
-
         try {
-            containerRequest.fromJson(bytes, false);
-            Container container = (DcacheContainer) containerDao.createByPath(path,
-                    containerRequest);
-            if (container == null) {
-                ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
-                builder.header("X-CDMI-Specification-Version", "1.0.2");
-                return builder.entity("Container Read Error").build();
+            Container containerRequest = (DcacheContainer) containerDao.findByPath(path);
+            if (containerRequest == null) {
+                containerRequest = new DcacheContainer();
+                containerRequest.setObjectType("application/cdmi-container");
+                containerRequest.fromJson(bytes, false);
+                if (containerRequest.getMove() == null) {
+                    Container container = (DcacheContainer) containerDao.createByPath(path,
+                            containerRequest);
+                    if (container == null) {
+                        ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                        builder.header("X-CDMI-Specification-Version", "1.0.2");
+                        return builder.entity("Container Read Error").build();
+                    } else {
+                        // make http response
+                        // build a JSON representation
+                        String respStr = container.toJson(false);
+                        ResponseBuilder builder = Response.created(new URI(path));
+                        builder.header("X-CDMI-Specification-Version", "1.0.2");
+                        return builder.entity(respStr).build();
+                    } // if/else
+                } else {
+                    containerRequest.fromJson(bytes, false);
+                    Container container = (DcacheContainer) containerDao.createByPath(path,
+                            containerRequest);
+                    if (container == null) {
+                        ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                        builder.header("X-CDMI-Specification-Version", "1.0.2");
+                        return builder.entity("Container Read Error").build();
+                    } else {
+                        // make http response
+                        // build a JSON representation
+                        String respStr = container.toJson(false);
+                        ResponseBuilder builder = Response.ok(new URI(path));
+                        builder.header("X-CDMI-Specification-Version", "1.0.2");
+                        return builder.entity(respStr).build();
+                    } // if/else
+                }
             } else {
-                // make http response
-                // build a JSON representation
-                String respStr = container.toJson(false);
-                ResponseBuilder builder = Response.created(new URI(path));
-                builder.header("X-CDMI-Specification-Version", "1.0.2");
-                return builder.entity(respStr).build();
-            } // if/else
+                containerRequest.fromJson(bytes, false);
+                Container container = (DcacheContainer) containerDao.createByPath(path,
+                        containerRequest);
+                if (container == null) {
+                    ResponseBuilder builder = Response.status(Response.Status.BAD_REQUEST);
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity("Container Read Error").build();
+                } else {
+                    // make http response
+                    // build a JSON representation
+                    String respStr = container.toJson(false);
+                    ResponseBuilder builder = Response.ok(new URI(path));
+                    builder.header("X-CDMI-Specification-Version", "1.0.2");
+                    return builder.entity(respStr).build();
+                } // if/else
+            }
         } catch (ForbiddenException ex) {
             ex.printStackTrace();
             _log.trace(ex.toString());

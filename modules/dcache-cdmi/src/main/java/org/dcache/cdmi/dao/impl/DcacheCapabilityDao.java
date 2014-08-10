@@ -21,7 +21,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import diskCacheV111.util.CacheException;
+import diskCacheV111.util.FileNotFoundCacheException;
 import diskCacheV111.util.FsPath;
+import diskCacheV111.util.NotDirCacheException;
+import diskCacheV111.util.NotInTrashCacheException;
+import diskCacheV111.util.PermissionDeniedCacheException;
 import diskCacheV111.util.PnfsHandler;
 import diskCacheV111.util.PnfsId;
 import diskCacheV111.vehicles.PnfsCreateEntryMessage;
@@ -31,6 +35,7 @@ import java.io.File;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import javax.security.auth.Subject;
 import org.dcache.auth.Subjects;
 import org.dcache.cdmi.model.DcacheCapability;
 import org.dcache.cdmi.util.IdConverter;
@@ -40,6 +45,9 @@ import static org.dcache.namespace.FileAttribute.*;
 import org.dcache.vehicles.FileAttributes;
 import org.slf4j.LoggerFactory;
 import org.snia.cdmiserver.dao.CapabilityDao;
+import org.snia.cdmiserver.exception.BadRequestException;
+import org.snia.cdmiserver.exception.ForbiddenException;
+import org.snia.cdmiserver.exception.NotFoundException;
 import org.snia.cdmiserver.model.Capability;
 
 /* This class is dCache's DAO implementation class for SNIA's CapabilityDao interface.
@@ -186,89 +194,138 @@ public class DcacheCapabilityDao extends AbstractCellComponent
     public Capability findByPath(String path)
     {
         _log.trace("In DcacheCapabilityDao.findByPath, path={}", path);
-        File directory;
-        String objectId = "";
-        DcacheCapability capability = new DcacheCapability();
-        switch (path) {
-            case "container":
-            case "container/":
-                _log.trace("Container Capabilities");
-                // Container Capabilities
-                capability.getMetadata().putAll(CONTAINER_METADATA); //those should be the capabilities
-                capability.getChildren().addAll(CAPABILITY_SUBTREE);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setObjectID(objectId);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
-                capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY)));
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setParentID(objectId);
-                capability.setObjectName("container/");
-                break;
-            case "container/default":
-            case "container/default/":
-                _log.trace("Default Container Capabilities");
-                capability.getMetadata().putAll(DEFAULT_CONTAINER_METADATA);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container/default");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setObjectID(objectId);
-                capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY) + "/container"));
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setParentID(objectId);
-                capability.setObjectName("default/");
-                break;
-            case "dataobject":
-            case "dataobject/":
-                // Data Object Capabilities
-                _log.trace("Data Object Capabilities");
-                capability.getMetadata().putAll(DATAOBJECT_METADATA);
-                capability.getChildren().addAll(CAPABILITY_SUBTREE);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setObjectID(objectId);
-                capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY)));
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setParentID(objectId);
-                capability.setObjectName("dataobject/");
-                break;
-            case "dataobject/default":
-            case "dataobject/default/":
-                _log.trace("Default Data Object Capabilities");
-                capability.getMetadata().putAll(DEFAULT_DATAOBJECT_METADATA);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject/default");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setObjectID(objectId);
-                capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject"));
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setParentID(objectId);
-                capability.setObjectName("default/");
-                break;
-            default:
-                // System Capabilities
-                _log.trace("System Capabilities");
-                capability.getMetadata().putAll(DEFAULT_METADATA);
-                capability.getChildren().addAll(CAPABILITY_MAINTREE);
-                directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
-                objectId = getAttr(directory.getAbsolutePath());
-                capability.setObjectID(objectId);
-                capability.setParentURI("/");
-                capability.setParentID(objectId);
-                capability.setObjectName(MAIN_DIRECTORY);
-                break;
-        }
-        capability.setObjectType("application/cdmi-capability");
+        if (path != null) {
+            String checkPath = path;
+            if (path.startsWith("cdmi_objectid/") || path.startsWith("/cdmi_objectid/")) {
+                String objectId = "";
+                String restPath = "";
+                String tempPath = "";
+                IdConverter idc = new IdConverter();
+                if (path.startsWith("cdmi_objectid/")) {
+                    tempPath = path.replace("cdmi_objectid/", "");
+                } else {
+                    tempPath = path.replace("/cdmi_objectid/", "");
+                }
+                int slashIndex = tempPath.indexOf("/");
+                if (slashIndex > 0) {
+                    objectId = tempPath.substring(0, slashIndex);
+                    restPath = tempPath.substring(slashIndex + 1);
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(Subjects.ROOT, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath + "/" + removeSlashesFromPath(restPath);
+                        }
+                    }
+                } else {
+                    objectId = tempPath;
+                    String strPnfsId = idc.toPnfsID(objectId);
+                    PnfsId pnfsId = new PnfsId(strPnfsId);
+                    FsPath pnfsPath = getPnfsPath(Subjects.ROOT, pnfsId);
+                    if (pnfsPath != null) {
+                        String strPnfsPath = removeSlashesFromPath(pnfsPath.toString());
+                        if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
+                            String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
+                            checkPath = "/" + tmpBasePath;
+                        }
+                    }
+                }
+            }
+            _log.trace("CheckPath={}", String.valueOf(checkPath));
 
-        List<String> children = capability.getChildren();
-        if (children.size() > 0) {
-            // has children - set the range
-            int lastindex = children.size() - 1;
-            String childrange = "0-" + lastindex;
-            capability.setChildrenrange(childrange);
+            if (checkPath != null) {
+                File directory;
+                String objectId = "";
+                DcacheCapability capability = new DcacheCapability();
+                switch (path) {
+                    case "container":
+                    case "container/":
+                        _log.trace("Container Capabilities");
+                        // Container Capabilities
+                        capability.getMetadata().putAll(CONTAINER_METADATA); //those should be the capabilities
+                        capability.getChildren().addAll(CAPABILITY_SUBTREE);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setObjectID(objectId);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
+                        capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY)));
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setParentID(objectId);
+                        capability.setObjectName("container/");
+                        break;
+                    case "container/default":
+                    case "container/default/":
+                        _log.trace("Default Container Capabilities");
+                        capability.getMetadata().putAll(DEFAULT_CONTAINER_METADATA);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container/default");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setObjectID(objectId);
+                        capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY) + "/container"));
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/container");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setParentID(objectId);
+                        capability.setObjectName("default/");
+                        break;
+                    case "dataobject":
+                    case "dataobject/":
+                        // Data Object Capabilities
+                        _log.trace("Data Object Capabilities");
+                        capability.getMetadata().putAll(DATAOBJECT_METADATA);
+                        capability.getChildren().addAll(CAPABILITY_SUBTREE);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setObjectID(objectId);
+                        capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY)));
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setParentID(objectId);
+                        capability.setObjectName("dataobject/");
+                        break;
+                    case "dataobject/default":
+                    case "dataobject/default/":
+                        _log.trace("Default Data Object Capabilities");
+                        capability.getMetadata().putAll(DEFAULT_DATAOBJECT_METADATA);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject/default");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setObjectID(objectId);
+                        capability.setParentURI(addPrefixSlashToPath(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject"));
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY) + "/dataobject");
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setParentID(objectId);
+                        capability.setObjectName("default/");
+                        break;
+                    default:
+                        // System Capabilities
+                        _log.trace("System Capabilities");
+                        capability.getMetadata().putAll(DEFAULT_METADATA);
+                        capability.getChildren().addAll(CAPABILITY_MAINTREE);
+                        directory = absoluteFile(removeSlashesFromPath(MAIN_DIRECTORY));
+                        objectId = getAttr(directory.getAbsolutePath());
+                        capability.setObjectID(objectId);
+                        capability.setParentURI("/");
+                        capability.setParentID(objectId);
+                        capability.setObjectName(MAIN_DIRECTORY);
+                        break;
+                }
+                capability.setObjectType("application/cdmi-capability");
+
+                List<String> children = capability.getChildren();
+                if (children.size() > 0) {
+                    // has children - set the range
+                    int lastindex = children.size() - 1;
+                    String childrange = "0-" + lastindex;
+                    capability.setChildrenrange(childrange);
+                }
+                return (DcacheCapability) capability;
+            } else {
+                throw new BadRequestException("DcacheCapabilityDao<Read>, No path given");
+            }
+        } else {
+            throw new BadRequestException("DcacheCapabilityDao<Read>, No path given");
         }
-        return (DcacheCapability) capability;
     }
 
     /**
@@ -339,13 +396,12 @@ public class DcacheCapabilityDao extends AbstractCellComponent
         boolean result = false;
         try {
             String tmpDirPath = addPrefixSlashToPath(dirPath);
-            FileAttributes attributes = null;
+            PnfsId check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, Subjects.ROOT);
-            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPnfsIdByPath(tmpDirPath);
+            if (check != null) {
                 result = true;
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -505,5 +561,31 @@ public class DcacheCapabilityDao extends AbstractCellComponent
     @Override
     public void beforeStop()
     {
+    }
+
+    /**
+     * <p>
+     * Retrieves the PnfsPath for a specific PnfsId.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private FsPath getPnfsPath(Subject subject, PnfsId pnfsid)
+    {
+        FsPath result = null;
+        try {
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            result = pnfs.getPathByPnfsId(pnfsid);
+        } catch (FileNotFoundCacheException | NotInTrashCacheException ignored) {
+            throw new NotFoundException("No such file or directory");
+        } catch (NotDirCacheException e) {
+            throw new NotFoundException("Not a directory");
+        } catch (PermissionDeniedCacheException e) {
+            throw new ForbiddenException("Permission denied");
+        } catch (CacheException ex) {
+            _log.warn("PnfsPath for PnfsId '{}' could not get retrieved, {}", pnfsid, ex.getMessage());
+        }
+        return result;
     }
 }

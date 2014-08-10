@@ -467,7 +467,7 @@ public class DcacheDataObjectDao extends AbstractCellComponent
                         }
                         // check for container
                         if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
-                            throw new ConflictException("Container <"
+                            throw new BadRequestException("Container <"
                                                         + containerDirectory.getAbsolutePath()
                                                         + "> doesn't exist");
                         }
@@ -577,12 +577,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                         // check for container
                         if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
-                            throw new ConflictException("Container <"
+                            throw new BadRequestException("Container <"
                                                         + containerDirectory.getAbsolutePath()
                                                         + "> doesn't exist");
                         }
                         if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
-                            throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
+                            throw new BadRequestException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
                         }
 
                         try {
@@ -797,12 +797,12 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                     // check for container
                     if (!checkIfDirectoryFileExists(subject, containerDirectory.getAbsolutePath())) {
-                        throw new ConflictException("Container <"
+                        throw new BadRequestException("Container <"
                                                     + containerDirectory.getAbsolutePath()
                                                     + "> doesn't exist");
                     }
                     if (!checkIfDirectoryFileExists(subject, sourceFile.getAbsolutePath())) {
-                        throw new ConflictException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
+                        throw new BadRequestException("Object File <" + objFile.getAbsolutePath() + "> does not exist");
                     }
 
                     String base =  removeSlashesFromPath(baseDirectoryName);
@@ -1483,18 +1483,18 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param dirPath
      *            {@link String} identifying a directory path
      */
-    private boolean checkIfDirectoryFileExists(Subject subject, String dirPath)
+    private synchronized boolean checkIfDirectoryFileExists(Subject subject, String dirPath)
     {
         boolean result = false;
         try {
             String tmpDirPath = addPrefixSlashToPath(dirPath);
-            FileAttributes attributes = null;
+            System.out.println(tmpDirPath);
+            PnfsId check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPnfsIdByPath(tmpDirPath);
+            if (check != null) {
                 result = true;
             }
-            return result;
         } catch (CacheException ignore) {
         }
         return result;
@@ -1508,14 +1508,14 @@ public class DcacheDataObjectDao extends AbstractCellComponent
      * @param dirPath
      *            {@link String} identifying a directory path
      */
-    private boolean checkIfDirectoryFileExists(Subject subject, PnfsId pnfsid)
+    private synchronized boolean checkIfDirectoryFileExists(Subject subject, PnfsId pnfsid)
     {
         boolean result = false;
         try {
-            FileAttributes attributes = null;
+            FsPath check = null;
             PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
-            attributes = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
-            if (attributes != null) {
+            check = pnfs.getPathByPnfsId(pnfsid);
+            if (check != null) {
                 result = true;
             }
         } catch (CacheException ignore) {

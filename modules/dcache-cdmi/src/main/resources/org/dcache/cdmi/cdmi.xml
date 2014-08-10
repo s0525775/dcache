@@ -274,9 +274,10 @@
     <bean id="objectIdResource" class="org.dcache.cdmi.resource.DcacheObjectIdResource" scope="prototype">
         <property name="containerDao" ref="containerDao"/>
         <property name="dataObjectDao" ref="dataObjectDao"/>
+        <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
     <bean id="capabilityResource" class="org.dcache.cdmi.resource.DcacheCapabilityResource" scope="prototype">
-         <property name="capabilityDao" ref="capabilityDao"/>
+        <property name="capabilityDao" ref="capabilityDao"/>
     </bean>
     <bean id="pathResource" class="org.dcache.cdmi.resource.DcachePathResource" scope="prototype">
         <property name="containerDao" ref="containerDao"/>
