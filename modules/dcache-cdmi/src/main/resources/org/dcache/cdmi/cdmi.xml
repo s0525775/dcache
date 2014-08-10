@@ -94,7 +94,7 @@
         <property name="address" value="#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }"/>
         <property name="port" value="${cdmi.net.ssl.port}"/>
         <property name="loginBrokers" value="${cdmi.service.loginbroker}"/>
-        <property name="root" value="${cdmi.root}"/>
+        <property name="root" value="${cdmi.basedirectory.data}"/>
     </bean>
 
     <bean id="banned-ciphers" class="org.dcache.util.Crypto"
@@ -116,7 +116,7 @@
         <property name="loginStrategy" ref="login-strategy"/>
         <property name="readOnly" value="${cdmi.authz.readonly}"/>
         <property name="enableBasicAuthentication" value="${cdmi.authn.basic}"/>
-        <property name="rootPath" value="${cdmi.root}"/>
+        <property name="rootPath" value="${cdmi.basedirectory.data}"/>
         <property name="uploadPath" value="${cdmi.authz.upload-directory}"/>
     </bean>
 
@@ -141,7 +141,7 @@
     </httpj:engine-factory>
 
     <jaxrs:server id="cdmiService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.port}/"
-                  depends-on="http" beanNames="objectIdResource pathResource">
+                  depends-on="http" beanNames="objectIdResource pathResource capabilityResource">
         <jaxrs:providers>
             <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
@@ -164,11 +164,11 @@
     <httpj:engine-factory id="https" bus="cxf">
         <httpj:identifiedTLSServerParameters id="secure">
             <httpj:tlsServerParameters>
-                <sec:keyManagers keyPassword="test123">
-                    <sec:keyStore type="PKCS12" file="/certs/server/cert.p12" password="test123"/>
+                <sec:keyManagers keyPassword="${cdmi.authn.keystore.password}">
+                    <sec:keyStore type="PKCS12" file="${cdmi.authn.keystore}" password="${cdmi.authn.keystore.password}"/>
                 </sec:keyManagers>
                 <sec:trustManagers>
-                    <sec:keyStore file="/certs/server/truststore.jks" password="test123"/>
+                    <sec:keyStore file="${cdmi.authn.truststore}" password="${cdmi.authn.truststore.password}"/>
                 </sec:trustManagers>
             </httpj:tlsServerParameters>
         </httpj:identifiedTLSServerParameters>
@@ -179,13 +179,13 @@
                 <bean id="https-connector" class="org.eclipse.jetty.server.ssl.SslSelectChannelConnector">
                     <constructor-arg>
                         <bean class="org.eclipse.jetty.http.ssl.SslContextFactory">
-                            <property name="keyStore" value="/certs/server/cert.p12"/>
+                            <property name="keyStore" value="${cdmi.authn.keystore}"/>
                             <property name="keyStoreType" value="PKCS12"/>
-                            <property name="keyStorePassword" value="test123"/>
-                            <property name="trustStore" value="/certs/server/truststore.jks"/>
-                            <property name="trustStorePassword" value="test123"/>
-                            <property name="wantClientAuth" value="true"/>
-                            <property name="needClientAuth" value="true"/>
+                            <property name="keyStorePassword" value="${cdmi.authn.keystore.password}"/>
+                            <property name="trustStore" value="${cdmi.authn.truststore}"/>
+                            <property name="trustStorePassword" value="${cdmi.authn.truststore.password}"/>
+                            <property name="wantClientAuth" value="${cdmi.authn.accept-client-cert}"/>
+                            <property name="needClientAuth" value="${cdmi.authn.require-client-cert}"/>
                             <property name="excludeCipherSuites" ref="banned-ciphers"/>
                         </bean>
                     </constructor-arg>
@@ -201,7 +201,7 @@
     </httpj:engine-factory>
 
     <jaxrs:server id="cdmiSSLService" address="https://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl.port}/"
-                  depends-on="https" beanNames="objectIdResource pathResource">
+                  depends-on="https" beanNames="objectIdResource pathResource capabilityResource">
         <jaxrs:providers>
             <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
@@ -221,6 +221,7 @@
         </jaxrs:serviceBeans>
     </jaxrs:server>
 
+    <!-- not tested, except if it is reachable as website: -->
     <httpj:engine-factory id="http-jg" bus="cxf">
         <httpj:engine port="${cdmi.net.ssl-jg.port}">
             <httpj:threadingParameters minThreads="5" maxThreads="15" />
@@ -250,8 +251,9 @@
         </httpj:engine>
     </httpj:engine-factory>
 
+    <!-- not tested, except if it is reachable as website: -->
     <jaxrs:server id="cdmiSSLJGService" address="http://#{ '${cdmi.net.listen}'.equals('any') ? null : '${cdmi.net.listen}' }:${cdmi.net.ssl-jg.port}/"
-                  depends-on="http-jg" beanNames="objectIdResource pathResource">
+                  depends-on="http-jg" beanNames="objectIdResource pathResource capabilityResource">
         <jaxrs:providers>
             <ref bean="authorizationFilter"/>
             <ref bean="badRequestExceptionMapper"/>
@@ -295,18 +297,17 @@
     <bean id="methodNotAllowedExceptionMapper" class="org.dcache.cdmi.provider.MethodNotAllowedExceptionMapper"/>
 
     <bean id="containerDao" class="org.dcache.cdmi.dao.impl.DcacheContainerDao">
-        <property name="baseDirectoryName" value="/public"/>
-        <property name="anonymousListing" value="false"/>
-        <!-- <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/> -->
+        <property name="baseDirectoryName" value="${cdmi.basedirectory.data}"/>
+        <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
         <property name="listDirectoryHandler" ref="list-handler"/>
         <property name="billingStub" ref="billing-stub"/>
     </bean>
 
     <bean id="dataObjectDao" class="org.dcache.cdmi.dao.impl.DcacheDataObjectDao">
-        <property name="baseDirectoryName" value="/public"/>
-        <property name="anonymousListing" value="false"/>
-        <!-- <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/> -->
+        <property name="baseDirectoryName" value="${cdmi.basedirectory.data}"/>
+        <property name="anonymousListing" value="${cdmi.authz.anonymous-listing}"/>
+        <property name="internalPort" value="${cdmi.net.port}"/>
         <property name="executor" ref="scheduled-thread-pool"/>
         <property name="pnfsStub" ref="pnfs-stub"/>
         <property name="listDirectoryHandler" ref="list-handler"/>
@@ -316,7 +317,8 @@
     </bean>
 
     <bean id="capabilityDao" class="org.dcache.cdmi.dao.impl.DcacheCapabilityDao">
-        <property name="baseDirectoryName" value="/"/>
+        <property name="baseDirectoryName" value="${cdmi.basedirectory.capabilites}"/>
+        <!-- needs to be listed for really everyone, no anonymous listing necessary -->
         <property name="pnfsStub" ref="pnfs-stub"/>
     </bean>
 

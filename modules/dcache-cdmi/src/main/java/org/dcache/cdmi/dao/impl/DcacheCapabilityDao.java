@@ -51,9 +51,9 @@ import org.snia.cdmiserver.exception.NotFoundException;
 import org.snia.cdmiserver.model.Capability;
 
 /* This class is dCache's DAO implementation class for SNIA's CapabilityDao interface.
-   Capabilities represents the functionalities of a Cloud System of a Container and of a DataObject,
-   that means which Cloud services are supported and provided if the Cloud client asks for them.
-   This class contains all operations which are related to capability operations.
+   Capabilities represents the functionalities of a Cloud System, of a Container and of a DataObject,
+   that means which Cloud services are supported and provided by the CDMI server if the Cloud client
+   asks for them. This class contains all operations which are related to capability operations.
    It's used for the metadata communication between CDMI server and CDMI client.
    This class is already different from SNIA's CDMI reference implementation.
 */

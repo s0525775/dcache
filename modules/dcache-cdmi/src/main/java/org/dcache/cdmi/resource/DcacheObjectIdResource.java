@@ -562,7 +562,6 @@ public class DcacheObjectIdResource
         } else {
             path = objectId;
         }
-        System.out.println("Path=" + path);
         String testPath = objectId;
         if (objectId.startsWith("/cdmi_objectid/") || objectId.startsWith("cdmi_objectid/")) {
             if (objectId.startsWith("/cdmi_objectid/")) {
