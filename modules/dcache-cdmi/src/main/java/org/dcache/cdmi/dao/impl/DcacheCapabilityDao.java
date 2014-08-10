@@ -479,7 +479,7 @@ public class DcacheCapabilityDao extends AbstractCellComponent
     private String addSuffixSlashToPath(String path)
     {
         String result = "";
-        if (path != null && path.length() > 0) {
+        if (path != null && path.length() >= 0) {
             if (!path.endsWith("/")) {
                 result = path + "/";
             } else {
