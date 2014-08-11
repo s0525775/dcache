@@ -1177,7 +1177,7 @@ public class DcacheContainerDao extends AbstractCellComponent
         long fileSize = 0;
         if (isAnonymousListingAllowed || ((subject != null) && !Subjects.isNobody(subject))) {
             for (Map.Entry<String, FileAttributes> entry : listDirectoriesFilesByPath(subject, directory.getAbsolutePath()).entrySet()) {
-                if (entry.getValue().getFileType() == DIR && entry.getValue().getOwner() == Subjects.getUid(subject)) {
+                if (entry.getValue().getFileType() == DIR) {
                     fileSize += entry.getValue().getSize();
                     children.add(entry.getKey() + "/");
                 } else {
@@ -1272,7 +1272,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                 List<String> children = container.getChildren();
                 if (isAnonymousListingAllowed || ((subject != null) && !Subjects.isNobody(subject))) {
                     for (Map.Entry<String, FileAttributes> entry : listDirectoriesFilesByPath(subject, absoluteFile(path).toString()).entrySet()) {
-                        if ((entry.getValue().getFileType() == DIR) && (entry.getValue().getOwner() == Subjects.getUid(subject))) {
+                        if (entry.getValue().getFileType() == DIR) {
                             fileSize += entry.getValue().getSize();
                             children.add(entry.getKey() + "/");
                         } else {
