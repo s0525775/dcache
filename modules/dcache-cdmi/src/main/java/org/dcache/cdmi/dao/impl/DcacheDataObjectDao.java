@@ -91,6 +91,7 @@ import org.snia.cdmiserver.dao.DataObjectDao;
 import org.snia.cdmiserver.exception.BadRequestException;
 import org.snia.cdmiserver.exception.ConflictException;
 import org.snia.cdmiserver.exception.ForbiddenException;
+import org.snia.cdmiserver.exception.NotFoundException;
 import org.snia.cdmiserver.exception.UnauthorizedException;
 import org.snia.cdmiserver.model.DataObject;
 
@@ -1068,10 +1069,13 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                     if (!checkIfDirectoryFileExists(subject, objFile.getAbsolutePath())) {
                         return null;
-                    } else {
-                        if (!isUserAllowed(subject, objFile.getAbsolutePath())) {
-                            throw new UnauthorizedException("Access denied", realm);
-                        }
+                    }
+                    if (!checkIfFileExists(subject, objFile.getAbsolutePath())) {
+                        throw new BadRequestException("Path '" + objFile.getAbsolutePath()
+                                + "' does not identify a dataobject");
+                    }
+                    if (!isAnonymousListingAllowed && !isUserAllowed(subject, objFile.getAbsolutePath())) {
+                        throw new ForbiddenException("Permission denied");
                     }
 
                     PnfsId pnfsId = null;
@@ -1213,15 +1217,20 @@ public class DcacheDataObjectDao extends AbstractCellComponent
 
                 Subject subject = getSubject();
                 if (!isAnonymousListingAllowed && (subject == null) && Subjects.isNobody(subject)) {
-                    throw new UnauthorizedException("Access denied", realm);
+                    throw new ForbiddenException("Permission denied");
+                }
+
+                if (!isAnonymousListingAllowed && !isUserAllowed(subject, pnfsId)) {
+                    throw new ForbiddenException("Permission denied");
                 }
 
                 if (!checkIfDirectoryFileExists(subject, pnfsId)) {
                     return null;
-                } else {
-                    if (!isUserAllowed(subject, pnfsId)) {
-                        throw new UnauthorizedException("Access denied", realm);
-                    }
+                }
+
+                if (!checkIfFileExists(subject, pnfsId)) {
+                    throw new BadRequestException("Object with ObjectId '" + removeSlashesFromPath(objectId)
+                            + "' does not identify a dataobject");
                 }
 
                 String path = "";
@@ -1572,6 +1581,57 @@ public class DcacheDataObjectDao extends AbstractCellComponent
             check = pnfs.getPathByPnfsId(pnfsid);
             if (check != null) {
                 result = true;
+            }
+        } catch (CacheException ignore) {
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Checks if a File exists in a specific path.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private boolean checkIfFileExists(Subject subject, String dirPath)
+    {
+        boolean result = false;
+        try {
+            String tmpDirPath = addPrefixSlashToPath(dirPath);
+            FileAttributes attributes = null;
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            attributes = pnfs.getFileAttributes(new FsPath(tmpDirPath), REQUIRED_ATTRIBUTES);
+            if (attributes != null) {
+                if ((attributes.getFileType() == REGULAR) || (attributes.getFileType() == LINK)) {
+                    result = true;
+                }
+            }
+        } catch (CacheException ignore) {
+        }
+        return result;
+    }
+
+    /**
+     * <p>
+     * Checks if a File exists in a specific path.
+     * </p>
+     *
+     * @param dirPath
+     *            {@link String} identifying a directory path
+     */
+    private boolean checkIfFileExists(Subject subject, PnfsId pnfsid)
+    {
+        boolean result = false;
+        try {
+            FileAttributes attributes = null;
+            PnfsHandler pnfs = new PnfsHandler(pnfsHandler, subject);
+            attributes = pnfs.getFileAttributes(pnfsid, REQUIRED_ATTRIBUTES);
+            if (attributes != null) {
+                if ((attributes.getFileType() == REGULAR) || (attributes.getFileType() == LINK)) {
+                    result = true;
+                }
             }
         } catch (CacheException ignore) {
         }

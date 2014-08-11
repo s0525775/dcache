@@ -848,15 +848,15 @@ public class DcacheContainerDao extends AbstractCellComponent
                     throw new ForbiddenException("Permission denied");
                 }
 
+                if (!isAnonymousListingAllowed && !isUserAllowed(subject, directory.getAbsolutePath())) {
+                    throw new ForbiddenException("Permission denied");
+                }
                 if (!checkIfDirectoryFileExists(subject, directory.getAbsolutePath())) {
                     return null;
                 }
                 if (!checkIfDirectoryExists(subject, directory.getAbsolutePath())) {
                     throw new BadRequestException("Path '" + directory.getAbsolutePath()
                             + "' does not identify a container");
-                }
-                if (!isAnonymousListingAllowed && !isUserAllowed(subject, directory.getAbsolutePath())) {
-                    throw new ForbiddenException("Permission denied");
                 }
 
                 // Setup ISO-8601 Date
@@ -1002,7 +1002,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                 }
 
                 if (!checkIfDirectoryFileExists(subject, pnfsId)) {
-                    throw new NotFoundException("Not Found");
+                    return null;
                 }
 
                 if (!checkIfDirectoryExists(subject, pnfsId)) {
