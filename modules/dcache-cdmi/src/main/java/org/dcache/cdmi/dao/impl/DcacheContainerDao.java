@@ -855,7 +855,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                     throw new BadRequestException("Path '" + directory.getAbsolutePath()
                             + "' does not identify a container");
                 }
-                if (!isUserAllowed(subject, directory.getAbsolutePath())) {
+                if (!isAnonymousListingAllowed && !isUserAllowed(subject, directory.getAbsolutePath())) {
                     throw new ForbiddenException("Permission denied");
                 }
 
@@ -997,7 +997,7 @@ public class DcacheContainerDao extends AbstractCellComponent
                     throw new ForbiddenException("Permission denied");
                 }
 
-                if (!isUserAllowed(subject, pnfsId)) {
+                if (!isAnonymousListingAllowed && !isUserAllowed(subject, pnfsId)) {
                     throw new ForbiddenException("Permission denied");
                 }
 
@@ -1348,6 +1348,10 @@ public class DcacheContainerDao extends AbstractCellComponent
                         if (strPnfsPath.contains(removeSlashesFromPath(baseDirectoryName) + "/")) {
                             String tmpBasePath = strPnfsPath.replace(removeSlashesFromPath(baseDirectoryName) + "/", "");
                             checkPath = "/" + tmpBasePath;
+                        } else {
+                            //It might be the root folder, called via ObjectID. Not yet supported!
+                            //Will throw a "Permission denied" later since the usual user hasn't the proper permissions.
+                            checkPath = null;
                         }
                     }
                 }
